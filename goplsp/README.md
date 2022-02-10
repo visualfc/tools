@@ -8,3 +8,6 @@ by the Go+ team. It provides IDE features to any [LSP]-compatible editor.
 To get started with `goplsp`, install an LSP plugin in your editor of choice.
 
 * TODO
+
+[language server]: https://langserver.org
+[LSP]: https://microsoft.github.io/language-server-protocol/
