@@ -2,9 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build go1.16
-// +build go1.16
-
 package main
 
 import (
@@ -14,13 +11,18 @@ import (
 )
 
 func TestGenerated(t *testing.T) {
-	testenv.NeedsGoBuild(t) // This is a lie. We actually need the source code.
+	testenv.NeedsGoPackages(t)
+	// This test fails on Kokoro, for unknown reasons, so must be run only on TryBots.
+	// In any case, it suffices to run this test on any builder.
+	testenv.NeedsGo1Point(t, 21)
 
-	ok, err := doMain("../..", false)
+	testenv.NeedsLocalXTools(t)
+
+	ok, err := doMain(false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !ok {
-		t.Error("documentation needs updating. run: `go run doc/generate.go` from the gopls module.")
+		t.Error("documentation needs updating. Run: cd gopls && go generate")
 	}
 }

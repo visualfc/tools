@@ -8,13 +8,48 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/hooks"
-	"golang.org/x/tools/internal/lsp/protocol"
-	. "golang.org/x/tools/internal/lsp/regtest"
+	"golang.org/x/tools/gopls/internal/lsp/protocol"
+	. "golang.org/x/tools/gopls/internal/lsp/regtest"
 )
 
 func TestMain(m *testing.M) {
+	bug.PanicOnBugs = true
 	Main(m, hooks.Options)
+}
+
+func TestMultilineTokens(t *testing.T) {
+	// 51731: panic: runtime error: slice bounds out of range [38:3]
+	const files = `
+-- go.mod --
+module mod.com
+
+go 1.17
+-- hi.tmpl --
+{{if (foÜx .X.Y)}}😀{{$A := 
+	"hi"
+	}}{{.Z $A}}{{else}}
+{{$A.X 12}}
+{{foo (.X.Y) 23 ($A.Z)}}
+{{end}}
+`
+	WithOptions(
+		Settings{
+			"templateExtensions": []string{"tmpl"},
+			"semanticTokens":     true,
+		},
+	).Run(t, files, func(t *testing.T, env *Env) {
+		var p protocol.SemanticTokensParams
+		p.TextDocument.URI = env.Sandbox.Workdir.URI("hi.tmpl")
+		toks, err := env.Editor.Server.SemanticTokensFull(env.Ctx, &p)
+		if err != nil {
+			t.Errorf("semantic token failed: %v", err)
+		}
+		if toks == nil || len(toks.Data) == 0 {
+			t.Errorf("got no semantic tokens")
+		}
+	})
 }
 
 func TestTemplatesFromExtensions(t *testing.T) {
@@ -28,18 +63,20 @@ go 1.12
 Hello {{}} <-- missing body
 {{end}}
 `
-
 	WithOptions(
-		EditorConfig{
-			Settings: map[string]interface{}{
-				"templateExtensions": []string{"tmpl"},
-				"semanticTokens":     true,
-			},
+		Settings{
+			"templateExtensions": []string{"tmpl"},
+			"semanticTokens":     true,
 		},
 	).Run(t, files, func(t *testing.T, env *Env) {
 		// TODO: can we move this diagnostic onto {{}}?
-		env.Await(env.DiagnosticAtRegexp("hello.tmpl", "()Hello {{}}"))
-		d := env.DiagnosticsFor("hello.tmpl").Diagnostics // issue 50786: check for Source
+		var diags protocol.PublishDiagnosticsParams
+		env.OnceMet(
+			InitialWorkspaceLoad,
+			Diagnostics(env.AtRegexp("hello.tmpl", "()Hello {{}}")),
+			ReadDiagnostics("hello.tmpl", &diags),
+		)
+		d := diags.Diagnostics // issue 50786: check for Source
 		if len(d) != 1 {
 			t.Errorf("expected 1 diagnostic, got %d", len(d))
 			return
@@ -59,7 +96,7 @@ Hello {{}} <-- missing body
 		}
 
 		env.WriteWorkspaceFile("hello.tmpl", "{{range .Planets}}\nHello {{.}}\n{{end}}")
-		env.Await(EmptyDiagnostics("hello.tmpl"))
+		env.AfterChange(NoDiagnostics(ForFile("hello.tmpl")))
 	})
 }
 
@@ -76,16 +113,15 @@ B {{}} <-- missing body
 `
 
 	WithOptions(
-		EditorConfig{
-			Settings: map[string]interface{}{
-				"templateExtensions": []string{"tmpl"},
-			},
-			DirectoryFilters: []string{"-b"},
+		Settings{
+			"directoryFilters":   []string{"-b"},
+			"templateExtensions": []string{"tmpl"},
 		},
 	).Run(t, files, func(t *testing.T, env *Env) {
-		env.Await(
-			OnceMet(env.DiagnosticAtRegexp("a/a.tmpl", "()A")),
-			NoDiagnostics("b/b.tmpl"),
+		env.OnceMet(
+			InitialWorkspaceLoad,
+			Diagnostics(env.AtRegexp("a/a.tmpl", "()A")),
+			NoDiagnostics(ForFile("b/b.tmpl")),
 		)
 	})
 }
@@ -100,16 +136,13 @@ go 1.12
 
 	Run(t, files, func(t *testing.T, env *Env) {
 		env.CreateBuffer("hello.tmpl", "")
-		env.Await(
-			OnceMet(
-				env.DoneWithOpen(),
-				NoDiagnostics("hello.tmpl"), // Don't get spurious errors for empty templates.
-			),
+		env.AfterChange(
+			NoDiagnostics(ForFile("hello.tmpl")), // Don't get spurious errors for empty templates.
 		)
 		env.SetBufferContent("hello.tmpl", "{{range .Planets}}\nHello {{}}\n{{end}}")
-		env.Await(env.DiagnosticAtRegexp("hello.tmpl", "()Hello {{}}"))
+		env.Await(Diagnostics(env.AtRegexp("hello.tmpl", "()Hello {{}}")))
 		env.RegexpReplace("hello.tmpl", "{{}}", "{{.}}")
-		env.Await(EmptyOrNoDiagnostics("hello.tmpl"))
+		env.Await(NoDiagnostics(ForFile("hello.tmpl")))
 	})
 }
 
@@ -127,11 +160,15 @@ Hello {{}} <-- missing body
 
 	Run(t, files, func(t *testing.T, env *Env) {
 		env.OpenFile("hello.tmpl")
-		env.Await(env.DiagnosticAtRegexp("hello.tmpl", "()Hello {{}}"))
+		env.AfterChange(
+			Diagnostics(env.AtRegexp("hello.tmpl", "()Hello {{}}")),
+		)
 		// Since we don't have templateExtensions configured, closing hello.tmpl
 		// should make its diagnostics disappear.
 		env.CloseBuffer("hello.tmpl")
-		env.Await(EmptyDiagnostics("hello.tmpl"))
+		env.AfterChange(
+			NoDiagnostics(ForFile("hello.tmpl")),
+		)
 	})
 }
 
@@ -148,16 +185,14 @@ go 1.12
 `
 
 	WithOptions(
-		EditorConfig{
-			Settings: map[string]interface{}{
-				"templateExtensions": []string{"tmpl", "gotmpl"},
-			},
+		Settings{
+			"templateExtensions": []string{"tmpl", "gotmpl"},
 		},
 	).Run(t, files, func(t *testing.T, env *Env) {
 		env.OpenFile("a.tmpl")
 		x := env.RegexpSearch("a.tmpl", `A`)
-		file, pos := env.GoToDefinition("a.tmpl", x)
-		refs := env.References(file, pos)
+		loc := env.GoToDefinition(x)
+		refs := env.References(loc)
 		if len(refs) != 2 {
 			t.Fatalf("got %v reference(s), want 2", len(refs))
 		}
@@ -170,9 +205,9 @@ go 1.12
 			}
 		}
 
-		content, npos := env.Hover(file, pos)
-		if pos != npos {
-			t.Errorf("pos? got %v, wanted %v", npos, pos)
+		content, nloc := env.Hover(loc)
+		if loc != nloc {
+			t.Errorf("loc? got %v, wanted %v", nloc, loc)
 		}
 		if content.Value != "template A defined" {
 			t.Errorf("got %s, wanted 'template A defined", content.Value)
@@ -193,5 +228,4 @@ func shorten(fn protocol.DocumentURI) string {
 	return pieces[j-2] + "/" + pieces[j-1]
 }
 
-// Hover,  SemTok, Diagnose with errors
-// and better coverage
+// Hover needs tests

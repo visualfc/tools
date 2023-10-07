@@ -15,7 +15,7 @@ import (
 	"go/build"
 	"go/token"
 	"go/types"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -127,6 +127,8 @@ func TestCgoOption(t *testing.T) {
 	// or the std library is incomplete (Android).
 	case "android", "plan9", "solaris", "windows":
 		t.Skipf("no cgo or incomplete std lib on %s", runtime.GOOS)
+	case "darwin":
+		t.Skipf("golang/go#58493: file locations in this test are stale on darwin")
 	}
 	// In nocgo builds (e.g. linux-amd64-nocgo),
 	// there is no "runtime/cgo" package,
@@ -188,7 +190,7 @@ func TestCgoOption(t *testing.T) {
 			}
 
 			// Load the file and check the object is declared at the right place.
-			b, err := ioutil.ReadFile(posn.Filename)
+			b, err := os.ReadFile(posn.Filename)
 			if err != nil {
 				t.Errorf("can't read %s: %s", posn.Filename, err)
 				continue

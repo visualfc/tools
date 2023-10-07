@@ -91,7 +91,7 @@ Use [coc.nvim], with the following `coc-settings.json` configuration:
 
 ```json
   "languageserver": {
-    "golang": {
+    "go": {
       "command": "gopls",
       "rootPatterns": ["go.work", "go.mod", ".vim/", ".git/", ".hg/"],
       "filetypes": ["go"],
@@ -140,80 +140,78 @@ cd "$dir"
 git clone 'https://github.com/neovim/nvim-lspconfig.git' .
 ```
 
-### <a href="#neovim-config" id="neovim-config">Custom Configuration</a>
+### <a href="#neovim-config" id="neovim-config">Configuration</a>
 
-You can add custom configuration using Lua.  Here is an example of enabling the
-`unusedparams` check as well as `staticcheck`:
+nvim-lspconfig aims to provide reasonable defaults, so your setup can be very
+brief.
 
-```vim
-lua <<EOF
-  lspconfig = require "lspconfig"
-  lspconfig.gopls.setup {
-    cmd = {"gopls", "serve"},
-    settings = {
-      gopls = {
-        analyses = {
-          unusedparams = true,
-        },
-        staticcheck = true,
+```lua
+local lspconfig = require("lspconfig")
+lspconfig.gopls.setup({})
+```
+
+However, you can also configure `gopls` for your preferences. Here's an
+example that enables `unusedparams`, `staticcheck`, and `gofumpt`.
+
+```lua
+local lspconfig = require("lspconfig")
+lspconfig.gopls.setup({
+  settings = {
+    gopls = {
+      analyses = {
+        unusedparams = true,
       },
+      staticcheck = true,
+      gofumpt = true,
     },
-  }
-EOF
+  },
+})
 ```
 
-### <a href="#neovim-imports" id="neovim-imports">Imports</a>
+### <a href="#neovim-imports" id="neovim-imports">Imports and Formatting</a>
 
-To get your imports ordered on save, like `goimports` does, you can define
-a helper function in Lua:
+Use the following configuration to have your imports organized on save using
+the logic of `goimports` and your code formatted.
 
-```vim
-lua <<EOF
-  -- …
-
-  function goimports(timeout_ms)
-    local context = { only = { "source.organizeImports" } }
-    vim.validate { context = { context, "t", true } }
-
+```lua
+autocmd("BufWritePre", {
+  pattern = "*.go",
+  callback = function()
     local params = vim.lsp.util.make_range_params()
-    params.context = context
-
-    -- See the implementation of the textDocument/codeAction callback
-    -- (lua/vim/lsp/handler.lua) for how to do this properly.
-    local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, timeout_ms)
-    if not result or next(result) == nil then return end
-    local actions = result[1].result
-    if not actions then return end
-    local action = actions[1]
-
-    -- textDocument/codeAction can return either Command[] or CodeAction[]. If it
-    -- is a CodeAction, it can have either an edit, a command or both. Edits
-    -- should be executed first.
-    if action.edit or type(action.command) == "table" then
-      if action.edit then
-        vim.lsp.util.apply_workspace_edit(action.edit)
+    params.context = {only = {"source.organizeImports"}}
+    -- buf_request_sync defaults to a 1000ms timeout. Depending on your
+    -- machine and codebase, you may want longer. Add an additional
+    -- argument after params if you find that you have to write the file
+    -- twice for changes to be saved.
+    -- E.g., vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 3000)
+    local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params)
+    for cid, res in pairs(result or {}) do
+      for _, r in pairs(res.result or {}) do
+        if r.edit then
+          local enc = (vim.lsp.get_client_by_id(cid) or {}).offset_encoding or "utf-16"
+          vim.lsp.util.apply_workspace_edit(r.edit, enc)
+        end
       end
-      if type(action.command) == "table" then
-        vim.lsp.buf.execute_command(action.command)
-      end
-    else
-      vim.lsp.buf.execute_command(action)
     end
+    vim.lsp.buf.format({async = false})
   end
-EOF
-
-autocmd BufWritePre *.go lua goimports(1000)
+})
 ```
-
-(Taken from the [discussion][nvim-lspconfig-imports] on Neovim issue tracker.)
 
 ### <a href="#neovim-omnifunc" id="neovim-omnifunc">Omnifunc</a>
 
-To make your <kbd>Ctrl</kbd>+<kbd>x</kbd>,<kbd>Ctrl</kbd>+<kbd>o</kbd> work, add
-this to your `init.vim`:
+In Neovim v0.8.1 and later if you don't set the option `omnifunc`, it will auto
+set to `v:lua.vim.lsp.omnifunc`. If you are using an earlier version, you can
+configure it manually:
 
-```vim
-autocmd FileType go setlocal omnifunc=v:lua.vim.lsp.omnifunc
+```lua
+local on_attach = function(client, bufnr)
+  -- Enable completion triggered by <c-x><c-o>
+  vim.api.nvim_buf_set_option(bufnr, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
+end
+require('lspconfig').gopls.setup({
+   on_attach = on_attach
+})
 ```
 
 ### <a href="#neovim-links" id="neovim-links">Additional Links</a>

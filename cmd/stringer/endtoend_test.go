@@ -11,15 +11,15 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"go/build"
 	"io"
-	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/tools/internal/testenv"
@@ -31,9 +31,27 @@ import (
 // we run stringer -type X and then compile and run the program. The resulting
 // binary panics if the String method for X is not correct, including for error cases.
 
+func TestMain(m *testing.M) {
+	if os.Getenv("STRINGER_TEST_IS_STRINGER") != "" {
+		main()
+		os.Exit(0)
+	}
+
+	// Inform subprocesses that they should run the cmd/stringer main instead of
+	// running tests. It's a close approximation to building and running the real
+	// command, and much less complicated and expensive to build and clean up.
+	os.Setenv("STRINGER_TEST_IS_STRINGER", "1")
+
+	flag.Parse()
+	if testing.Verbose() {
+		os.Setenv("GOPACKAGESDEBUG", "true")
+	}
+
+	os.Exit(m.Run())
+}
+
 func TestEndToEnd(t *testing.T) {
-	dir, stringer := buildStringer(t)
-	defer os.RemoveAll(dir)
+	stringer := stringerPath(t)
 	// Read the testdata directory.
 	fd, err := os.Open("testdata")
 	if err != nil {
@@ -61,11 +79,12 @@ func TestEndToEnd(t *testing.T) {
 			// This file is used for tag processing in TestTags or TestConstValueChange, below.
 			continue
 		}
-		if name == "cgo.go" && !build.Default.CgoEnabled {
-			t.Logf("cgo is not enabled for %s", name)
-			continue
-		}
-		stringerCompileAndRun(t, dir, stringer, typeName(name), name)
+		t.Run(name, func(t *testing.T) {
+			if name == "cgo.go" && !build.Default.CgoEnabled {
+				t.Skipf("cgo is not enabled for %s", name)
+			}
+			stringerCompileAndRun(t, t.TempDir(), stringer, typeName(name), name)
+		})
 	}
 }
 
@@ -92,8 +111,8 @@ func moreTests(t *testing.T, dirname, prefix string) []string {
 
 // TestTags verifies that the -tags flag works as advertised.
 func TestTags(t *testing.T) {
-	dir, stringer := buildStringer(t)
-	defer os.RemoveAll(dir)
+	stringer := stringerPath(t)
+	dir := t.TempDir()
 	var (
 		protectedConst = []byte("TagProtected")
 		output         = filepath.Join(dir, "const_string.go")
@@ -109,11 +128,11 @@ func TestTags(t *testing.T) {
 	// - Versions of Go earlier than Go 1.11, do not support absolute directories as a pattern.
 	// - When the current directory is inside a go module, the path will not be considered
 	//   a valid path to a package.
-	err := runInDir(dir, stringer, "-type", "Const", ".")
+	err := runInDir(t, dir, stringer, "-type", "Const", ".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := ioutil.ReadFile(output)
+	result, err := os.ReadFile(output)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,11 +143,11 @@ func TestTags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = runInDir(dir, stringer, "-type", "Const", "-tags", "tag", ".")
+	err = runInDir(t, dir, stringer, "-type", "Const", "-tags", "tag", ".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err = ioutil.ReadFile(output)
+	result, err = os.ReadFile(output)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,8 +159,8 @@ func TestTags(t *testing.T) {
 // TestConstValueChange verifies that if a constant value changes and
 // the stringer code is not regenerated, we'll get a compiler error.
 func TestConstValueChange(t *testing.T) {
-	dir, stringer := buildStringer(t)
-	defer os.RemoveAll(dir)
+	stringer := stringerPath(t)
+	dir := t.TempDir()
 	source := filepath.Join(dir, "day.go")
 	err := copy(source, filepath.Join("testdata", "day.go"))
 	if err != nil {
@@ -149,12 +168,12 @@ func TestConstValueChange(t *testing.T) {
 	}
 	stringSource := filepath.Join(dir, "day_string.go")
 	// Run stringer in the directory that contains the package files.
-	err = runInDir(dir, stringer, "-type", "Day", "-output", stringSource)
+	err = runInDir(t, dir, stringer, "-type", "Day", "-output", stringSource)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Run the binary in the temporary directory as a sanity check.
-	err = run("go", "run", stringSource, source)
+	err = run(t, "go", "run", stringSource, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,34 +191,34 @@ func TestConstValueChange(t *testing.T) {
 	// output. An alternative might be to check that the error output
 	// matches a set of possible error strings emitted by known
 	// Go compilers.
-	fmt.Fprintf(os.Stderr, "Note: the following messages should indicate an out-of-bounds compiler error\n")
-	err = run("go", "build", stringSource, source)
+	t.Logf("Note: the following messages should indicate an out-of-bounds compiler error\n")
+	err = run(t, "go", "build", stringSource, source)
 	if err == nil {
 		t.Fatal("unexpected compiler success")
 	}
 }
 
-// buildStringer creates a temporary directory and installs stringer there.
-func buildStringer(t *testing.T) (dir string, stringer string) {
-	t.Helper()
-	testenv.NeedsTool(t, "go")
+var exe struct {
+	path string
+	err  error
+	once sync.Once
+}
 
-	dir, err := ioutil.TempDir("", "stringer")
-	if err != nil {
-		t.Fatal(err)
+func stringerPath(t *testing.T) string {
+	testenv.NeedsExec(t)
+
+	exe.once.Do(func() {
+		exe.path, exe.err = os.Executable()
+	})
+	if exe.err != nil {
+		t.Fatal(exe.err)
 	}
-	stringer = filepath.Join(dir, "stringer.exe")
-	err = run("go", "build", "-o", stringer)
-	if err != nil {
-		t.Fatalf("building stringer: %s", err)
-	}
-	return dir, stringer
+	return exe.path
 }
 
 // stringerCompileAndRun runs stringer for the named file and compiles and
 // runs the target binary in directory dir. That binary will panic if the String method is incorrect.
 func stringerCompileAndRun(t *testing.T, dir, stringer, typeName, fileName string) {
-	t.Helper()
 	t.Logf("run: %s %s\n", fileName, typeName)
 	source := filepath.Join(dir, path.Base(fileName))
 	err := copy(source, filepath.Join("testdata", fileName))
@@ -208,12 +227,12 @@ func stringerCompileAndRun(t *testing.T, dir, stringer, typeName, fileName strin
 	}
 	stringSource := filepath.Join(dir, typeName+"_string.go")
 	// Run stringer in temporary directory.
-	err = run(stringer, "-type", typeName, "-output", stringSource, source)
+	err = run(t, stringer, "-type", typeName, "-output", stringSource, source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Run the binary in the temporary directory.
-	err = run("go", "run", stringSource, source)
+	err = run(t, "go", "run", stringSource, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,17 +256,24 @@ func copy(to, from string) error {
 
 // run runs a single command and returns an error if it does not succeed.
 // os/exec should have this function, to be honest.
-func run(name string, arg ...string) error {
-	return runInDir(".", name, arg...)
+func run(t testing.TB, name string, arg ...string) error {
+	t.Helper()
+	return runInDir(t, ".", name, arg...)
 }
 
 // runInDir runs a single command in directory dir and returns an error if
 // it does not succeed.
-func runInDir(dir, name string, arg ...string) error {
-	cmd := exec.Command(name, arg...)
+func runInDir(t testing.TB, dir, name string, arg ...string) error {
+	t.Helper()
+	cmd := testenv.Command(t, name, arg...)
 	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(), "GO111MODULE=auto")
-	return cmd.Run()
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		t.Logf("%s", out)
+	}
+	if err != nil {
+		return fmt.Errorf("%v: %v", cmd, err)
+	}
+	return nil
 }

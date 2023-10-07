@@ -21,12 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/tools/go/ast/inspector"
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil"
 	"golang.org/x/tools/internal/testenv"
-	"golang.org/x/tools/internal/typeparams/genericfeatures"
 )
 
 func bytesAllocated() uint64 {
@@ -38,7 +36,7 @@ func bytesAllocated() uint64 {
 
 func TestStdlib(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping in short mode; too slow (https://golang.org/issue/14113)")
+		t.Skip("skipping in short mode; too slow (https://golang.org/issue/14113)") // ~5s
 	}
 	testenv.NeedsTool(t, "go")
 
@@ -51,22 +49,6 @@ func TestStdlib(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var nonGeneric int
-	for i := 0; i < len(pkgs); i++ {
-		pkg := pkgs[i]
-		inspect := inspector.New(pkg.Syntax)
-		features := genericfeatures.ForPackage(inspect, pkg.TypesInfo)
-		// Skip standard library packages that use generics. This won't be
-		// sufficient if any standard library packages start _importing_ packages
-		// that use generics.
-		if features != 0 {
-			t.Logf("skipping package %q which uses generics", pkg.PkgPath)
-			continue
-		}
-		pkgs[nonGeneric] = pkg
-		nonGeneric++
-	}
-	pkgs = pkgs[:nonGeneric]
 
 	t1 := time.Now()
 	alloc1 := bytesAllocated()
@@ -76,6 +58,7 @@ func TestStdlib(t *testing.T) {
 	// Comment out these lines during benchmarking.  Approx SSA build costs are noted.
 	mode |= ssa.SanityCheckFunctions // + 2% space, + 4% time
 	mode |= ssa.GlobalDebug          // +30% space, +18% time
+	mode |= ssa.InstantiateGenerics  // + 0% space, + 2% time (unlikely to reproduce outside of stdlib)
 	prog, _ := ssautil.Packages(pkgs, mode)
 
 	t2 := time.Now()
@@ -98,20 +81,33 @@ func TestStdlib(t *testing.T) {
 
 	allFuncs := ssautil.AllFunctions(prog)
 
-	// Check that all non-synthetic functions have distinct names.
-	// Synthetic wrappers for exported methods should be distinct too,
-	// except for unexported ones (explained at (*Function).RelString).
-	byName := make(map[string]*ssa.Function)
-	for fn := range allFuncs {
-		if fn.Synthetic == "" || ast.IsExported(fn.Name()) {
-			str := fn.String()
-			prev := byName[str]
-			byName[str] = fn
-			if prev != nil {
-				t.Errorf("%s: duplicate function named %s",
-					prog.Fset.Position(fn.Pos()), str)
-				t.Errorf("%s:   (previously defined here)",
-					prog.Fset.Position(prev.Pos()))
+	// The assertion below is not valid if the program contains
+	// variants of the same package, such as the test variants
+	// (e.g. package p as compiled for test executable x) obtained
+	// when cfg.Tests=true. Profile-guided optimization may
+	// lead to similar variation for non-test executables.
+	//
+	// Ideally, the test would assert that all functions within
+	// each executable (more generally: within any singly rooted
+	// transitively closed subgraph of the import graph) have
+	// distinct names, but that isn't so easy to compute efficiently.
+	// Disabling for now.
+	if false {
+		// Check that all non-synthetic functions have distinct names.
+		// Synthetic wrappers for exported methods should be distinct too,
+		// except for unexported ones (explained at (*Function).RelString).
+		byName := make(map[string]*ssa.Function)
+		for fn := range allFuncs {
+			if fn.Synthetic == "" || ast.IsExported(fn.Name()) {
+				str := fn.String()
+				prev := byName[str]
+				byName[str] = fn
+				if prev != nil {
+					t.Errorf("%s: duplicate function named %s",
+						prog.Fset.Position(fn.Pos()), str)
+					t.Errorf("%s:   (previously defined here)",
+						prog.Fset.Position(prev.Pos()))
+				}
 			}
 		}
 	}

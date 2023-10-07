@@ -11,7 +11,6 @@ import (
 	"go/format"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,14 +18,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"testing"
 	"text/scanner"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/internal/checker"
 	"golang.org/x/tools/go/packages"
-	"golang.org/x/tools/internal/lsp/diff"
-	"golang.org/x/tools/internal/lsp/diff/myers"
-	"golang.org/x/tools/internal/span"
+	"golang.org/x/tools/internal/diff"
 	"golang.org/x/tools/internal/testenv"
 	"golang.org/x/tools/txtar"
 )
@@ -36,7 +34,7 @@ import (
 // maps file names to contents). On success it returns the name of the
 // directory and a cleanup function to delete it.
 func WriteFiles(filemap map[string]string) (dir string, cleanup func(), err error) {
-	gopath, err := ioutil.TempDir("", "analysistest")
+	gopath, err := os.MkdirTemp("", "analysistest")
 	if err != nil {
 		return "", nil, err
 	}
@@ -45,7 +43,7 @@ func WriteFiles(filemap map[string]string) (dir string, cleanup func(), err erro
 	for name, content := range filemap {
 		filename := filepath.Join(gopath, "src", name)
 		os.MkdirAll(filepath.Dir(filename), 0777) // ignore error
-		if err := ioutil.WriteFile(filename, []byte(content), 0666); err != nil {
+		if err := os.WriteFile(filename, []byte(content), 0666); err != nil {
 			cleanup()
 			return "", nil, err
 		}
@@ -81,23 +79,52 @@ type Testing interface {
 // Each section in the archive corresponds to a single message.
 //
 // A golden file using txtar may look like this:
-// 	-- turn into single negation --
-// 	package pkg
 //
-// 	func fn(b1, b2 bool) {
-// 		if !b1 { // want `negating a boolean twice`
-// 			println()
-// 		}
-// 	}
+//	-- turn into single negation --
+//	package pkg
 //
-// 	-- remove double negation --
-// 	package pkg
+//	func fn(b1, b2 bool) {
+//		if !b1 { // want `negating a boolean twice`
+//			println()
+//		}
+//	}
 //
-// 	func fn(b1, b2 bool) {
-// 		if b1 { // want `negating a boolean twice`
-// 			println()
-// 		}
-// 	}
+//	-- remove double negation --
+//	package pkg
+//
+//	func fn(b1, b2 bool) {
+//		if b1 { // want `negating a boolean twice`
+//			println()
+//		}
+//	}
+//
+// # Conflicts
+//
+// A single analysis pass may offer two or more suggested fixes that
+// (1) conflict but are nonetheless logically composable, (e.g.
+// because both update the import declaration), or (2) are
+// fundamentally incompatible (e.g. alternative fixes to the same
+// statement).
+//
+// It is up to the driver to decide how to apply such fixes. A
+// sophisticated driver could attempt to resolve conflicts of the
+// first kind, but this test driver simply reports the fact of the
+// conflict with the expectation that the user will split their tests
+// into nonconflicting parts.
+//
+// Conflicts of the second kind can be avoided by giving the
+// alternative fixes different names (SuggestedFix.Message) and using
+// a multi-section .txtar file with a named section for each
+// alternative fix.
+//
+// Analyzers that compute fixes from a textual diff of the
+// before/after file contents (instead of directly from syntax tree
+// positions) may produce fixes that, although logically
+// non-conflicting, nonetheless conflict due to the particulars of the
+// diff algorithm. In such cases it may suffice to introduce
+// sufficient separation of the statements in the test input so that
+// the computed diffs do not overlap. If that fails, break the test
+// into smaller parts.
 func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns ...string) []*Result {
 	r := Run(t, dir, a, patterns...)
 
@@ -113,7 +140,7 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 	// should match up.
 	for _, act := range r {
 		// file -> message -> edits
-		fileEdits := make(map[*token.File]map[string][]diff.TextEdit)
+		fileEdits := make(map[*token.File]map[string][]diff.Edit)
 		fileContents := make(map[*token.File][]byte)
 
 		// Validate edits, prepare the fileEdits map and read the file contents.
@@ -135,23 +162,19 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 						continue
 					}
 					if _, ok := fileContents[file]; !ok {
-						contents, err := ioutil.ReadFile(file.Name())
+						contents, err := os.ReadFile(file.Name())
 						if err != nil {
 							t.Errorf("error reading %s: %v", file.Name(), err)
 						}
 						fileContents[file] = contents
 					}
-					spn, err := span.NewRange(act.Pass.Fset, edit.Pos, edit.End).Span()
-					if err != nil {
-						t.Errorf("error converting edit to span %s: %v", file.Name(), err)
-					}
-
 					if _, ok := fileEdits[file]; !ok {
-						fileEdits[file] = make(map[string][]diff.TextEdit)
+						fileEdits[file] = make(map[string][]diff.Edit)
 					}
-					fileEdits[file][sf.Message] = append(fileEdits[file][sf.Message], diff.TextEdit{
-						Span:    spn,
-						NewText: string(edit.NewText),
+					fileEdits[file][sf.Message] = append(fileEdits[file][sf.Message], diff.Edit{
+						Start: file.Offset(edit.Pos),
+						End:   file.Offset(edit.End),
+						New:   string(edit.NewText),
 					})
 				}
 			}
@@ -188,23 +211,14 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 					for _, vf := range ar.Files {
 						if vf.Name == sf {
 							found = true
-							out := diff.ApplyEdits(string(orig), edits)
 							// the file may contain multiple trailing
 							// newlines if the user places empty lines
 							// between files in the archive. normalize
 							// this to a single newline.
-							want := string(bytes.TrimRight(vf.Data, "\n")) + "\n"
-							formatted, err := format.Source([]byte(out))
-							if err != nil {
-								t.Errorf("%s: error formatting edited source: %v\n%s", file.Name(), err, out)
-								continue
-							}
-							if want != string(formatted) {
-								d, err := myers.ComputeEdits("", want, string(formatted))
-								if err != nil {
-									t.Errorf("failed to compute suggested fix diff: %v", err)
-								}
-								t.Errorf("suggested fixes failed for %s:\n%s", file.Name(), diff.ToUnified(fmt.Sprintf("%s.golden [%s]", file.Name(), sf), "actual", want, d))
+							golden := append(bytes.TrimRight(vf.Data, "\n"), '\n')
+
+							if err := applyDiffsAndCompare(orig, golden, edits, file.Name()); err != nil {
+								t.Errorf("%s", err)
 							}
 							break
 						}
@@ -216,25 +230,13 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 			} else {
 				// all suggested fixes are represented by a single file
 
-				var catchallEdits []diff.TextEdit
+				var catchallEdits []diff.Edit
 				for _, edits := range fixes {
 					catchallEdits = append(catchallEdits, edits...)
 				}
 
-				out := diff.ApplyEdits(string(orig), catchallEdits)
-				want := string(ar.Comment)
-
-				formatted, err := format.Source([]byte(out))
-				if err != nil {
-					t.Errorf("%s: error formatting resulting source: %v\n%s", file.Name(), err, out)
-					continue
-				}
-				if want != string(formatted) {
-					d, err := myers.ComputeEdits("", want, string(formatted))
-					if err != nil {
-						t.Errorf("%s: failed to compute suggested fix diff: %s", file.Name(), err)
-					}
-					t.Errorf("suggested fixes failed for %s:\n%s", file.Name(), diff.ToUnified(file.Name()+".golden", "actual", want, d))
+				if err := applyDiffsAndCompare(orig, ar.Comment, catchallEdits, file.Name()); err != nil {
+					t.Errorf("%s", err)
 				}
 			}
 		}
@@ -242,13 +244,42 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 	return r
 }
 
+// applyDiffsAndCompare applies edits to src and compares the results against
+// golden after formatting both. fileName is use solely for error reporting.
+func applyDiffsAndCompare(src, golden []byte, edits []diff.Edit, fileName string) error {
+	out, err := diff.ApplyBytes(src, edits)
+	if err != nil {
+		return fmt.Errorf("%s: error applying fixes: %v (see possible explanations at RunWithSuggestedFixes)", fileName, err)
+	}
+	wantRaw, err := format.Source(golden)
+	if err != nil {
+		return fmt.Errorf("%s.golden: error formatting golden file: %v\n%s", fileName, err, out)
+	}
+	want := string(wantRaw)
+
+	formatted, err := format.Source(out)
+	if err != nil {
+		return fmt.Errorf("%s: error formatting resulting source: %v\n%s", fileName, err, out)
+	}
+	if got := string(formatted); got != want {
+		unified := diff.Unified(fileName+".golden", "actual", want, got)
+		return fmt.Errorf("suggested fixes failed for %s:\n%s", fileName, unified)
+	}
+	return nil
+}
+
 // Run applies an analysis to the packages denoted by the "go list" patterns.
 //
-// It loads the packages from the specified GOPATH-style project
+// It loads the packages from the specified
 // directory using golang.org/x/tools/go/packages, runs the analysis on
 // them, and checks that each analysis emits the expected diagnostics
 // and facts specified by the contents of '// want ...' comments in the
-// package's source files.
+// package's source files. It treats a comment of the form
+// "//...// want..." or "/*...// want... */" as if it starts at 'want'.
+//
+// If the directory contains a go.mod file, Run treats it as the root of the
+// Go module in which to work. Otherwise, Run treats it as the root of a
+// GOPATH-style tree, with package contained in the src subdirectory.
 //
 // An expectation of a Diagnostic is specified by a string literal
 // containing a regular expression that must match the diagnostic
@@ -280,13 +311,18 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 // attempted, even if unsuccessful. It is safe for a test to ignore all
 // the results, but a test may use it to perform additional checks.
 func Run(t Testing, dir string, a *analysis.Analyzer, patterns ...string) []*Result {
-	if t, ok := t.(testenv.Testing); ok {
+	if t, ok := t.(testing.TB); ok {
 		testenv.NeedsGoPackages(t)
 	}
 
 	pkgs, err := loadPackages(a, dir, patterns...)
 	if err != nil {
 		t.Errorf("loading %s: %v", patterns, err)
+		return nil
+	}
+
+	if err := analysis.Validate([]*analysis.Analyzer{a}); err != nil {
+		t.Errorf("Validate: %v", err)
 		return nil
 	}
 
@@ -305,10 +341,17 @@ func Run(t Testing, dir string, a *analysis.Analyzer, patterns ...string) []*Res
 type Result = checker.TestAnalyzerResult
 
 // loadPackages uses go/packages to load a specified packages (from source, with
-// dependencies) from dir, which is the root of a GOPATH-style project
-// tree. It returns an error if any package had an error, or the pattern
+// dependencies) from dir, which is the root of a GOPATH-style project tree.
+// loadPackages returns an error if any package had an error, or the pattern
 // matched no packages.
 func loadPackages(a *analysis.Analyzer, dir string, patterns ...string) ([]*packages.Package, error) {
+	env := []string{"GOPATH=" + dir, "GO111MODULE=off"} // GOPATH mode
+
+	// Undocumented module mode. Will be replaced by something better.
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		env = []string{"GO111MODULE=on", "GOPROXY=off"} // module mode
+	}
+
 	// packages.Load loads the real standard library, not a minimal
 	// fake version, which would be more efficient, especially if we
 	// have many small tests that import, say, net/http.
@@ -316,11 +359,14 @@ func loadPackages(a *analysis.Analyzer, dir string, patterns ...string) ([]*pack
 	// a list of packages we generate and then do the parsing and
 	// typechecking, though this feature seems to be a recurring need.
 
+	mode := packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedImports |
+		packages.NeedTypes | packages.NeedTypesSizes | packages.NeedSyntax | packages.NeedTypesInfo |
+		packages.NeedDeps | packages.NeedModule
 	cfg := &packages.Config{
-		Mode:  packages.LoadAllSyntax,
+		Mode:  mode,
 		Dir:   dir,
 		Tests: true,
-		Env:   append(os.Environ(), "GOPATH="+dir, "GO111MODULE=off", "GOPROXY=off"),
+		Env:   append(os.Environ(), env...),
 	}
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
@@ -405,7 +451,7 @@ func check(t Testing, gopath string, pass *analysis.Pass, diagnostics []analysis
 	// Extract 'want' comments from non-Go files.
 	// TODO(adonovan): we may need to handle //line directives.
 	for _, filename := range pass.OtherFiles {
-		data, err := ioutil.ReadFile(filename)
+		data, err := os.ReadFile(filename)
 		if err != nil {
 			t.Errorf("can't read '// want' comments from %s: %v", filename, err)
 			continue

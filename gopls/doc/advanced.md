@@ -16,7 +16,8 @@ Where `vX.Y.Z` is the desired version.
 
 ### Unstable versions
 
-To update `gopls` to the latest **unstable** version, use:
+To update `gopls` to the latest **unstable** version, use the following
+commands.
 
 ```sh
 # Create an empty go.mod file, only for tracking requirements.
@@ -24,11 +25,8 @@ cd $(mktemp -d)
 go mod init gopls-unstable
 
 # Use 'go get' to add requirements and to ensure they work together.
-go get golang.org/x/tools/gopls@master golang.org/x/tools@master
+go get -d golang.org/x/tools/gopls@master golang.org/x/tools@master
 
-# For go1.17 or older, the above `go get` command will build and
-# install `gopls`. For go1.18+ or tip, run the following command to install
-# using selected versions in go.mod.
 go install golang.org/x/tools/gopls
 ```
 
@@ -44,44 +42,39 @@ You can achieve this by adding the right version of `go` to your `PATH`
 (`export PATH=$HOME/go/bin:$PATH` on Unix systems) or by configuring your
 editor.
 
+To work on both `std` and `cmd` simultaneously, add a `go.work` file to
+`GOROOT/src`:
+
+```
+cd $(go env GOROOT)/src
+go work init . cmd
+```
+
+Note that you must work inside the `GOROOT/src` subdirectory, as the `go`
+command does not recognize `go.work` files in a parent of `GOROOT/src`
+(https://go.dev/issue/59429).
+
 ## Working with generic code
 
-Gopls has beta support for editing generic Go code, as defined by the type
-parameters proposal ([golang/go#43651](https://golang.org/issues/43651)) and
-type set addendum ([golang/go#45346](https://golang.org/issues/45346)).
-
-To enable this support, you need to **build gopls with a version of Go that
-supports generics**. The easiest way to do this is by installing the Go 1.18 Beta
-as described at
-[Tutorial: Getting started with generics#prerequisites](https://go.dev/doc/tutorial/generics),
-and then using this Go version to build gopls:
+Gopls has support for editing generic Go code. To enable this support, you need
+to **install gopls using Go 1.18 or later**. The easiest way to do this is by
+[installing Go 1.18+](https://go.dev/dl) and then using this Go version to
+install gopls:
 
 ```
-$ go1.18beta2 install golang.org/x/tools/gopls@latest
+$ go install golang.org/x/tools/gopls@latest
 ```
 
-When using the Go 1.18, it is strongly recommended that you install the latest
-version of `gopls`, or the latest **unstable** version as
-[described above](#installing-unreleased-versions).
+It is strongly recommended that you install the latest version of `gopls`, or
+the latest **unstable** version as [described above](#installing-unreleased-versions).
 
-You also need to make `gopls` select the beta version of `go` (in `<GOROOT>/go/bin`
-where GOROOT is the location reported by `go1.18beta2 env GOROOT`) by adding
-it to your `PATH` or by configuring your editor.
-
-The `gopls` built with these instructions understands generic code. To actually
-run the generic code you develop, you must also use the beta version of the Go
-compiler. For example:
-
-```
-$ go1.18beta2 run .
-```
+The `gopls` built with these instructions understands generic code. See the
+[generics tutorial](https://go.dev/doc/tutorial/generics) for more information
+on how to use generics in Go!
 
 ### Known issues
 
   * [`staticcheck`](https://github.com/golang/tools/blob/master/gopls/doc/settings.md#staticcheck-bool)
     on generic code is not supported yet.
-
-please follow the [v0.8.0](https://github.com/golang/go/milestone/244) milestone
-to see the list of go1.18-related known issues and our progress.
 
 [Go project]: https://go.googlesource.com/go

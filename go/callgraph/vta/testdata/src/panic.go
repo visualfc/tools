@@ -27,12 +27,12 @@ func recover2() {
 
 func Baz(a A) {
 	defer recover1()
+	defer recover()
 	panic(a)
 }
 
 // Relevant SSA:
 // func recover1():
-// 	0:
 //   t0 = print("only this recover...":string)
 //   t1 = recover()
 //   t2 = typeassert,ok t1.(I)
@@ -50,17 +50,14 @@ func Baz(a A) {
 //   return
 //
 // func Baz(i I):
-//   t0 = local A (a)
-//   *t0 = a
 //   defer recover1()
-//   t1 = *t0
-//   t2 = make interface{} <- A (t1)
+//   t0 = make interface{} <- A (a)
 //   panic t2
 
-// t2 argument to panic in Baz gets ultimately connected to recover
+// t0 argument to panic in Baz gets ultimately connected to recover
 // registers t1 in recover1() and t0 in recover2().
 
 // WANT:
 // Panic -> Recover
-// Local(t2) -> Panic
+// Local(t0) -> Panic
 // Recover -> Local(t0), Local(t1)

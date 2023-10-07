@@ -2,6 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build !android && !ios && (unix || aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris || plan9 || windows)
+// +build !android
+// +build !ios
+// +build unix aix darwin dragonfly freebsd linux netbsd openbsd solaris plan9 windows
+
 package ssa_test
 
 import (
@@ -48,7 +53,6 @@ func main() {
 // Build and run the ssadump.go program if you want a standalone tool
 // with similar functionality. It is located at
 // golang.org/x/tools/cmd/ssadump.
-//
 func Example_buildPackage() {
 	// Replace interface{} with any for this test.
 	ssa.SetNormalizeAnyForTesting(true)
@@ -159,7 +163,7 @@ func Example_loadWholeProgram() {
 	}
 
 	// Create SSA packages for well-typed packages and their dependencies.
-	prog, pkgs := ssautil.AllPackages(initial, ssa.PrintPackages)
+	prog, pkgs := ssautil.AllPackages(initial, ssa.PrintPackages|ssa.InstantiateGenerics)
 	_ = pkgs
 
 	// Build SSA code for the whole program.

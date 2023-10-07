@@ -8,13 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	. "golang.org/x/tools/internal/lsp/regtest"
-	"golang.org/x/tools/internal/lsp/source"
+	. "golang.org/x/tools/gopls/internal/lsp/regtest"
 )
 
 func TestPostfixSnippetCompletion(t *testing.T) {
-	t.Skipf("skipping test due to suspected synchronization bug; see https://go.dev/issue/50707")
-
 	const mod = `
 -- go.mod --
 module mod.com
@@ -268,6 +265,27 @@ for k := range foo {
 `,
 		},
 		{
+			name: "channel_range",
+			before: `
+package foo
+
+func _() {
+	foo := make(chan int)
+	foo.range
+}
+`,
+			after: `
+package foo
+
+func _() {
+	foo := make(chan int)
+	for e := range foo {
+	$0
+}
+}
+`,
+		},
+		{
 			name: "var",
 			before: `
 package foo
@@ -379,7 +397,7 @@ func _() {
 			before: `
 package foo
 
-func foo() []string { 
+func foo() []string {
 	x := "test"
 	return x.split
 }`,
@@ -388,7 +406,7 @@ package foo
 
 import "strings"
 
-func foo() []string { 
+func foo() []string {
 	x := "test"
 	return strings.Split(x, "$0")
 }`,
@@ -412,28 +430,158 @@ func foo() string {
 	return strings.Join(x, "$0")
 }`,
 		},
+		{
+			name: "if not nil interface",
+			before: `
+package foo
+
+func _() {
+	var foo error
+	foo.ifnotnil
+}
+`,
+			after: `
+package foo
+
+func _() {
+	var foo error
+	if foo != nil {
+	$0
+}
+}
+`,
+		},
+		{
+			name: "if not nil pointer",
+			before: `
+package foo
+
+func _() {
+	var foo *int
+	foo.ifnotnil
+}
+`,
+			after: `
+package foo
+
+func _() {
+	var foo *int
+	if foo != nil {
+	$0
+}
+}
+`,
+		},
+		{
+			name: "if not nil slice",
+			before: `
+package foo
+
+func _() {
+	var foo []int
+	foo.ifnotnil
+}
+`,
+			after: `
+package foo
+
+func _() {
+	var foo []int
+	if foo != nil {
+	$0
+}
+}
+`,
+		},
+		{
+			name: "if not nil map",
+			before: `
+package foo
+
+func _() {
+	var foo map[string]any
+	foo.ifnotnil
+}
+`,
+			after: `
+package foo
+
+func _() {
+	var foo map[string]any
+	if foo != nil {
+	$0
+}
+}
+`,
+		},
+		{
+			name: "if not nil channel",
+			before: `
+package foo
+
+func _() {
+	var foo chan int
+	foo.ifnotnil
+}
+`,
+			after: `
+package foo
+
+func _() {
+	var foo chan int
+	if foo != nil {
+	$0
+}
+}
+`,
+		},
+		{
+			name: "if not nil function",
+			before: `
+package foo
+
+func _() {
+	var foo func()
+	foo.ifnotnil
+}
+`,
+			after: `
+package foo
+
+func _() {
+	var foo func()
+	if foo != nil {
+	$0
+}
+}
+`,
+		},
 	}
 
-	r := WithOptions(Options(func(o *source.Options) {
-		o.ExperimentalPostfixCompletions = true
-	}))
+	r := WithOptions(
+		Settings{
+			"experimentalPostfixCompletions": true,
+		},
+	)
 	r.Run(t, mod, func(t *testing.T, env *Env) {
+		env.CreateBuffer("foo.go", "")
+
 		for _, c := range cases {
 			t.Run(c.name, func(t *testing.T) {
 				c.before = strings.Trim(c.before, "\n")
 				c.after = strings.Trim(c.after, "\n")
 
-				env.CreateBuffer("foo.go", c.before)
+				env.SetBufferContent("foo.go", c.before)
 
-				pos := env.RegexpSearch("foo.go", "\n}")
-				completions := env.Completion("foo.go", pos)
+				loc := env.RegexpSearch("foo.go", "\n}")
+				completions := env.Completion(loc)
 				if len(completions.Items) != 1 {
 					t.Fatalf("expected one completion, got %v", completions.Items)
 				}
 
-				env.AcceptCompletion("foo.go", pos, completions.Items[0])
+				env.AcceptCompletion(loc, completions.Items[0])
 
-				if buf := env.Editor.BufferText("foo.go"); buf != c.after {
+				if buf := env.BufferText("foo.go"); buf != c.after {
 					t.Errorf("\nGOT:\n%s\nEXPECTED:\n%s", buf, c.after)
 				}
 			})

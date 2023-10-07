@@ -43,6 +43,7 @@ import (
 type Profile struct {
 	CPU    string `flag:"profile.cpu" help:"write CPU profile to this file"`
 	Memory string `flag:"profile.mem" help:"write memory profile to this file"`
+	Alloc  string `flag:"profile.alloc" help:"write alloc profile to this file"`
 	Trace  string `flag:"profile.trace" help:"write trace log to this file"`
 }
 
@@ -92,6 +93,10 @@ func Main(ctx context.Context, app Application, args []string) {
 	if err := Run(ctx, s, app, args); err != nil {
 		fmt.Fprintf(s.Output(), "%s: %v\n", app.Name(), err)
 		if _, printHelp := err.(commandLineError); printHelp {
+			// TODO(adonovan): refine this. It causes
+			// any command-line error to result in the full
+			// usage message, which typically obscures
+			// the actual error.
 			s.Usage()
 		}
 		os.Exit(2)
@@ -101,7 +106,7 @@ func Main(ctx context.Context, app Application, args []string) {
 // Run is the inner loop for Main; invoked by Main, recursively by
 // Run, and by various tests.  It runs the application and returns an
 // error.
-func Run(ctx context.Context, s *flag.FlagSet, app Application, args []string) error {
+func Run(ctx context.Context, s *flag.FlagSet, app Application, args []string) (resultErr error) {
 	s.Usage = func() {
 		if app.ShortHelp() != "" {
 			fmt.Fprintf(s.Output(), "%s\n\nUsage:\n  ", app.ShortHelp())
@@ -128,9 +133,15 @@ func Run(ctx context.Context, s *flag.FlagSet, app Application, args []string) e
 			return err
 		}
 		if err := pprof.StartCPUProfile(f); err != nil {
+			f.Close() // ignore error
 			return err
 		}
-		defer pprof.StopCPUProfile()
+		defer func() {
+			pprof.StopCPUProfile()
+			if closeErr := f.Close(); resultErr == nil {
+				resultErr = closeErr
+			}
+		}()
 	}
 
 	if p != nil && p.Trace != "" {
@@ -139,10 +150,14 @@ func Run(ctx context.Context, s *flag.FlagSet, app Application, args []string) e
 			return err
 		}
 		if err := trace.Start(f); err != nil {
+			f.Close() // ignore error
 			return err
 		}
 		defer func() {
 			trace.Stop()
+			if closeErr := f.Close(); resultErr == nil {
+				resultErr = closeErr
+			}
 			log.Printf("To view the trace, run:\n$ go tool trace view %s", p.Trace)
 		}()
 	}
@@ -156,6 +171,19 @@ func Run(ctx context.Context, s *flag.FlagSet, app Application, args []string) e
 			runtime.GC() // get up-to-date statistics
 			if err := pprof.WriteHeapProfile(f); err != nil {
 				log.Printf("Writing memory profile: %v", err)
+			}
+			f.Close()
+		}()
+	}
+
+	if p != nil && p.Alloc != "" {
+		f, err := os.Create(p.Alloc)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := pprof.Lookup("allocs").WriteTo(f, 0); err != nil {
+				log.Printf("Writing alloc profile: %v", err)
 			}
 			f.Close()
 		}()
@@ -192,6 +220,9 @@ func addFlags(f *flag.FlagSet, field reflect.StructField, value reflect.Value) *
 	if value.Kind() != reflect.Struct {
 		return nil
 	}
+
+	// TODO(adonovan): there's no need for this special treatment of Profile:
+	// The caller can use f.Lookup("profile.cpu") etc instead.
 	p, _ := value.Addr().Interface().(*Profile)
 	// go through all the fields of the struct
 	for i := 0; i < value.Type().NumField(); i++ {

@@ -6,13 +6,14 @@ package jsonrpc2
 
 import (
 	"context"
+	"errors"
 	"io"
+	"math"
 	"net"
 	"os"
 	"time"
 
 	"golang.org/x/tools/internal/event"
-	errors "golang.org/x/xerrors"
 )
 
 // NOTE: This file provides an experimental API for serving multiple remote
@@ -100,7 +101,7 @@ func Serve(ctx context.Context, ln net.Listener, server StreamServer, idleTimeou
 	}()
 
 	// Max duration: ~290 years; surely that's long enough.
-	const forever = 1<<63 - 1
+	const forever = math.MaxInt64
 	if idleTimeout <= 0 {
 		idleTimeout = forever
 	}

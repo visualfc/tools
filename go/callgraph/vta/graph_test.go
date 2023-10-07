@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"golang.org/x/tools/go/callgraph/cha"
+	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil"
 )
 
@@ -24,7 +25,7 @@ func TestNodeInterface(t *testing.T) {
 	//   - global variable "gl"
 	//   - "main" function and its
 	//   - first register instruction t0 := *gl
-	prog, _, err := testProg("testdata/src/simple.go")
+	prog, _, err := testProg("testdata/src/simple.go", ssa.BuilderMode(0))
 	if err != nil {
 		t.Fatalf("couldn't load testdata/src/simple.go program: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestNodeInterface(t *testing.T) {
 
 func TestVtaGraph(t *testing.T) {
 	// Get the basic type int from a real program.
-	prog, _, err := testProg("testdata/src/simple.go")
+	prog, _, err := testProg("testdata/src/simple.go", ssa.BuilderMode(0))
 	if err != nil {
 		t.Fatalf("couldn't load testdata/src/simple.go program: %v", err)
 	}
@@ -151,21 +152,21 @@ func vtaGraphStr(g vtaGraph) []string {
 	return vgs
 }
 
-// subGraph checks if a graph `g1` is a subgraph of graph `g2`.
-// Assumes that each element in `g1` and `g2` is an edge set
-// for a particular node in a fixed yet arbitrary format.
-func subGraph(g1, g2 []string) bool {
-	m := make(map[string]bool)
-	for _, s := range g2 {
-		m[s] = true
+// setdiff returns the set difference of `X-Y` or {s | s ∈ X, s ∉ Y }.
+func setdiff(X, Y []string) []string {
+	y := make(map[string]bool)
+	var delta []string
+	for _, s := range Y {
+		y[s] = true
 	}
 
-	for _, s := range g1 {
-		if _, ok := m[s]; !ok {
-			return false
+	for _, s := range X {
+		if _, ok := y[s]; !ok {
+			delta = append(delta, s)
 		}
 	}
-	return true
+	sort.Strings(delta)
+	return delta
 }
 
 func TestVTAGraphConstruction(t *testing.T) {
@@ -191,7 +192,7 @@ func TestVTAGraphConstruction(t *testing.T) {
 		"testdata/src/panic.go",
 	} {
 		t.Run(file, func(t *testing.T) {
-			prog, want, err := testProg(file)
+			prog, want, err := testProg(file, ssa.BuilderMode(0))
 			if err != nil {
 				t.Fatalf("couldn't load test file '%s': %s", file, err)
 			}
@@ -200,8 +201,9 @@ func TestVTAGraphConstruction(t *testing.T) {
 			}
 
 			g, _ := typePropGraph(ssautil.AllFunctions(prog), cha.CallGraph(prog))
-			if gs := vtaGraphStr(g); !subGraph(want, gs) {
-				t.Errorf("`%s`: want superset of %v;\n got %v", file, want, gs)
+			got := vtaGraphStr(g)
+			if diff := setdiff(want, got); len(diff) > 0 {
+				t.Errorf("`%s`: want superset of %v;\n got %v\ndiff: %v", file, want, got, diff)
 			}
 		})
 	}

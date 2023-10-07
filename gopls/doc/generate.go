@@ -18,8 +18,8 @@ import (
 	"go/token"
 	"go/types"
 	"io"
-	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -32,39 +32,67 @@ import (
 	"github.com/jba/printsrc"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
-	"golang.org/x/tools/internal/lsp/command"
-	"golang.org/x/tools/internal/lsp/command/commandmeta"
-	"golang.org/x/tools/internal/lsp/mod"
-	"golang.org/x/tools/internal/lsp/source"
+	"golang.org/x/tools/gopls/internal/lsp/command"
+	"golang.org/x/tools/gopls/internal/lsp/command/commandmeta"
+	"golang.org/x/tools/gopls/internal/lsp/mod"
+	"golang.org/x/tools/gopls/internal/lsp/safetoken"
+	"golang.org/x/tools/gopls/internal/lsp/source"
 )
 
 func main() {
-	if _, err := doMain("..", true); err != nil {
+	if _, err := doMain(true); err != nil {
 		fmt.Fprintf(os.Stderr, "Generation failed: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func doMain(baseDir string, write bool) (bool, error) {
+func doMain(write bool) (bool, error) {
 	api, err := loadAPI()
 	if err != nil {
 		return false, err
 	}
 
-	if ok, err := rewriteFile(filepath.Join(baseDir, "internal/lsp/source/api_json.go"), api, write, rewriteAPI); !ok || err != nil {
+	sourceDir, err := pkgDir("golang.org/x/tools/gopls/internal/lsp/source")
+	if err != nil {
+		return false, err
+	}
+
+	if ok, err := rewriteFile(filepath.Join(sourceDir, "api_json.go"), api, write, rewriteAPI); !ok || err != nil {
 		return ok, err
 	}
-	if ok, err := rewriteFile(filepath.Join(baseDir, "gopls/doc/settings.md"), api, write, rewriteSettings); !ok || err != nil {
+
+	goplsDir, err := pkgDir("golang.org/x/tools/gopls")
+	if err != nil {
+		return false, err
+	}
+
+	if ok, err := rewriteFile(filepath.Join(goplsDir, "doc", "settings.md"), api, write, rewriteSettings); !ok || err != nil {
 		return ok, err
 	}
-	if ok, err := rewriteFile(filepath.Join(baseDir, "gopls/doc/commands.md"), api, write, rewriteCommands); !ok || err != nil {
+	if ok, err := rewriteFile(filepath.Join(goplsDir, "doc", "commands.md"), api, write, rewriteCommands); !ok || err != nil {
 		return ok, err
 	}
-	if ok, err := rewriteFile(filepath.Join(baseDir, "gopls/doc/analyzers.md"), api, write, rewriteAnalyzers); !ok || err != nil {
+	if ok, err := rewriteFile(filepath.Join(goplsDir, "doc", "analyzers.md"), api, write, rewriteAnalyzers); !ok || err != nil {
+		return ok, err
+	}
+	if ok, err := rewriteFile(filepath.Join(goplsDir, "doc", "inlayHints.md"), api, write, rewriteInlayHints); !ok || err != nil {
 		return ok, err
 	}
 
 	return true, nil
+}
+
+// pkgDir returns the directory corresponding to the import path pkgPath.
+func pkgDir(pkgPath string) (string, error) {
+	cmd := exec.Command("go", "list", "-f", "{{.Dir}}", pkgPath)
+	out, err := cmd.Output()
+	if err != nil {
+		if ee, _ := err.(*exec.ExitError); ee != nil && len(ee.Stderr) > 0 {
+			return "", fmt.Errorf("%v: %w\n%s", cmd, err, ee.Stderr)
+		}
+		return "", fmt.Errorf("%v: %w", cmd, err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func loadAPI() (*source.APIJSON, error) {
@@ -72,7 +100,7 @@ func loadAPI() (*source.APIJSON, error) {
 		&packages.Config{
 			Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax | packages.NeedDeps,
 		},
-		"golang.org/x/tools/internal/lsp/source",
+		"golang.org/x/tools/gopls/internal/lsp/source",
 	)
 	if err != nil {
 		return nil, err
@@ -102,6 +130,7 @@ func loadAPI() (*source.APIJSON, error) {
 	} {
 		api.Analyzers = append(api.Analyzers, loadAnalyzers(m)...)
 	}
+	api.Hints = loadHints(source.AllInlayHints)
 	for _, category := range []reflect.Value{
 		reflect.ValueOf(defaults.UserOptions),
 	} {
@@ -144,6 +173,14 @@ func loadAPI() (*source.APIJSON, error) {
 						Name:    fmt.Sprintf("%q", l.Lens),
 						Doc:     l.Doc,
 						Default: def,
+					})
+				}
+			case "hints":
+				for _, a := range api.Hints {
+					opt.EnumKeys.Keys = append(opt.EnumKeys.Keys, source.EnumKey{
+						Name:    fmt.Sprintf("%q", a.Name),
+						Doc:     a.Doc,
+						Default: strconv.FormatBool(a.Default),
 					})
 				}
 			}
@@ -431,10 +468,14 @@ func structDoc(fields []*commandmeta.Field, level int) string {
 		if fld.Doc != "" && level == 0 {
 			doclines := strings.Split(fld.Doc, "\n")
 			for _, line := range doclines {
-				fmt.Fprintf(&b, "%s\t// %s\n", indent, line)
+				text := ""
+				if line != "" {
+					text = " " + line
+				}
+				fmt.Fprintf(&b, "%s\t//%s\n", indent, text)
 			}
 		}
-		tag := fld.JSONTag
+		tag := strings.Split(fld.JSONTag, ",")[0]
 		if tag == "" {
 			tag = fld.Name
 		}
@@ -482,7 +523,25 @@ func loadAnalyzers(m map[string]*source.Analyzer) []*source.AnalyzerJSON {
 		json = append(json, &source.AnalyzerJSON{
 			Name:    a.Analyzer.Name,
 			Doc:     a.Analyzer.Doc,
+			URL:     a.Analyzer.URL,
 			Default: a.Enabled,
+		})
+	}
+	return json
+}
+
+func loadHints(m map[string]*source.Hint) []*source.HintJSON {
+	var sorted []string
+	for _, h := range m {
+		sorted = append(sorted, h.Name)
+	}
+	sort.Strings(sorted)
+	var json []*source.HintJSON
+	for _, name := range sorted {
+		h := m[name]
+		json = append(json, &source.HintJSON{
+			Name: h.Name,
+			Doc:  h.Doc,
 		})
 	}
 	return json
@@ -505,7 +564,7 @@ func upperFirst(x string) string {
 func fileForPos(pkg *packages.Package, pos token.Pos) (*ast.File, error) {
 	fset := pkg.Fset
 	for _, f := range pkg.Syntax {
-		if fset.Position(f.Pos()).Filename == fset.Position(pos).Filename {
+		if safetoken.StartPosition(fset, f.Pos()).Filename == safetoken.StartPosition(fset, pos).Filename {
 			return f, nil
 		}
 	}
@@ -513,7 +572,7 @@ func fileForPos(pkg *packages.Package, pos token.Pos) (*ast.File, error) {
 }
 
 func rewriteFile(file string, api *source.APIJSON, write bool, rewrite func([]byte, *source.APIJSON) ([]byte, error)) (bool, error) {
-	old, err := ioutil.ReadFile(file)
+	old, err := os.ReadFile(file)
 	if err != nil {
 		return false, err
 	}
@@ -527,7 +586,7 @@ func rewriteFile(file string, api *source.APIJSON, write bool, rewrite func([]by
 		return bytes.Equal(old, new), nil
 	}
 
-	if err := ioutil.WriteFile(file, new, 0); err != nil {
+	if err := os.WriteFile(file, new, 0); err != nil {
 		return false, err
 	}
 
@@ -537,7 +596,7 @@ func rewriteFile(file string, api *source.APIJSON, write bool, rewrite func([]by
 func rewriteAPI(_ []byte, api *source.APIJSON) ([]byte, error) {
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "// Code generated by \"golang.org/x/tools/gopls/doc/generate\"; DO NOT EDIT.\n\npackage source\n\nvar GeneratedAPIJSON = ")
-	if err := printsrc.NewPrinter("golang.org/x/tools/internal/lsp/source").Fprint(&buf, api); err != nil {
+	if err := printsrc.NewPrinter("golang.org/x/tools/gopls/internal/lsp/source").Fprint(&buf, api); err != nil {
 		return nil, err
 	}
 	return format.Source(buf.Bytes())
@@ -571,7 +630,7 @@ func rewriteSettings(doc []byte, api *source.APIJSON) ([]byte, error) {
 			writeTitle(section, h.final, level)
 			for _, opt := range h.options {
 				header := strMultiply("#", level+1)
-				section.Write([]byte(fmt.Sprintf("%s ", header)))
+				fmt.Fprintf(section, "%s ", header)
 				opt.Write(section)
 			}
 		}
@@ -697,6 +756,21 @@ func rewriteAnalyzers(doc []byte, api *source.APIJSON) ([]byte, error) {
 		}
 	}
 	return replaceSection(doc, "Analyzers", section.Bytes())
+}
+
+func rewriteInlayHints(doc []byte, api *source.APIJSON) ([]byte, error) {
+	section := bytes.NewBuffer(nil)
+	for _, hint := range api.Hints {
+		fmt.Fprintf(section, "## **%v**\n\n", hint.Name)
+		fmt.Fprintf(section, "%s\n\n", hint.Doc)
+		switch hint.Default {
+		case true:
+			fmt.Fprintf(section, "**Enabled by default.**\n\n")
+		case false:
+			fmt.Fprintf(section, "**Disabled by default. Enable it by setting `\"hints\": {\"%s\": true}`.**\n\n", hint.Name)
+		}
+	}
+	return replaceSection(doc, "Hints", section.Bytes())
 }
 
 func replaceSection(doc []byte, sectionName string, replacement []byte) ([]byte, error) {
