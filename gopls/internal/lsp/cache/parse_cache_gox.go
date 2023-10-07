@@ -31,5 +31,8 @@ const (
 // If parseFiles returns an error, it still returns a slice,
 // but with a nil entry for each file that could not be parsed.
 func (c *parseCache) parseGopFiles(ctx context.Context, fset *token.FileSet, mode parser.Mode, purgeFuncBodies bool, fhs ...source.FileHandle) ([]*source.ParsedGopFile, error) {
-	panic("todo")
+	for _ = range fhs {
+		panic("todo")
+	}
+	return nil, nil
 }
