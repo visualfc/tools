@@ -23,6 +23,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/filecache"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -1521,7 +1522,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs)
 		return nil, err
 	}
 	// goxls: Go+ files
-	pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, GopParseFull, false, inputs.gopFiles...)
+	pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, parserutil.ParseFull, false, inputs.gopFiles...)
 	if err != nil {
 		return nil, err
 	}

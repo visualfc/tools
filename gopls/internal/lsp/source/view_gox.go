@@ -13,6 +13,7 @@ import (
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
+	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/span"
 )
 
@@ -44,6 +45,20 @@ type ParsedGopFile struct {
 	FixedAST bool
 	Mapper   *protocol.Mapper // may map fixed Src, not file content
 	ParseErr scanner.ErrorList
+}
+
+// PositionPos returns the token.Pos of protocol position p within the file.
+func (pgf *ParsedGopFile) PositionPos(p protocol.Position) (token.Pos, error) {
+	offset, err := pgf.Mapper.PositionOffset(p)
+	if err != nil {
+		return token.NoPos, err
+	}
+	return safetoken.Pos(pgf.Tok, offset)
+}
+
+// NodeRange returns a protocol Range for the ast.Node interval in this file.
+func (pgf *ParsedGopFile) NodeRange(node ast.Node) (protocol.Range, error) {
+	return pgf.Mapper.NodeRange(pgf.Tok, node)
 }
 
 // NarrowestPackageForGopFile is a convenience function that selects the

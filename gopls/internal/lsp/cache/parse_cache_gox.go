@@ -12,10 +12,6 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp/source"
 )
 
-const (
-	GopParseFull parser.Mode = parser.AllErrors | parser.ParseComments
-)
-
 // parseGopFiles returns a ParsedGopFile for each file handle in fhs, in the
 // requested parse mode.
 //
