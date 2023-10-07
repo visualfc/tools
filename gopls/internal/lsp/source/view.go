@@ -845,6 +845,8 @@ const (
 	Tmpl
 	// Work is a go.work file.
 	Work
+	// goxls: Gop is a Go+ file.
+	Gop
 )
 
 func (k FileKind) String() string {
@@ -859,6 +861,8 @@ func (k FileKind) String() string {
 		return "tmpl"
 	case Work:
 		return "go.work"
+	case Gop: // goxls: Gop is a Go+ file
+		return "gop"
 	default:
 		return fmt.Sprintf("internal error: unknown file kind %d", k)
 	}

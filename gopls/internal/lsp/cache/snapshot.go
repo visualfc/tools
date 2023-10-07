@@ -287,6 +287,10 @@ func (s *snapshot) FileKind(fh source.FileHandle) source.FileKind {
 		return source.Sum
 	case ".work":
 		return source.Work
+	default:
+		if checkGopFile(fh, fext) { // goxls: check Go+ file
+			return source.Gop
+		}
 	}
 	exts := s.options.TemplateExtensions
 	for _, ext := range exts {
