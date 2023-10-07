@@ -7,6 +7,8 @@ require golang.org/x/tools/gopls v0.13.2
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/goplus/gop v1.1.7 // indirect
+	github.com/qiniu/x v1.11.9 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20221212164502-fae10dda9338 // indirect
 	golang.org/x/mod v0.13.0 // indirect
