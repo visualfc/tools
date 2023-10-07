@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/google/go-cmp v0.5.9
+	github.com/goplus/gop v1.1.7
 	github.com/jba/printsrc v0.2.2
 	github.com/jba/templatecheck v0.6.0
 	github.com/sergi/go-diff v1.1.0
@@ -20,12 +21,10 @@ require (
 	mvdan.cc/xurls/v2 v2.4.0
 )
 
-require github.com/qiniu/x v1.11.9 // indirect
-
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/google/safehtml v0.1.0 // indirect
-	github.com/goplus/gop v1.1.7
+	github.com/qiniu/x v1.11.9 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20221212164502-fae10dda9338 // indirect
 
 )
