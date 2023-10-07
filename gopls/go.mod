@@ -20,9 +20,12 @@ require (
 	mvdan.cc/xurls/v2 v2.4.0
 )
 
+require github.com/qiniu/x v1.11.9 // indirect
+
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/google/safehtml v0.1.0 // indirect
+	github.com/goplus/gop v1.1.7
 	golang.org/x/exp/typeparams v0.0.0-20221212164502-fae10dda9338 // indirect
 
 )

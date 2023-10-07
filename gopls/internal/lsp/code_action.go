@@ -109,7 +109,7 @@ func (s *Server) codeAction(ctx context.Context, params *protocol.CodeActionPara
 
 		return actions, nil
 
-	case source.Go:
+	case source.Go, source.Gop: // goxls: Go+
 		diagnostics := params.Context.Diagnostics
 
 		// Don't suggest fixes for generated files, since they are generally

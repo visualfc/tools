@@ -5,13 +5,10 @@
 package cache
 
 import (
+	"golang.org/x/tools/gopls/internal/goxls/goputil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 )
 
 func checkGopFile(fh source.FileHandle, fext string) bool {
-	switch fext {
-	case ".gop", ".spx", ".rdx", ".gox", ".gmx":
-		return true
-	}
-	return false
+	return goputil.FileKind(fext) != goputil.FileUnknown
 }

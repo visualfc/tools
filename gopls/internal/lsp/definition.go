@@ -34,7 +34,7 @@ func (s *Server) definition(ctx context.Context, params *protocol.DefinitionPara
 	switch kind := snapshot.FileKind(fh); kind {
 	case source.Tmpl:
 		return template.Definition(snapshot, fh, params.Position)
-	case source.Go:
+	case source.Go, source.Gop: // goxls: Go+
 		return source.Definition(ctx, snapshot, fh, params.Position)
 	default:
 		return nil, fmt.Errorf("can't find definitions for file type %s", kind)
@@ -52,7 +52,7 @@ func (s *Server) typeDefinition(ctx context.Context, params *protocol.TypeDefini
 		return nil, err
 	}
 	switch kind := snapshot.FileKind(fh); kind {
-	case source.Go:
+	case source.Go, source.Gop: // goxls: Go+
 		return source.TypeDefinition(ctx, snapshot, fh, params.Position)
 	default:
 		return nil, fmt.Errorf("can't find type definitions for file type %s", kind)
