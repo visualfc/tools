@@ -42,6 +42,9 @@ type syntaxPackage struct {
 	// -- identifiers --
 	id PackageID
 
+	// goxls: Go+ files
+	gopFiles []*source.ParsedGopFile
+
 	// -- outputs --
 	fset            *token.FileSet // for now, same as the snapshot's FileSet
 	goFiles         []*source.ParsedGoFile
