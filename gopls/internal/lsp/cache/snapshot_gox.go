@@ -10,5 +10,5 @@ import (
 )
 
 func checkGopFile(fh source.FileHandle, fext string) bool {
-	return goputil.FileKind(fext) != goputil.FileUnknown
+	return goputil.FileKind(fext) != 0
 }

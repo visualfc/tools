@@ -36,6 +36,8 @@ func (s *Server) hover(ctx context.Context, params *protocol.HoverParams) (_ *pr
 		return mod.Hover(ctx, snapshot, fh, params.Position)
 	case source.Go:
 		return source.Hover(ctx, snapshot, fh, params.Position)
+	case source.Gop: // goxls: Go+
+		return source.HoverGop(ctx, snapshot, fh, params.Position)
 	case source.Tmpl:
 		return template.Hover(ctx, snapshot, fh, params.Position)
 	case source.Work:

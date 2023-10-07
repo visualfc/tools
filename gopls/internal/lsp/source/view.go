@@ -552,6 +552,9 @@ type Metadata struct {
 	CompiledGoFiles []span.URI
 	IgnoredFiles    []span.URI
 
+	// goxls: Go+ files
+	GopFiles []span.URI
+
 	ForTest       PackagePath // q in a "p [q.test]" package, else ""
 	TypesSizes    types.Sizes
 	Errors        []packages.Error          // must be set for packages in import cycles
@@ -957,6 +960,9 @@ type Package interface {
 	File(uri span.URI) (*ParsedGoFile, error)
 	GetSyntax() []*ast.File // (borrowed)
 	GetParseErrors() []scanner.ErrorList
+
+	// goxls: Go+ files
+	GopFile(uri span.URI) (*ParsedGopFile, error)
 
 	// Results of type checking:
 	GetTypes() *types.Package

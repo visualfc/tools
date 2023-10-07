@@ -1301,6 +1301,9 @@ type typeCheckInputs struct {
 	depsByImpPath            map[ImportPath]PackageID
 	goVersion                string // packages.Module.GoVersion, e.g. "1.18"
 
+	// goxls: Go+ files
+	gopFiles []source.FileHandle
+
 	// Used for type check diagnostics:
 	relatedInformation bool
 	linkTarget         string
@@ -1322,6 +1325,10 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 	if err != nil {
 		return typeCheckInputs{}, err
 	}
+	gopFiles, err := readFiles(ctx, s, m.GopFiles) // goxls: Go+ files
+	if err != nil {
+		return typeCheckInputs{}, err
+	}
 	compiledGoFiles, err := readFiles(ctx, s, m.CompiledGoFiles)
 	if err != nil {
 		return typeCheckInputs{}, err
@@ -1337,6 +1344,7 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 		pkgPath:         m.PkgPath,
 		name:            m.Name,
 		goFiles:         goFiles,
+		gopFiles:        gopFiles, // goxls: Go+ files
 		compiledGoFiles: compiledGoFiles,
 		sizes:           m.TypesSizes,
 		depsByImpPath:   m.DepsByImpPath,
@@ -1509,6 +1517,11 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs)
 	// compiled files.
 	var err error
 	pkg.goFiles, err = b.parseCache.parseFiles(ctx, b.fset, source.ParseFull, false, inputs.goFiles...)
+	if err != nil {
+		return nil, err
+	}
+	// goxls: Go+ files
+	pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, GopParseFull, false, inputs.gopFiles...)
 	if err != nil {
 		return nil, err
 	}

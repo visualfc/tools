@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls/goputil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
@@ -436,6 +437,14 @@ func buildMetadata(updates map[PackageID]*source.Metadata, pkg *packages.Package
 	for _, filename := range pkg.GoFiles {
 		uri := span.URIFromPath(filename)
 		m.GoFiles = append(m.GoFiles, uri)
+	}
+	// goxls: Go+ files: we don't change codes out of gopls
+	for _, filename := range pkg.OtherFiles {
+		fext := filepath.Ext(filename)
+		if goputil.FileKind(fext) != 0 { // Go+ file
+			uri := span.URIFromPath(filename)
+			m.GopFiles = append(m.GopFiles, uri)
+		}
 	}
 	for _, filename := range pkg.IgnoredFiles {
 		uri := span.URIFromPath(filename)
