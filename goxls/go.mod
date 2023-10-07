@@ -1,4 +1,4 @@
-module golang.org/x/tools/goxls
+module github.com/goplus/tools/goxls
 
 go 1.18
 
