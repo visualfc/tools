@@ -90,7 +90,7 @@ type Config = packages.Config
 
 // A Package describes a loaded Go+ package.
 type Package struct {
-	packages.Package
+	*packages.Package
 
 	// GopFiles lists the absolute file paths of the package's Go source files.
 	// It may include files that should not be compiled, for example because
@@ -136,7 +136,7 @@ func Load(cfg *Config, patterns ...string) ([]*Package, error) {
 	}
 	ret := make([]*Package, len(pkgs))
 	for i, pkg := range pkgs {
-		ret[i] = &Package{Package: *pkg, Imports: importPkgs(pkg.Imports)}
+		ret[i] = &Package{Package: pkg, Imports: importPkgs(pkg.Imports)}
 	}
 	return ret, nil
 }
@@ -147,7 +147,7 @@ func importPkgs(pkgs map[string]*packages.Package) map[string]*Package {
 	}
 	ret := make(map[string]*Package, len(pkgs))
 	for path, pkg := range pkgs {
-		ret[path] = &Package{Package: *pkg}
+		ret[path] = &Package{Package: pkg}
 	}
 	return ret
 }
@@ -188,10 +188,10 @@ func Visit(pkgs []*Package, pre func(*Package) bool, post func(*Package)) {
 
 func init() {
 	packagesinternal.GetForTest = func(p interface{}) string {
-		return internal.GetForTest(&p.(*Package).Package)
+		return internal.GetForTest(p.(*Package).Package)
 	}
 	packagesinternal.GetDepsErrors = func(p interface{}) []*packagesinternal.PackageError {
-		return internal.GetDepsErrors(&p.(*Package).Package)
+		return internal.GetDepsErrors(p.(*Package).Package)
 	}
 	packagesinternal.GetGoCmdRunner = internal.GetGoCmdRunner
 	packagesinternal.SetGoCmdRunner = internal.SetGoCmdRunner

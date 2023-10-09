@@ -972,7 +972,7 @@ type Package interface {
 
 	// goxls: Go+ files
 	GopFile(uri span.URI) (*ParsedGopFile, error)
-	GopTypesInfo() *typesutil.Info // use GopTypesInfo() instead of GetTypesInfo() in a Go+ package
+	GopTypesInfo() *typesutil.Info // use GopTypesInfo() in a Go+ file
 
 	// Results of type checking:
 	GetTypes() *types.Package
