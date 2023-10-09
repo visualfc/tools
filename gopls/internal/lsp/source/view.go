@@ -22,8 +22,9 @@ import (
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/types/objectpath"
+	"golang.org/x/tools/gopls/internal/goxls/packages"
+	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/progress"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -35,7 +36,6 @@ import (
 	"golang.org/x/tools/internal/event/tag"
 	"golang.org/x/tools/internal/gocommand"
 	"golang.org/x/tools/internal/imports"
-	"golang.org/x/tools/internal/packagesinternal"
 )
 
 // A GlobalSnapshotID uniquely identifies a snapshot within this process and
@@ -562,7 +562,8 @@ type Metadata struct {
 	IgnoredFiles    []span.URI
 
 	// goxls: Go+ files
-	GopFiles []span.URI
+	GopFiles         []span.URI
+	CompiledGopFiles []span.URI
 
 	ForTest       PackagePath // q in a "p [q.test]" package, else ""
 	TypesSizes    types.Sizes
@@ -972,7 +973,7 @@ type Package interface {
 
 	// goxls: Go+ files
 	GopFile(uri span.URI) (*ParsedGopFile, error)
-	GopTypesInfo() *typesutil.Info // use GopTypesInfo() instead of GetTypesInfo() in a Go+ package
+	GopTypesInfo() *typesutil.Info // use GopTypesInfo() in a Go+ file
 
 	// Results of type checking:
 	GetTypes() *types.Package

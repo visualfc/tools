@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"golang.org/x/tools/go/expect"
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/packages/packagestest"
+	"golang.org/x/tools/gopls/internal/goxls/packages"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -188,6 +188,14 @@ func Context(t testing.TB) context.Context {
 func DefaultOptions(o *source.Options) {
 	o.SupportedCodeActions = map[source.FileKind]map[protocol.CodeActionKind]bool{
 		source.Go: {
+			protocol.SourceOrganizeImports: true,
+			protocol.QuickFix:              true,
+			protocol.RefactorRewrite:       true,
+			protocol.RefactorInline:        true,
+			protocol.RefactorExtract:       true,
+			protocol.SourceFixAll:          true,
+		},
+		source.Gop: { // goxls: DefaultOptions is same as Go
 			protocol.SourceOrganizeImports: true,
 			protocol.QuickFix:              true,
 			protocol.RefactorRewrite:       true,

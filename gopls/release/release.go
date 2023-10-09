@@ -25,7 +25,7 @@ import (
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/semver"
-	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/gopls/internal/goxls/packages"
 )
 
 var versionFlag = flag.String("version", "", "version to tag")

@@ -15,16 +15,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/gopls/internal/bug"
-	"golang.org/x/tools/gopls/internal/goxls/goputil"
+	"golang.org/x/tools/gopls/internal/goxls/packages"         // goxls: replace golang.org/x/tools/go/packages
+	"golang.org/x/tools/gopls/internal/goxls/packagesinternal" // goxls: replace golang.org/x/tools/internal/packagesinternal
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/event/tag"
 	"golang.org/x/tools/internal/gocommand"
-	"golang.org/x/tools/internal/packagesinternal"
 )
 
 var loadID uint64 // atomic identifier for loads
@@ -438,14 +437,18 @@ func buildMetadata(updates map[PackageID]*source.Metadata, pkg *packages.Package
 		uri := span.URIFromPath(filename)
 		m.GoFiles = append(m.GoFiles, uri)
 	}
-	// goxls: Go+ files: we don't change codes out of gopls
-	for _, filename := range pkg.OtherFiles {
-		fext := filepath.Ext(filename)
-		if goputil.FileKind(fext) != 0 { // Go+ file
-			uri := span.URIFromPath(filename)
-			m.GopFiles = append(m.GopFiles, uri)
+	/*
+		if true { // goxls: Go+ files
+				for _, filename := range pkg.GopFiles {
+					uri := span.URIFromPath(filename)
+					m.GopFiles = append(m.GopFiles, uri)
+				}
+				for _, filename := range pkg.CompiledGopFiles {
+					uri := span.URIFromPath(filename)
+					m.CompiledGopFiles = append(m.CompiledGopFiles, uri)
+				}
 		}
-	}
+	*/
 	for _, filename := range pkg.IgnoredFiles {
 		uri := span.URIFromPath(filename)
 		m.IgnoredFiles = append(m.IgnoredFiles, uri)

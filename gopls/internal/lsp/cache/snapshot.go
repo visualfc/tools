@@ -27,9 +27,10 @@ import (
 	"unsafe"
 
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/types/objectpath"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls/packages"
+	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/filecache"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -42,7 +43,6 @@ import (
 	"golang.org/x/tools/internal/event/tag"
 	"golang.org/x/tools/internal/gocommand"
 	"golang.org/x/tools/internal/memoize"
-	"golang.org/x/tools/internal/packagesinternal"
 	"golang.org/x/tools/internal/persistent"
 	"golang.org/x/tools/internal/typesinternal"
 )
