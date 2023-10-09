@@ -437,18 +437,16 @@ func buildMetadata(updates map[PackageID]*source.Metadata, pkg *packages.Package
 		uri := span.URIFromPath(filename)
 		m.GoFiles = append(m.GoFiles, uri)
 	}
-	/*
-		if true { // goxls: Go+ files
-				for _, filename := range pkg.GopFiles {
-					uri := span.URIFromPath(filename)
-					m.GopFiles = append(m.GopFiles, uri)
-				}
-				for _, filename := range pkg.CompiledGopFiles {
-					uri := span.URIFromPath(filename)
-					m.CompiledGopFiles = append(m.CompiledGopFiles, uri)
-				}
+	if true { // goxls: Go+ files
+		for _, filename := range pkg.GopFiles {
+			uri := span.URIFromPath(filename)
+			m.GopFiles = append(m.GopFiles, uri)
 		}
-	*/
+		for _, filename := range pkg.CompiledGopFiles {
+			uri := span.URIFromPath(filename)
+			m.CompiledGopFiles = append(m.CompiledGopFiles, uri)
+		}
+	}
 	for _, filename := range pkg.IgnoredFiles {
 		uri := span.URIFromPath(filename)
 		m.IgnoredFiles = append(m.IgnoredFiles, uri)
