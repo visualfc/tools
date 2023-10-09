@@ -12,13 +12,13 @@ import (
 	"golang.org/x/tools/gopls/internal/span"
 )
 
-func (p *Package) GopFile(uri span.URI) (*source.ParsedGopFile, error) {
-	return p.pkg.GopFile(uri)
+func (p *Package) GopTypesInfo() *typesutil.Info {
+	panic("todo")
+	// return p.pkg.gopTypesInfo
 }
 
-func (p *Package) GopTypesInfo() *typesutil.Info {
-	// return p.pkg.typesInfo
-	panic("todo")
+func (p *Package) GopFile(uri span.URI) (*source.ParsedGopFile, error) {
+	return p.pkg.GopFile(uri)
 }
 
 func (pkg *syntaxPackage) GopFile(uri span.URI) (*source.ParsedGopFile, error) {

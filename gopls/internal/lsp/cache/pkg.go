@@ -13,6 +13,7 @@ import (
 	"go/types"
 	"sync"
 
+	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/lsp/source/methodsets"
 	"golang.org/x/tools/gopls/internal/lsp/source/xrefs"
@@ -43,7 +44,9 @@ type syntaxPackage struct {
 	id PackageID
 
 	// goxls: Go+ files
-	gopFiles []*source.ParsedGopFile
+	gopTypesInfo     *typesutil.Info
+	gopFiles         []*source.ParsedGopFile
+	compiledGopFiles []*source.ParsedGopFile
 
 	// -- outputs --
 	fset            *token.FileSet // for now, same as the snapshot's FileSet

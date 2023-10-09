@@ -1303,7 +1303,8 @@ type typeCheckInputs struct {
 	goVersion                string // packages.Module.GoVersion, e.g. "1.18"
 
 	// goxls: Go+ files
-	gopFiles []source.FileHandle
+	gopFiles         []source.FileHandle
+	compiledGopFiles []source.FileHandle
 
 	// Used for type check diagnostics:
 	relatedInformation bool
@@ -1330,6 +1331,10 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 	if err != nil {
 		return typeCheckInputs{}, err
 	}
+	compiledGopFiles, err := readFiles(ctx, s, m.CompiledGopFiles) // goxls: Go+ files
+	if err != nil {
+		return typeCheckInputs{}, err
+	}
 	compiledGoFiles, err := readFiles(ctx, s, m.CompiledGoFiles)
 	if err != nil {
 		return typeCheckInputs{}, err
@@ -1341,15 +1346,16 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 	}
 
 	return typeCheckInputs{
-		id:              m.ID,
-		pkgPath:         m.PkgPath,
-		name:            m.Name,
-		goFiles:         goFiles,
-		gopFiles:        gopFiles, // goxls: Go+ files
-		compiledGoFiles: compiledGoFiles,
-		sizes:           m.TypesSizes,
-		depsByImpPath:   m.DepsByImpPath,
-		goVersion:       goVersion,
+		id:               m.ID,
+		pkgPath:          m.PkgPath,
+		name:             m.Name,
+		goFiles:          goFiles,
+		gopFiles:         gopFiles,         // goxls: Go+ files
+		compiledGopFiles: compiledGopFiles, // goxls: Go+ files
+		compiledGoFiles:  compiledGoFiles,
+		sizes:            m.TypesSizes,
+		depsByImpPath:    m.DepsByImpPath,
+		goVersion:        goVersion,
 
 		relatedInformation: s.options.RelatedInformationSupported,
 		linkTarget:         s.options.LinkTarget,
@@ -1523,6 +1529,11 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs)
 	}
 	// goxls: Go+ files
 	pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, parserutil.ParseFull, false, inputs.gopFiles...)
+	if err != nil {
+		return nil, err
+	}
+	// goxls: Go+ files
+	pkg.compiledGopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, parserutil.ParseFull, false, inputs.compiledGopFiles...)
 	if err != nil {
 		return nil, err
 	}
