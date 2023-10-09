@@ -260,7 +260,7 @@ func missingModuleDiagnostics(ctx context.Context, snapshot *snapshot, pm *sourc
 			//
 			// import (
 			//   "golang.org/x/tools/go/expect"
-			//   "golang.org/x/tools/go/packages"
+			//   "golang.org/x/tools/gopls/internal/goxls/packages"
 			// )
 			// They both are related to the same module: "golang.org/x/tools".
 			var match string

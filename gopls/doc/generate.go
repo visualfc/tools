@@ -31,7 +31,7 @@ import (
 
 	"github.com/jba/printsrc"
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/gopls/internal/goxls/packages"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/command/commandmeta"
 	"golang.org/x/tools/gopls/internal/lsp/mod"

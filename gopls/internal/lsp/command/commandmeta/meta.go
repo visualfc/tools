@@ -16,7 +16,7 @@ import (
 	"unicode"
 
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/gopls/internal/goxls/packages"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 )
 

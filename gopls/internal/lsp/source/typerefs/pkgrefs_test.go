@@ -19,13 +19,13 @@ import (
 	"time"
 
 	"golang.org/x/tools/go/gcexportdata"
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/gopls/internal/astutil"
+	"golang.org/x/tools/gopls/internal/goxls/packages"
+	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
 	"golang.org/x/tools/gopls/internal/lsp/cache"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/lsp/source/typerefs"
 	"golang.org/x/tools/gopls/internal/span"
-	"golang.org/x/tools/internal/packagesinternal"
 	"golang.org/x/tools/internal/testenv"
 )
 
