@@ -195,6 +195,14 @@ func DefaultOptions(o *source.Options) {
 			protocol.RefactorExtract:       true,
 			protocol.SourceFixAll:          true,
 		},
+		source.Gop: { // goxls: DefaultOptions is same as Go
+			protocol.SourceOrganizeImports: true,
+			protocol.QuickFix:              true,
+			protocol.RefactorRewrite:       true,
+			protocol.RefactorInline:        true,
+			protocol.RefactorExtract:       true,
+			protocol.SourceFixAll:          true,
+		},
 		source.Mod: {
 			protocol.SourceOrganizeImports: true,
 		},
