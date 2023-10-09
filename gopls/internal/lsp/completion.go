@@ -36,8 +36,10 @@ func (s *Server) completion(ctx context.Context, params *protocol.CompletionPara
 	var candidates []completion.CompletionItem
 	var surrounding *completion.Selection
 	switch snapshot.FileKind(fh) {
-	case source.Go, source.Gop: // goxls: Go+
+	case source.Go:
 		candidates, surrounding, err = completion.Completion(ctx, snapshot, fh, params.Position, params.Context)
+	case source.Gop: // goxls: Go+ file
+		candidates, surrounding, err = completion.GopCompletion(ctx, snapshot, fh, params.Position, params.Context)
 	case source.Mod:
 		candidates, surrounding = nil, nil
 	case source.Work:

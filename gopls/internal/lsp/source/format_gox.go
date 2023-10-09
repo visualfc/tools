@@ -12,6 +12,7 @@ import (
 
 	"github.com/goplus/gop/format"
 	"golang.org/x/tools/gopls/internal/goxls/goputil"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/tokeninternal"
@@ -27,7 +28,7 @@ func FormatGop(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protoco
 		return nil, fmt.Errorf("can't format %q: file is generated", fh.URI().Filename())
 	}
 
-	pgf, err := snapshot.ParseGo(ctx, fh, ParseFull)
+	pgf, err := snapshot.ParseGop(ctx, fh, parserutil.ParseFull)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +40,7 @@ func FormatGop(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protoco
 		if err != nil {
 			return nil, err
 		}
-		return computeTextEdits(ctx, snapshot, pgf, string(formatted))
+		return computeGopTextEdits(ctx, snapshot, pgf, string(formatted))
 	}
 
 	// format.Node changes slightly from one release to another, so the version
@@ -78,7 +79,15 @@ func FormatGop(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protoco
 		}
 		formatted = string(b)
 	}
-	return computeTextEdits(ctx, snapshot, pgf, formatted)
+	return computeGopTextEdits(ctx, snapshot, pgf, formatted)
+}
+
+func computeGopTextEdits(ctx context.Context, snapshot Snapshot, pgf *ParsedGopFile, formatted string) ([]protocol.TextEdit, error) {
+	_, done := event.Start(ctx, "gop.computeTextEdits")
+	defer done()
+
+	edits := snapshot.Options().ComputeEdits(string(pgf.Src), formatted)
+	return ToProtocolEdits(pgf.Mapper, edits)
 }
 
 func formatGopSource(ctx context.Context, fh FileHandle) ([]byte, error) {
