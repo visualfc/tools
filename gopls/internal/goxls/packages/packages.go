@@ -6,6 +6,9 @@ package packages
 
 import (
 	"golang.org/x/tools/go/packages"
+	internal "golang.org/x/tools/internal/packagesinternal"
+
+	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 )
 
@@ -130,4 +133,20 @@ func importPkgs(pkgs map[string]*packages.Package) map[string]*Package {
 		ret[path] = &Package{Package: *pkg}
 	}
 	return ret
+}
+
+func init() {
+	packagesinternal.GetForTest = func(p interface{}) string {
+		return internal.GetForTest(&p.(*Package).Package)
+	}
+	packagesinternal.GetDepsErrors = func(p interface{}) []*packagesinternal.PackageError {
+		return internal.GetDepsErrors(&p.(*Package).Package)
+	}
+	packagesinternal.GetGoCmdRunner = internal.GetGoCmdRunner
+	packagesinternal.SetGoCmdRunner = internal.SetGoCmdRunner
+	packagesinternal.SetModFile = internal.SetModFile
+	packagesinternal.SetModFlag = internal.SetModFlag
+	packagesinternal.TypecheckCgo = internal.TypecheckCgo
+	packagesinternal.DepsErrors = internal.DepsErrors
+	packagesinternal.ForTest = internal.ForTest
 }
