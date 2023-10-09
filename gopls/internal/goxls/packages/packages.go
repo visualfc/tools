@@ -11,6 +11,7 @@ import (
 	internal "golang.org/x/tools/internal/packagesinternal"
 
 	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
+	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 )
 
 // An Error describes a problem with a package's metadata, syntax, or types.
@@ -87,12 +88,9 @@ const (
 // Calls to Load do not modify this struct.
 type Config = packages.Config
 
-type Package = packages.Package
-
-/*
 // A Package describes a loaded Go+ package.
 type Package struct {
-	*packages.Package
+	packages.Package
 
 	// GopFiles lists the absolute file paths of the package's Go source files.
 	// It may include files that should not be compiled, for example because
@@ -113,7 +111,6 @@ type Package struct {
 	// It is set only when Syntax is set.
 	GopTypesInfo *typesutil.Info
 }
-*/
 
 // Module provides module information for a package.
 type Module = packages.Module
@@ -133,32 +130,37 @@ type Module = packages.Module
 // proceeding with further analysis. The PrintErrors function is
 // provided for convenient display of all errors.
 func Load(cfg *Config, patterns ...string) ([]*Package, error) {
-	return packages.Load(cfg, patterns...)
-}
-
-/*
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
 		return nil, err
 	}
+	pkgMap := make(map[*packages.Package]*Package)
 	ret := make([]*Package, len(pkgs))
 	for i, pkg := range pkgs {
-		ret[i] = &Package{Package: pkg, Imports: importPkgs(pkg.Imports)}
+		ret[i] = pkgOf(pkgMap, pkg)
 	}
 	return ret, nil
 }
 
-func importPkgs(pkgs map[string]*packages.Package) map[string]*Package {
+func importPkgs(pkgMap map[*packages.Package]*Package, pkgs map[string]*packages.Package) map[string]*Package {
 	if len(pkgs) == 0 {
 		return nil
 	}
 	ret := make(map[string]*Package, len(pkgs))
 	for path, pkg := range pkgs {
-		ret[path] = &Package{Package: pkg}
+		ret[path] = pkgOf(pkgMap, pkg)
 	}
 	return ret
 }
-*/
+
+func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package) *Package {
+	if ret, ok := pkgMap[pkg]; ok {
+		return ret
+	}
+	ret := &Package{Package: *pkg, Imports: importPkgs(pkgMap, pkg.Imports)}
+	pkgMap[pkg] = ret
+	return ret
+}
 
 // Visit visits all the packages in the import graph whose roots are
 // pkgs, calling the optional pre function the first time each package
@@ -196,12 +198,10 @@ func Visit(pkgs []*Package, pre func(*Package) bool, post func(*Package)) {
 
 func init() {
 	packagesinternal.GetForTest = func(p interface{}) string {
-		return internal.GetForTest(p.(*Package))
-		// return internal.GetForTest(p.(*Package).Package)
+		return internal.GetForTest(&p.(*Package).Package)
 	}
 	packagesinternal.GetDepsErrors = func(p interface{}) []*packagesinternal.PackageError {
-		return internal.GetDepsErrors(p.(*Package))
-		// return internal.GetDepsErrors(p.(*Package).Package)
+		return internal.GetDepsErrors(&p.(*Package).Package)
 	}
 	packagesinternal.GetGoCmdRunner = internal.GetGoCmdRunner
 	packagesinternal.SetGoCmdRunner = internal.SetGoCmdRunner
