@@ -24,6 +24,7 @@ import (
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/types/objectpath"
+	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/progress"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
@@ -971,6 +972,7 @@ type Package interface {
 
 	// goxls: Go+ files
 	GopFile(uri span.URI) (*ParsedGopFile, error)
+	GopTypesInfo() *typesutil.Info // use GopTypesInfo() instead of GetTypesInfo() in a Go+ package
 
 	// Results of type checking:
 	GetTypes() *types.Package

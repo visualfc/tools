@@ -7,12 +7,18 @@ package cache
 import (
 	"fmt"
 
+	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
 )
 
 func (p *Package) GopFile(uri span.URI) (*source.ParsedGopFile, error) {
 	return p.pkg.GopFile(uri)
+}
+
+func (p *Package) GopTypesInfo() *typesutil.Info {
+	// return p.pkg.typesInfo
+	panic("todo")
 }
 
 func (pkg *syntaxPackage) GopFile(uri span.URI) (*source.ParsedGopFile, error) {
