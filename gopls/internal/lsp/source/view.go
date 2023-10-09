@@ -562,7 +562,8 @@ type Metadata struct {
 	IgnoredFiles    []span.URI
 
 	// goxls: Go+ files
-	GopFiles []span.URI
+	GopFiles         []span.URI
+	CompiledGopFiles []span.URI
 
 	ForTest       PackagePath // q in a "p [q.test]" package, else ""
 	TypesSizes    types.Sizes

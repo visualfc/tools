@@ -11,7 +11,6 @@ import (
 	internal "golang.org/x/tools/internal/packagesinternal"
 
 	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 )
 
 // An Error describes a problem with a package's metadata, syntax, or types.
@@ -88,6 +87,9 @@ const (
 // Calls to Load do not modify this struct.
 type Config = packages.Config
 
+type Package = packages.Package
+
+/*
 // A Package describes a loaded Go+ package.
 type Package struct {
 	*packages.Package
@@ -111,6 +113,7 @@ type Package struct {
 	// It is set only when Syntax is set.
 	GopTypesInfo *typesutil.Info
 }
+*/
 
 // Module provides module information for a package.
 type Module = packages.Module
@@ -130,6 +133,10 @@ type Module = packages.Module
 // proceeding with further analysis. The PrintErrors function is
 // provided for convenient display of all errors.
 func Load(cfg *Config, patterns ...string) ([]*Package, error) {
+	return packages.Load(cfg, patterns...)
+}
+
+/*
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
 		return nil, err
@@ -151,6 +158,7 @@ func importPkgs(pkgs map[string]*packages.Package) map[string]*Package {
 	}
 	return ret
 }
+*/
 
 // Visit visits all the packages in the import graph whose roots are
 // pkgs, calling the optional pre function the first time each package
@@ -188,10 +196,12 @@ func Visit(pkgs []*Package, pre func(*Package) bool, post func(*Package)) {
 
 func init() {
 	packagesinternal.GetForTest = func(p interface{}) string {
-		return internal.GetForTest(p.(*Package).Package)
+		return internal.GetForTest(p.(*Package))
+		// return internal.GetForTest(p.(*Package).Package)
 	}
 	packagesinternal.GetDepsErrors = func(p interface{}) []*packagesinternal.PackageError {
-		return internal.GetDepsErrors(p.(*Package).Package)
+		return internal.GetDepsErrors(p.(*Package))
+		// return internal.GetDepsErrors(p.(*Package).Package)
 	}
 	packagesinternal.GetGoCmdRunner = internal.GetGoCmdRunner
 	packagesinternal.SetGoCmdRunner = internal.SetGoCmdRunner
