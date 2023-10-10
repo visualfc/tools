@@ -24,6 +24,8 @@ require (
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/google/safehtml v0.1.0 // indirect
+	github.com/goplus/gox v1.11.37 // indirect
+	github.com/goplus/mod v0.11.2 // indirect
 	github.com/qiniu/x v1.11.9 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20221212164502-fae10dda9338 // indirect
 
