@@ -23,7 +23,7 @@ jobs:
 
     - name: Install
       run: |
-        cd goxls
+        cd gopls
         go install -v ./...
 
     - name: Test
