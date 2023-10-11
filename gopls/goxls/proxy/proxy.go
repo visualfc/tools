@@ -44,10 +44,6 @@ func Main() {
 	check(err)
 	defer stdoutf.Close()
 
-	stderrf, err := createFile("/gopls.err")
-	check(err)
-	defer stderrf.Close()
-
 	log.SetOutput(logf)
 	log.Println("[INFO] app start:", os.Args)
 
@@ -63,7 +59,7 @@ func Main() {
 	cmd := exec.Command(gopls, os.Args[1:]...)
 	cmd.Stdin = pr
 	cmd.Stdout = io.MultiWriter(os.Stdout, stdoutf)
-	cmd.Stderr = io.MultiWriter(os.Stderr, stderrf)
+	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	check(err)
 }
