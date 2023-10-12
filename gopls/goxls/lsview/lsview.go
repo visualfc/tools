@@ -52,7 +52,7 @@ func Main(app, goxls string) {
 				id := req.ID()
 				log.Printf("[%v] %s:\n%s", id, req.Method(), params(req.Params()))
 				reqChan <- id
-				resp := respFetch(respChan)
+				resp, ret := respFetch(respChan)
 				if resp != nil {
 					log.Printf("[%v] %s ret:\n%s", id, app, resp)
 				}
@@ -60,9 +60,9 @@ func Main(app, goxls string) {
 					select { // allow send request failed
 					case <-time.After(time.Second):
 					case reqChan2 <- id:
-						if resp2 := respFetch(respChan2); resp2 != nil {
+						if resp2, ret2 := respFetch(respChan2); resp2 != nil {
 							log.Printf("[%v] %s ret:\n%s", id, goxls, resp2)
-							if !reflect.DeepEqual(resp, resp2) {
+							if !reflect.DeepEqual(ret, ret2) {
 								logd.Printf("[%v] %s:\n%s", id, req.Method(), params(req.Params()))
 								logd.Printf("[%v] %s ret:\n%s", id, app, resp)
 								logd.Printf("[%v] %s ret:\n%s", id, goxls, resp2)
@@ -82,19 +82,17 @@ func Main(app, goxls string) {
 	select {}
 }
 
-func respFetch(respChan chan *jsonrpc2.Response) any {
+func respFetch(respChan chan *jsonrpc2.Response) (any, any) {
 	select {
 	case <-time.After(time.Second):
 	case resp := <-respChan:
 		ret := any(resp.Err())
 		if ret == nil {
-			ret = params(resp.Result())
-		} else {
-			ret = fmt.Sprintf("%serror: %v\n", indent, ret)
+			return paramsEx(resp.Result())
 		}
-		return ret
+		return fmt.Sprintf("%serror: %v\n", indent, ret), nil
 	}
-	return nil
+	return nil, nil
 }
 
 func respLoop(app string, respChan chan *jsonrpc2.Response, reqChan chan jsonrpc2.ID) {
@@ -143,16 +141,25 @@ func params(raw json.RawMessage) []byte {
 	if err != nil {
 		return raw
 	}
-	return paramsEx(ret, indent)
+	return paramsFmt(ret, indent)
 }
 
-func paramsEx(ret any, prefix string) []byte {
+func paramsEx(raw json.RawMessage) ([]byte, any) {
+	var ret any
+	err := json.Unmarshal(raw, &ret)
+	if err != nil {
+		return raw, ret
+	}
+	return paramsFmt(ret, indent), ret
+}
+
+func paramsFmt(ret any, prefix string) []byte {
 	var b bytes.Buffer
 	switch val := ret.(type) {
 	case mapt:
 		for k, v := range val {
 			if isComplex(v) {
-				fmt.Fprintf(&b, "%s%s:\n%s", prefix, k, paramsEx(v, prefix+indent))
+				fmt.Fprintf(&b, "%s%s:\n%s", prefix, k, paramsFmt(v, prefix+indent))
 			} else {
 				fmt.Fprintf(&b, "%s%s: %v\n", prefix, k, v)
 			}
