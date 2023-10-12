@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"sort"
 	"time"
 
 	"golang.org/x/tools/internal/fakenet"
@@ -157,7 +158,9 @@ func paramsFmt(ret any, prefix string) []byte {
 	var b bytes.Buffer
 	switch val := ret.(type) {
 	case mapt:
-		for k, v := range val {
+		keys := keys(val)
+		for _, k := range keys {
+			v := val[k]
 			if isComplex(v) {
 				fmt.Fprintf(&b, "%s%s:\n%s", prefix, k, paramsFmt(v, prefix+indent))
 			} else {
@@ -192,6 +195,15 @@ func isComplex(v any) bool {
 	}
 	_, ok := v.(slice)
 	return ok
+}
+
+func keys(v mapt) []string {
+	ret := make([]string, 0, len(v))
+	for key := range v {
+		ret = append(ret, key)
+	}
+	sort.Strings(ret)
+	return ret
 }
 
 func check(err error) {
