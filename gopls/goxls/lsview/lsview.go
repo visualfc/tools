@@ -53,11 +53,11 @@ func Main(app, goxls string) {
 				}
 				if goxls != "" {
 					select { // allow send request failed
+					case <-time.After(time.Second):
 					case reqChan2 <- id:
 						if ret := respFetch(respChan2); ret != nil {
 							log.Printf("[%v] %s ret:\n%s", id, goxls, ret)
 						}
-					default:
 					}
 				}
 			case *jsonrpc2.Notification:
