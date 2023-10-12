@@ -25,10 +25,14 @@ func Main(app, goxls string) {
 	check(err)
 	defer fin.Close()
 
+	fdiff, err := os.Create(app + ".diff")
+	check(err)
+	defer fdiff.Close()
+
+	logd := log.New(fdiff, "", log.LstdFlags)
 	reqStream := jsonrpc2.NewHeaderStream(fakenet.NewConn("request", fin, os.Stdout))
 	reqChan := make(chan jsonrpc2.ID, 1)
 	respChan := make(chan *jsonrpc2.Response, 1)
-
 	reqChan2 := make(chan jsonrpc2.ID, 1)
 	respChan2 := make(chan *jsonrpc2.Response, 1)
 
@@ -48,15 +52,21 @@ func Main(app, goxls string) {
 				id := req.ID()
 				log.Printf("[%v] %s:\n%s", id, req.Method(), params(req.Params()))
 				reqChan <- id
-				if ret := respFetch(respChan); ret != nil {
-					log.Printf("[%v] %s ret:\n%s", id, app, ret)
+				resp := respFetch(respChan)
+				if resp != nil {
+					log.Printf("[%v] %s ret:\n%s", id, app, resp)
 				}
 				if goxls != "" {
 					select { // allow send request failed
 					case <-time.After(time.Second):
 					case reqChan2 <- id:
-						if ret := respFetch(respChan2); ret != nil {
-							log.Printf("[%v] %s ret:\n%s", id, goxls, ret)
+						if resp2 := respFetch(respChan2); resp2 != nil {
+							log.Printf("[%v] %s ret:\n%s", id, goxls, resp2)
+							if !reflect.DeepEqual(resp, resp2) {
+								logd.Printf("[%v] %s:\n%s", id, req.Method(), params(req.Params()))
+								logd.Printf("[%v] %s ret:\n%s", id, app, resp)
+								logd.Printf("[%v] %s ret:\n%s", id, goxls, resp2)
+							}
 						}
 					}
 				}
