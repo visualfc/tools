@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"time"
 
 	"golang.org/x/tools/gopls/internal/lsp/cache"
@@ -39,6 +38,10 @@ type Serve struct {
 	RemoteLogfile       string        `flag:"remote.logfile" help:"when used with -remote=auto, the -logfile value used to start the daemon"`
 
 	app *Application
+
+	// goxls: input/output of jsonrpc
+	In  io.ReadCloser
+	Out io.WriteCloser
 }
 
 func (s *Serve) Name() string   { return "serve" }
@@ -133,7 +136,8 @@ func (s *Serve) Run(ctx context.Context, args ...string) error {
 		defer log.Printf("Gopls daemon: exiting")
 		return jsonrpc2.ListenAndServe(ctx, network, addr, ss, s.IdleTimeout)
 	}
-	stream := jsonrpc2.NewHeaderStream(fakenet.NewConn("stdio", os.Stdin, os.Stdout))
+	// goxls: os.Stdin => s.reqIn(), os.Stdout => s.reqOut()
+	stream := jsonrpc2.NewHeaderStream(fakenet.NewConn("stdio", s.reqIn(), s.reqOut()))
 	if s.Trace && di != nil {
 		stream = protocol.LoggingStream(stream, di.LogWriter)
 	}
