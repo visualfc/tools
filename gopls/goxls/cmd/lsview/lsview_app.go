@@ -5,7 +5,7 @@
 package main
 
 import (
-	"golang.org/x/tools/gopls/goxls/proxy"
+	"golang.org/x/tools/gopls/goxls/lsview"
 )
 
 const (
@@ -14,5 +14,5 @@ const (
 )
 
 func main() {
-	proxy.Main(gopls, goxls)
+	lsview.Main(gopls, goxls)
 }

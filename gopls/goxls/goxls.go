@@ -6,14 +6,18 @@ package goxls
 
 import (
 	"context"
+	"io"
 	"os"
 
-	"golang.org/x/tools/gopls/internal/goxls/cmd"
 	"golang.org/x/tools/gopls/internal/hooks"
+	"golang.org/x/tools/gopls/internal/lsp/cmd"
 	"golang.org/x/tools/internal/tool"
 )
 
-func Main() {
+func Main(in io.ReadCloser, out io.WriteCloser) {
 	ctx := context.Background()
-	tool.Main(ctx, cmd.New("goxls", "", nil, hooks.Options), os.Args[1:])
+	app := cmd.New("goxls", "", nil, hooks.Options)
+	app.Serve.In = in
+	app.Serve.Out = out
+	tool.Main(ctx, app, os.Args[1:])
 }
