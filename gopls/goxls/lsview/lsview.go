@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -21,7 +22,14 @@ import (
 	"golang.org/x/tools/internal/jsonrpc2"
 )
 
-func Main(app, goxls string) {
+func Main(app, goxls string, args ...string) {
+	flag := flag.NewFlagSet("lsview", flag.ExitOnError)
+	var (
+		fSummary = flag.Bool("s", false, "show summary information for jsonrpc")
+	)
+	flag.Parse(args)
+	summary := *fSummary
+
 	fin, err := os.Open(app + ".in")
 	check(err)
 	defer fin.Close()
@@ -56,28 +64,28 @@ func Main(app, goxls string) {
 			switch req := msg.(type) {
 			case *jsonrpc2.Call:
 				id := req.ID()
-				log.Printf("[%v] %s:\n%s", id, req.Method(), params(req.Params()))
+				log.Printf("[%v] %s\n%s", id, req.Method(), params(req.Params(), summary))
 				reqChan <- id
-				resp, ret := respFetch(respChan)
+				resp, ret := respFetch(respChan, summary)
 				if resp != nil {
-					log.Printf("[%v] %s ret:\n%s", id, app, resp)
+					log.Printf("[%v] %s ret\n%s", id, app, resp)
 				}
 				if goxls != "" {
 					select { // allow send request failed
 					case <-time.After(time.Second):
 					case reqChan2 <- id:
-						if resp2, ret2 := respFetch(respChan2); resp2 != nil {
-							log.Printf("[%v] %s ret:\n%s", id, goxls, resp2)
+						if resp2, ret2 := respFetch(respChan2, summary); resp2 != nil {
+							log.Printf("[%v] %s ret\n%s", id, goxls, resp2)
 							if !reflect.DeepEqual(ret, ret2) {
-								logd.Printf("[%v] %s:\n%s", id, req.Method(), params(req.Params()))
-								logd.Printf("[%v] %s ret:\n%s", id, app, resp)
-								logd.Printf("[%v] %s ret:\n%s", id, goxls, resp2)
+								logd.Printf("[%v] %s\n%s", id, req.Method(), params(req.Params(), summary))
+								logd.Printf("[%v] %s ret\n%s", id, app, resp)
+								logd.Printf("[%v] %s ret\n%s", id, goxls, resp2)
 							}
 						}
 					}
 				}
 			case *jsonrpc2.Notification:
-				log.Printf("[] %s:\n%s", req.Method(), params(req.Params()))
+				log.Printf("[] %s:\n%s", req.Method(), params(req.Params(), summary))
 			}
 		}
 	}()
@@ -88,13 +96,16 @@ func Main(app, goxls string) {
 	select {}
 }
 
-func respFetch(respChan chan *jsonrpc2.Response) (any, any) {
+func respFetch(respChan chan *jsonrpc2.Response, summary bool) (any, any) {
 	select {
 	case <-time.After(time.Second):
 	case resp := <-respChan:
 		ret := any(resp.Err())
 		if ret == nil {
-			return paramsEx(resp.Result())
+			return paramsEx(resp.Result(), summary)
+		}
+		if summary {
+			return nil, nil
 		}
 		return fmt.Sprintf("%serror: %v\n", indent, ret), nil
 	}
@@ -147,25 +158,31 @@ type slice = []any
 
 const indent = "  "
 
-func params(raw json.RawMessage) []byte {
+func params(raw json.RawMessage, summary bool) []byte {
+	if summary {
+		return nil
+	}
 	var ret any
 	err := json.Unmarshal(raw, &ret)
 	if err != nil {
 		return raw
 	}
-	return paramsFmt(ret, indent)
+	return paramsFmt(ret, indent, false)
 }
 
-func paramsEx(raw json.RawMessage) ([]byte, any) {
+func paramsEx(raw json.RawMessage, summary bool) ([]byte, any) {
 	var ret any
 	err := json.Unmarshal(raw, &ret)
 	if err != nil {
 		return raw, ret
 	}
-	return paramsFmt(ret, indent), ret
+	return paramsFmt(ret, indent, summary), ret
 }
 
-func paramsFmt(ret any, prefix string) []byte {
+func paramsFmt(ret any, prefix string, summary bool) []byte {
+	if summary {
+		return nil
+	}
 	var b bytes.Buffer
 	switch val := ret.(type) {
 	case mapt:
@@ -173,7 +190,7 @@ func paramsFmt(ret any, prefix string) []byte {
 		for _, k := range keys {
 			v := val[k]
 			if isComplex(v) {
-				fmt.Fprintf(&b, "%s%s:\n%s", prefix, k, paramsFmt(v, prefix+indent))
+				fmt.Fprintf(&b, "%s%s:\n%s", prefix, k, paramsFmt(v, prefix+indent, false))
 			} else {
 				fmt.Fprintf(&b, "%s%s: %v\n", prefix, k, v)
 			}

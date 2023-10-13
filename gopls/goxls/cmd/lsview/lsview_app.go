@@ -5,6 +5,8 @@
 package main
 
 import (
+	"os"
+
 	"golang.org/x/tools/gopls/goxls/lsview"
 )
 
@@ -14,5 +16,5 @@ const (
 )
 
 func main() {
-	lsview.Main(gopls, goxls)
+	lsview.Main(gopls, goxls, os.Args[1:]...)
 }
