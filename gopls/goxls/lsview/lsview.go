@@ -26,11 +26,16 @@ func Main(app, goxls string) {
 	check(err)
 	defer fin.Close()
 
+	fview, err := os.Create(app + ".view")
+	check(err)
+	defer fview.Close()
+
 	fdiff, err := os.Create(app + ".diff")
 	check(err)
 	defer fdiff.Close()
 
 	logd := log.New(fdiff, "", log.LstdFlags)
+	log := log.New(io.MultiWriter(os.Stderr, fview), "", log.LstdFlags)
 	reqStream := jsonrpc2.NewHeaderStream(fakenet.NewConn("request", fin, os.Stdout))
 	reqChan := make(chan jsonrpc2.ID, 1)
 	respChan := make(chan *jsonrpc2.Response, 1)
@@ -118,7 +123,13 @@ next:
 	}
 	for {
 		msg, _, err := respStream.Read(ctx)
-		check(err)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				time.Sleep(time.Second / 5)
+				continue
+			}
+			check(err)
+		}
 		switch resp := msg.(type) {
 		case *jsonrpc2.Response:
 			if resp.ID() == id {
