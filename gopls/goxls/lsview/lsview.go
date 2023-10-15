@@ -73,17 +73,18 @@ func Main(app, goxls string, args ...string) {
 					log.Printf("[%v] %s ret\n%s", id, app, resp)
 				}
 				if goxls != "" {
+					var resp2, ret2 any
 					select { // allow send request failed
 					case <-time.After(time.Second):
 					case reqChan2 <- id:
-						if resp2, ret2 := respFetch(respChan2, summary); resp2 != nil {
+						if resp2, ret2 = respFetch(respChan2, summary); resp2 != nil {
 							log.Printf("[%v] %s ret\n%s", id, goxls, resp2)
-							if !reflect.DeepEqual(ret, ret2) {
-								logd.Printf("[%v] %s\n%s", id, method, params(req.Params(), summary))
-								logd.Printf("[%v] %s ret\n%s", id, app, resp)
-								logd.Printf("[%v] %s ret\n%s", id, goxls, resp2)
-							}
 						}
+					}
+					if eq, resp, resp2 := checkEqual(id, ret, ret2, resp, resp2); !eq {
+						logd.Printf("[%v] %s\n%s", id, method, params(req.Params(), summary))
+						logd.Printf("[%v] %s ret\n%s", id, app, resp)
+						logd.Printf("[%v] %s ret\n%s", id, goxls, resp2)
 					}
 				}
 			case *jsonrpc2.Notification:
@@ -95,7 +96,7 @@ func Main(app, goxls string, args ...string) {
 	}()
 	go respLoop(app, respChan, reqChan)
 	if goxls != "" {
-		go respLoop(app, respChan2, reqChan2)
+		go respLoop(goxls, respChan2, reqChan2)
 	}
 	select {}
 }
@@ -224,6 +225,42 @@ func isComplex(v any) bool {
 	}
 	_, ok := v.(slice)
 	return ok
+}
+
+func checkEqual(id jsonrpc2.ID, a, b, resp, resp2 any) (eq bool, fmta, fmtb any) {
+	ma, oka := a.(mapt)
+	mb, okb := b.(mapt)
+	if oka && okb {
+		if id == jsonrpc2.NewIntID(0) {
+			delete(ma, "serverInfo")
+			delete(mb, "serverInfo")
+		}
+		if eq = mapEqual(ma, mb); !eq {
+			fmta, fmtb = paramsFmt(a, indent, false), paramsFmt(b, indent, false)
+		}
+		return
+	}
+	return reflect.DeepEqual(a, b), resp, resp2
+}
+
+func mapEqual(ma, mb mapt) bool {
+	for k, va := range ma {
+		if vb, ok := mb[k]; ok {
+			mva, oka := va.(mapt)
+			mvb, okb := vb.(mapt)
+			eq := false
+			if oka && okb {
+				eq = mapEqual(mva, mvb)
+			} else {
+				eq = reflect.DeepEqual(va, vb)
+			}
+			if eq {
+				delete(ma, k)
+				delete(mb, k)
+			}
+		}
+	}
+	return len(ma) == 0 && len(mb) == 0
 }
 
 func keys(v mapt) []string {
