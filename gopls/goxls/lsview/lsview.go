@@ -26,9 +26,10 @@ func Main(app, goxls string, args ...string) {
 	flag := flag.NewFlagSet("lsview", flag.ExitOnError)
 	var (
 		fSummary = flag.Bool("s", false, "show summary information for jsonrpc")
+		fSel     = flag.String("sel", "", "select a method to print")
 	)
 	flag.Parse(args)
-	summary := *fSummary
+	sel := *fSel
 
 	fin, err := os.Open(app + ".in")
 	check(err)
@@ -63,8 +64,9 @@ func Main(app, goxls string, args ...string) {
 			}
 			switch req := msg.(type) {
 			case *jsonrpc2.Call:
-				id := req.ID()
-				log.Printf("[%v] %s\n%s", id, req.Method(), params(req.Params(), summary))
+				id, method := req.ID(), req.Method()
+				summary := *fSummary && method != sel
+				log.Printf("[%v] %s\n%s", id, method, params(req.Params(), summary))
 				reqChan <- id
 				resp, ret := respFetch(respChan, summary)
 				if resp != nil {
@@ -77,7 +79,7 @@ func Main(app, goxls string, args ...string) {
 						if resp2, ret2 := respFetch(respChan2, summary); resp2 != nil {
 							log.Printf("[%v] %s ret\n%s", id, goxls, resp2)
 							if !reflect.DeepEqual(ret, ret2) {
-								logd.Printf("[%v] %s\n%s", id, req.Method(), params(req.Params(), summary))
+								logd.Printf("[%v] %s\n%s", id, method, params(req.Params(), summary))
 								logd.Printf("[%v] %s ret\n%s", id, app, resp)
 								logd.Printf("[%v] %s ret\n%s", id, goxls, resp2)
 							}
@@ -85,7 +87,9 @@ func Main(app, goxls string, args ...string) {
 					}
 				}
 			case *jsonrpc2.Notification:
-				log.Printf("[] %s:\n%s", req.Method(), params(req.Params(), summary))
+				method := req.Method()
+				summary := *fSummary && method != sel
+				log.Printf("[] %s:\n%s", method, params(req.Params(), summary))
 			}
 		}
 	}()
@@ -104,10 +108,7 @@ func respFetch(respChan chan *jsonrpc2.Response, summary bool) (any, any) {
 		if ret == nil {
 			return paramsEx(resp.Result(), summary)
 		}
-		if summary {
-			return nil, nil
-		}
-		return fmt.Sprintf("%serror: %v\n", indent, ret), nil
+		return fmt.Sprintf("%serror: %v\n", indent, ret), ret
 	}
 	return nil, nil
 }
