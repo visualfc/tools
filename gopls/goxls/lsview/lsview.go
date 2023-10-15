@@ -31,15 +31,15 @@ func Main(app, goxls string, args ...string) {
 	flag.Parse(args)
 	sel := *fSel
 
-	fin, err := os.Open(app + ".in")
+	fin, err := os.Open("gopls.in")
 	check(err)
 	defer fin.Close()
 
-	fview, err := os.Create(app + ".view")
+	fview, err := os.Create("gopls.view")
 	check(err)
 	defer fview.Close()
 
-	fdiff, err := os.Create(app + ".diff")
+	fdiff, err := os.Create("gopls.diff")
 	check(err)
 	defer fdiff.Close()
 

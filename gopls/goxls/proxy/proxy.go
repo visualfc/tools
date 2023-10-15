@@ -24,8 +24,10 @@ func Main(gopls, goxls string, args ...string) {
 
 	goplsDir := home + "/.gopls/"
 	rotateDir := goplsDir + strconv.FormatInt(time.Now().UnixMicro(), 36)
-	err = os.MkdirAll(rotateDir, 0755)
-	check(err)
+	if _, e := os.Lstat(goplsDir + gopls + ".in"); e == nil {
+		err = os.MkdirAll(rotateDir, 0755)
+		check(err)
+	}
 
 	rotateDir += "/"
 	createFile := func(name string) (f *os.File, err error) {
@@ -34,7 +36,7 @@ func Main(gopls, goxls string, args ...string) {
 		return os.Create(normal)
 	}
 
-	stdinf, err := createFile(gopls + ".in")
+	stdinf, err := createFile("gopls.in")
 	check(err)
 	defer stdinf.Close()
 
