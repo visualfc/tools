@@ -13,7 +13,12 @@ import (
 	"time"
 )
 
-func Main(gopls, goxls string) {
+func Main(gopls, goxls string, args ...string) {
+	if len(args) > 0 && args[0] == "version" {
+		version(gopls, args)
+		return
+	}
+
 	home, err := os.UserHomeDir()
 	check(err)
 
@@ -29,10 +34,6 @@ func Main(gopls, goxls string) {
 		return os.Create(normal)
 	}
 
-	logf, err := createFile(gopls + ".log")
-	check(err)
-	defer logf.Close()
-
 	stdinf, err := createFile(gopls + ".in")
 	check(err)
 	defer stdinf.Close()
@@ -40,9 +41,6 @@ func Main(gopls, goxls string) {
 	stdoutf, err := createFile(gopls + ".out")
 	check(err)
 	defer stdoutf.Close()
-
-	log.SetOutput(logf)
-	log.Println("[INFO] app start:", os.Args)
 
 	var pwGox io.WriteCloser
 	if goxls != "" {
@@ -55,7 +53,7 @@ func Main(gopls, goxls string) {
 		pwGox = pw
 
 		go func() {
-			cmd := exec.Command(goxls, os.Args[1:]...)
+			cmd := exec.Command(goxls, args...)
 			cmd.Stdin = pr
 			cmd.Stdout = goxoutf
 			cmd.Stderr = os.Stderr
@@ -78,11 +76,20 @@ func Main(gopls, goxls string) {
 		}
 	}()
 
-	cmd := exec.Command(gopls, os.Args[1:]...)
+	cmd := exec.Command(gopls, args...)
 	cmd.Stdin = pr
 	cmd.Stdout = io.MultiWriter(os.Stdout, stdoutf)
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
+	check(err)
+}
+
+func version(gopls string, args []string) {
+	cmd := exec.Command(gopls, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
 	check(err)
 }
 
