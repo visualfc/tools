@@ -4,6 +4,7 @@
 
 package typesinternal
 
+/*
 import "go/types"
 
 // This file contains back doors that allow gopls to avoid method sorting when
@@ -22,3 +23,4 @@ var SkipEncoderMethodSorting func(enc interface{})
 // ObjectpathObject is like objectpath.Object, but allows suppressing method
 // sorting.
 var ObjectpathObject func(pkg *types.Package, p string, skipMethodSorting bool) (types.Object, error)
+*/

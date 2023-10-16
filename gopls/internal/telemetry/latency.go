@@ -4,6 +4,7 @@
 
 package telemetry
 
+/*
 import (
 	"context"
 	"errors"
@@ -100,3 +101,4 @@ func StartLatencyTimer(operation string) func(context.Context, error) {
 		}
 	}
 }
+*/

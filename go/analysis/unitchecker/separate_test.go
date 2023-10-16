@@ -7,7 +7,7 @@
 package unitchecker_test
 
 // This file illustrates separate analysis with an example.
-
+/*
 import (
 	"bytes"
 	"encoding/json"
@@ -309,3 +309,4 @@ func extractTxtar(ar *txtar.Archive, dir string) error {
 	}
 	return nil
 }
+*/

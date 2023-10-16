@@ -4,6 +4,7 @@
 
 package completion
 
+/*
 import (
 	"context"
 	"errors"
@@ -33,3 +34,4 @@ func (c *gopCompleter) packageNameCompletions(ctx context.Context, fileURI span.
 	}
 	return nil
 }
+*/

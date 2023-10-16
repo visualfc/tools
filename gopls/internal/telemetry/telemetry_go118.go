@@ -7,6 +7,7 @@
 
 package telemetry
 
+/*
 import "golang.org/x/tools/gopls/internal/lsp/protocol"
 
 func Mode() string {
@@ -28,3 +29,4 @@ func RecordViewGoVersion(x int) {
 
 func AddForwardedCounters(names []string, values []int64) {
 }
+*/

@@ -4,6 +4,7 @@
 
 package goxls
 
+/*
 import (
 	"context"
 	"io"
@@ -20,4 +21,18 @@ func Main(in io.ReadCloser, out io.WriteCloser) {
 	app.Serve.In = in
 	app.Serve.Out = out
 	tool.Main(ctx, app, os.Args[1:])
+}
+*/
+import (
+	"context"
+	"os"
+
+	"golang.org/x/tools/gopls/internal/hooks"
+	"golang.org/x/tools/gopls/internal/lsp/cmd"
+	"golang.org/x/tools/internal/tool"
+)
+
+func Main() {
+	ctx := context.Background()
+	tool.Main(ctx, cmd.New("goxls", "", nil, hooks.Options), os.Args[1:])
 }

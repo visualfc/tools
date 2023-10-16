@@ -4,6 +4,7 @@
 
 package cache
 
+/*
 import (
 	"path/filepath"
 
@@ -149,3 +150,4 @@ func (m *fileMap) Dirs() *persistent.Set[string] {
 	}
 	return m.dirs
 }
+*/

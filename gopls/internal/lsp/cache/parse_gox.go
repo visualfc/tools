@@ -4,6 +4,7 @@
 
 package cache
 
+/*
 import (
 	"context"
 	"fmt"
@@ -157,3 +158,4 @@ func fixGopAST(n ast.Node, tok *token.File, src []byte) (fixes []fixType) {
 func fixGopSrc(f *ast.File, tf *token.File, src []byte) (newSrc []byte, fix fixType) {
 	return nil, noFix
 }
+*/

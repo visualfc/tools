@@ -4,6 +4,7 @@
 
 package completion
 
+/*
 import (
 	"github.com/goplus/gop/ast"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
@@ -118,3 +119,4 @@ func (c *gopCompleter) functionCallSnippet(name string, tparams, params []string
 
 	snip.WriteText(")")
 }
+*/

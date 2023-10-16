@@ -4,6 +4,7 @@
 
 package completion
 
+/*
 import (
 	"context"
 	"fmt"
@@ -2515,3 +2516,4 @@ func gopForEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ide
 		}
 	}
 }
+*/

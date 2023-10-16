@@ -4,6 +4,7 @@
 
 package completion
 
+/*
 // wantLabelCompletion returns true if we want (only) label
 // completions at the position.
 func (c *gopCompleter) wantLabelCompletion() labelType {
@@ -16,3 +17,4 @@ func (c *gopCompleter) wantLabelCompletion() labelType {
 func (c *gopCompleter) labels(lt labelType) {
 	panic("todo")
 }
+*/

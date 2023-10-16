@@ -7,6 +7,7 @@
 
 package telemetry
 
+/*
 import (
 	"fmt"
 
@@ -91,3 +92,4 @@ func AddForwardedCounters(names []string, values []int64) {
 		counter.Add("fwd/"+n, v)
 	}
 }
+*/

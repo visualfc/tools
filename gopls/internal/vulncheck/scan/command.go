@@ -7,6 +7,7 @@
 
 package scan
 
+/*
 import (
 	"bytes"
 	"context"
@@ -474,3 +475,4 @@ func (h *osvReader) Finding(finding *govulncheck.Finding) error {
 func (h *osvReader) Progress(progress *govulncheck.Progress) error {
 	return nil
 }
+*/

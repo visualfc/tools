@@ -4,6 +4,7 @@
 
 package cache
 
+/*
 import (
 	"bytes"
 	"container/heap"
@@ -205,3 +206,4 @@ func (c *parseCache) parseGopFiles(ctx context.Context, fset *token.FileSet, mod
 
 	return pgfs, firstErr
 }
+*/
