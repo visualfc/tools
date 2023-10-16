@@ -50,6 +50,7 @@ import (
 	"flag"
 	"fmt"
 	"go/format"
+	"io/ioutil"
 	"math"
 	"os"
 	"strconv"
@@ -3208,7 +3209,7 @@ func exit(status int) {
 }
 
 func gofmt() {
-	src, err := os.ReadFile(oflag)
+	src, err := ioutil.ReadFile(oflag)
 	if err != nil {
 		return
 	}
@@ -3216,7 +3217,7 @@ func gofmt() {
 	if err != nil {
 		return
 	}
-	os.WriteFile(oflag, src, 0666)
+	ioutil.WriteFile(oflag, src, 0666)
 }
 
 var yaccpar string // will be processed version of yaccpartext: s/$$/prefix/g

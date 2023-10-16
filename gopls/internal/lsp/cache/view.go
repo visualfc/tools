@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -24,10 +25,10 @@ import (
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/semver"
 	exec "golang.org/x/sys/execabs"
+	"golang.org/x/tools/gopls/internal/govulncheck"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
-	"golang.org/x/tools/gopls/internal/vulncheck"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/gocommand"
 	"golang.org/x/tools/internal/imports"
@@ -46,16 +47,14 @@ type View struct {
 	// name is the user-specified name of this view.
 	name string
 
-	// lastOptions holds the most recent options on this view, used for detecting
-	// major changes.
-	//
-	// Guarded by Session.viewMu.
-	lastOptions *source.Options
+	optionsMu sync.Mutex
+	options   *source.Options
 
 	// Workspace information. The fields below are immutable, and together with
 	// options define the build list. Any change to these fields results in a new
 	// View.
-	workspaceInformation // Go environment information
+	folder               span.URI // user-specified workspace folder
+	workspaceInformation          // Go environment information
 
 	importsState *importsState
 
@@ -66,7 +65,7 @@ type View struct {
 
 	// vulns maps each go.mod file's URI to its known vulnerabilities.
 	vulnsMu sync.Mutex
-	vulns   map[span.URI]*vulncheck.Result
+	vulns   map[span.URI]*govulncheck.Result
 
 	// parseCache holds an LRU cache of recently parsed files.
 	parseCache *parseCache
@@ -74,7 +73,7 @@ type View struct {
 	// fs is the file source used to populate this view.
 	fs *overlayFS
 
-	// knownFiles tracks files that the view has accessed.
+	// seenFiles tracks files that the view has accessed.
 	// TODO(golang/go#57558): this notion is fundamentally problematic, and
 	// should be removed.
 	knownFilesMu sync.Mutex
@@ -116,9 +115,6 @@ type View struct {
 //
 // This type is compared to see if the View needs to be reconstructed.
 type workspaceInformation struct {
-	// folder is the LSP workspace folder.
-	folder span.URI
-
 	// `go env` variables that need to be tracked by gopls.
 	goEnv
 
@@ -141,13 +137,6 @@ type workspaceInformation struct {
 	// inGOPATH reports whether the workspace directory is contained in a GOPATH
 	// directory.
 	inGOPATH bool
-
-	// goCommandDir is the dir to use for running go commands.
-	//
-	// The only case where this should matter is if we've narrowed the workspace to
-	// a single nested module. In that case, the go command won't be able to find
-	// the module unless we tell it the nested directory.
-	goCommandDir span.URI
 }
 
 // effectiveGO111MODULE reports the value of GO111MODULE effective in the go
@@ -362,7 +351,7 @@ func (v *View) ID() string { return v.id }
 // longer needed.
 func tempModFile(modFh source.FileHandle, gosum []byte) (tmpURI span.URI, cleanup func(), err error) {
 	filenameHash := source.Hashf("%s", modFh.URI().Filename())
-	tmpMod, err := os.CreateTemp("", fmt.Sprintf("go.%s.*.mod", filenameHash))
+	tmpMod, err := ioutil.TempFile("", fmt.Sprintf("go.%s.*.mod", filenameHash))
 	if err != nil {
 		return "", nil, err
 	}
@@ -397,7 +386,7 @@ func tempModFile(modFh source.FileHandle, gosum []byte) (tmpURI span.URI, cleanu
 
 	// Create an analogous go.sum, if one exists.
 	if gosum != nil {
-		if err := os.WriteFile(tmpSumName, gosum, 0655); err != nil {
+		if err := ioutil.WriteFile(tmpSumName, gosum, 0655); err != nil {
 			return "", nil, err
 		}
 	}
@@ -415,19 +404,44 @@ func (v *View) Folder() span.URI {
 	return v.folder
 }
 
-func minorOptionsChange(a, b *source.Options) bool {
-	// TODO(rfindley): this function detects whether a view should be recreated,
-	// but this is also checked by the getWorkspaceInformation logic.
-	//
-	// We should eliminate this redundancy.
-	//
-	// Additionally, this function has existed for a long time, but git history
-	// suggests that it was added arbitrarily, not due to an actual performance
-	// problem.
-	//
-	// Especially now that we have optimized reinitialization of the session, we
-	// should consider just always creating a new view on any options change.
+func (v *View) Options() *source.Options {
+	v.optionsMu.Lock()
+	defer v.optionsMu.Unlock()
+	return v.options
+}
 
+func (v *View) FileKind(fh source.FileHandle) source.FileKind {
+	// The kind of an unsaved buffer comes from the
+	// TextDocumentItem.LanguageID field in the didChange event,
+	// not from the file name. They may differ.
+	if o, ok := fh.(*Overlay); ok {
+		if o.kind != source.UnknownKind {
+			return o.kind
+		}
+	}
+
+	fext := filepath.Ext(fh.URI().Filename())
+	switch fext {
+	case ".go":
+		return source.Go
+	case ".mod":
+		return source.Mod
+	case ".sum":
+		return source.Sum
+	case ".work":
+		return source.Work
+	}
+	exts := v.Options().TemplateExtensions
+	for _, ext := range exts {
+		if fext == ext || fext == "."+ext {
+			return source.Tmpl
+		}
+	}
+	// and now what? This should never happen, but it does for cgo before go1.15
+	return source.Go
+}
+
+func minorOptionsChange(a, b *source.Options) bool {
 	// Check if any of the settings that modify our understanding of files have
 	// been changed.
 	if !reflect.DeepEqual(a.Env, b.Env) {
@@ -455,42 +469,29 @@ func minorOptionsChange(a, b *source.Options) bool {
 	return reflect.DeepEqual(aBuildFlags, bBuildFlags)
 }
 
-// SetFolderOptions updates the options of each View associated with the folder
-// of the given URI.
-//
-// Calling this may cause each related view to be invalidated and a replacement
-// view added to the session.
-func (s *Session) SetFolderOptions(ctx context.Context, uri span.URI, options *source.Options) error {
-	s.viewMu.Lock()
-	defer s.viewMu.Unlock()
-
-	for _, v := range s.views {
-		if v.folder == uri {
-			if err := s.setViewOptions(ctx, v, options); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (s *Session) setViewOptions(ctx context.Context, v *View, options *source.Options) error {
+// SetViewOptions sets the options of the given view to new values. Calling
+// this may cause the view to be invalidated and a replacement view added to
+// the session. If so the new view will be returned, otherwise the original one
+// will be returned.
+func (s *Session) SetViewOptions(ctx context.Context, v *View, options *source.Options) (*View, error) {
 	// no need to rebuild the view if the options were not materially changed
-	if minorOptionsChange(v.lastOptions, options) {
-		_, release := v.invalidateContent(ctx, nil, options, false)
-		release()
-		v.lastOptions = options
-		return nil
+	v.optionsMu.Lock()
+	if minorOptionsChange(v.options, options) {
+		v.options = options
+		v.optionsMu.Unlock()
+		return v, nil
 	}
-	return s.updateViewLocked(ctx, v, options)
+	v.optionsMu.Unlock()
+	newView, err := s.updateView(ctx, v, options)
+	return newView, err
 }
 
 // viewEnv returns a string describing the environment of a newly created view.
 //
 // It must not be called concurrently with any other view methods.
 func viewEnv(v *View) string {
-	env := v.snapshot.options.EnvSlice()
-	buildFlags := append([]string{}, v.snapshot.options.BuildFlags...)
+	env := v.options.EnvSlice()
+	buildFlags := append([]string{}, v.options.BuildFlags...)
 
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, `go info for %v
@@ -501,7 +502,7 @@ func viewEnv(v *View) string {
 (selected go env: %v)
 `,
 		v.folder.Filename(),
-		v.goCommandDir.Filename(),
+		v.workingDir().Filename(),
 		strings.TrimRight(v.workspaceInformation.goversionOutput, "\n"),
 		v.snapshot.validBuildConfiguration(),
 		buildFlags,
@@ -539,13 +540,13 @@ func fileHasExtension(path string, suffixes []string) bool {
 // locateTemplateFiles ensures that the snapshot has mapped template files
 // within the workspace folder.
 func (s *snapshot) locateTemplateFiles(ctx context.Context) {
-	if len(s.options.TemplateExtensions) == 0 {
+	if len(s.view.Options().TemplateExtensions) == 0 {
 		return
 	}
-	suffixes := s.options.TemplateExtensions
+	suffixes := s.view.Options().TemplateExtensions
 
 	searched := 0
-	filterFunc := s.filterFunc()
+	filterFunc := s.view.filterFunc()
 	err := filepath.WalkDir(s.view.folder.Filename(), func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -579,33 +580,33 @@ func (s *snapshot) locateTemplateFiles(ctx context.Context) {
 	}
 }
 
-func (s *snapshot) contains(uri span.URI) bool {
+func (v *View) contains(uri span.URI) bool {
 	// If we've expanded the go dir to a parent directory, consider if the
 	// expanded dir contains the uri.
 	// TODO(rfindley): should we ignore the root here? It is not provided by the
 	// user. It would be better to explicitly consider the set of active modules
 	// wherever relevant.
 	inGoDir := false
-	if source.InDir(s.view.goCommandDir.Filename(), s.view.folder.Filename()) {
-		inGoDir = source.InDir(s.view.goCommandDir.Filename(), uri.Filename())
+	if source.InDir(v.workingDir().Filename(), v.folder.Filename()) {
+		inGoDir = source.InDir(v.workingDir().Filename(), uri.Filename())
 	}
-	inFolder := source.InDir(s.view.folder.Filename(), uri.Filename())
+	inFolder := source.InDir(v.folder.Filename(), uri.Filename())
 
 	if !inGoDir && !inFolder {
 		return false
 	}
 
-	return !s.filterFunc()(uri)
+	return !v.filterFunc()(uri)
 }
 
 // filterFunc returns a func that reports whether uri is filtered by the currently configured
 // directoryFilters.
-func (s *snapshot) filterFunc() func(span.URI) bool {
-	filterer := buildFilterer(s.view.folder.Filename(), s.view.gomodcache, s.options)
+func (v *View) filterFunc() func(span.URI) bool {
+	filterer := buildFilterer(v.folder.Filename(), v.gomodcache, v.Options())
 	return func(uri span.URI) bool {
 		// Only filter relative to the configured root directory.
-		if source.InDir(s.view.folder.Filename(), uri.Filename()) {
-			return pathExcludedByFilter(strings.TrimPrefix(uri.Filename(), s.view.folder.Filename()), filterer)
+		if source.InDir(v.folder.Filename(), uri.Filename()) {
+			return pathExcludedByFilter(strings.TrimPrefix(uri.Filename(), v.folder.Filename()), filterer)
 		}
 		return false
 	}
@@ -632,12 +633,7 @@ func (v *View) relevantChange(c source.FileModification) bool {
 	// had neither test nor associated issue, and cited only emacs behavior, this
 	// logic was deleted.
 
-	snapshot, release, err := v.getSnapshot()
-	if err != nil {
-		return false // view was shut down
-	}
-	defer release()
-	return snapshot.contains(c.URI)
+	return v.contains(c.URI)
 }
 
 func (v *View) markKnown(uri span.URI) {
@@ -783,6 +779,7 @@ func (s *snapshot) initialize(ctx context.Context, firstAttempt bool) {
 	}
 
 	s.loadWorkspace(ctx, firstAttempt)
+	s.collectAllKnownSubdirs(ctx)
 }
 
 func (s *snapshot) loadWorkspace(ctx context.Context, firstAttempt bool) (loadErr error) {
@@ -915,9 +912,7 @@ func (s *snapshot) loadWorkspace(ctx context.Context, firstAttempt bool) (loadEr
 //
 // invalidateContent returns a non-nil snapshot for the new content, along with
 // a callback which the caller must invoke to release that snapshot.
-//
-// newOptions may be nil, in which case options remain unchanged.
-func (v *View) invalidateContent(ctx context.Context, changes map[span.URI]source.FileHandle, newOptions *source.Options, forceReloadMetadata bool) (*snapshot, func()) {
+func (v *View) invalidateContent(ctx context.Context, changes map[span.URI]*fileChange, forceReloadMetadata bool) (*snapshot, func()) {
 	// Detach the context so that content invalidation cannot be canceled.
 	ctx = xcontext.Detach(ctx)
 
@@ -939,7 +934,7 @@ func (v *View) invalidateContent(ctx context.Context, changes map[span.URI]sourc
 	prevSnapshot.AwaitInitialized(ctx)
 
 	// Save one lease of the cloned snapshot in the view.
-	v.snapshot, v.releaseSnapshot = prevSnapshot.clone(ctx, v.baseCtx, changes, newOptions, forceReloadMetadata)
+	v.snapshot, v.releaseSnapshot = prevSnapshot.clone(ctx, v.baseCtx, changes, forceReloadMetadata)
 
 	prevReleaseSnapshot()
 	v.destroy(prevSnapshot, "View.invalidateContent")
@@ -953,9 +948,7 @@ func (s *Session) getWorkspaceInformation(ctx context.Context, folder span.URI, 
 		return workspaceInformation{}, fmt.Errorf("invalid workspace folder path: %w; check that the casing of the configured workspace folder path agrees with the casing reported by the operating system", err)
 	}
 	var err error
-	info := workspaceInformation{
-		folder: folder,
-	}
+	var info workspaceInformation
 	inv := gocommand.Invocation{
 		WorkingDir: folder.Filename(),
 		Env:        options.EnvSlice(),
@@ -992,20 +985,6 @@ func (s *Session) getWorkspaceInformation(ctx context.Context, folder span.URI, 
 			info.inGOPATH = true
 			break
 		}
-	}
-
-	// Compute the "working directory", which is where we run go commands.
-	//
-	// Note: if gowork is in use, this will default to the workspace folder. In
-	// the past, we would instead use the folder containing go.work. This should
-	// not make a difference, and in fact may improve go list error messages.
-	//
-	// TODO(golang/go#57514): eliminate the expandWorkspaceToModule setting
-	// entirely.
-	if options.ExpandWorkspaceToModule && info.gomod != "" {
-		info.goCommandDir = span.URIFromPath(filepath.Dir(info.gomod.Filename()))
-	} else {
-		info.goCommandDir = folder
 	}
 	return info, nil
 }
@@ -1048,6 +1027,24 @@ func findWorkspaceModFile(ctx context.Context, folderURI span.URI, fs source.Fil
 	return "", nil
 }
 
+// workingDir returns the directory from which to run Go commands.
+//
+// The only case where this should matter is if we've narrowed the workspace to
+// a singular nested module. In that case, the go command won't be able to find
+// the module unless we tell it the nested directory.
+func (v *View) workingDir() span.URI {
+	// Note: if gowork is in use, this will default to the workspace folder. In
+	// the past, we would instead use the folder containing go.work. This should
+	// not make a difference, and in fact may improve go list error messages.
+	//
+	// TODO(golang/go#57514): eliminate the expandWorkspaceToModule setting
+	// entirely.
+	if v.Options().ExpandWorkspaceToModule && v.gomod != "" {
+		return span.URIFromPath(filepath.Dir(v.gomod.Filename()))
+	}
+	return v.folder
+}
+
 // findRootPattern looks for files with the given basename in dir or any parent
 // directory of dir, using the provided FileSource. It returns the first match,
 // starting from dir and search parents.
@@ -1057,11 +1054,11 @@ func findWorkspaceModFile(ctx context.Context, folderURI span.URI, fs source.Fil
 func findRootPattern(ctx context.Context, dir, basename string, fs source.FileSource) (string, error) {
 	for dir != "" {
 		target := filepath.Join(dir, basename)
-		fh, err := fs.ReadFile(ctx, span.URIFromPath(target))
+		exists, err := fileExists(ctx, span.URIFromPath(target), fs)
 		if err != nil {
-			return "", err // context cancelled
+			return "", err // not readable or context cancelled
 		}
-		if fileExists(fh) {
+		if exists {
 			return target, nil
 		}
 		// Trailing separators must be trimmed, otherwise filepath.Split is a noop.
@@ -1125,8 +1122,8 @@ func (v *View) ClearModuleUpgrades(modfile span.URI) {
 const maxGovulncheckResultAge = 1 * time.Hour // Invalidate results older than this limit.
 var timeNow = time.Now                        // for testing
 
-func (v *View) Vulnerabilities(modfiles ...span.URI) map[span.URI]*vulncheck.Result {
-	m := make(map[span.URI]*vulncheck.Result)
+func (v *View) Vulnerabilities(modfiles ...span.URI) map[span.URI]*govulncheck.Result {
+	m := make(map[span.URI]*govulncheck.Result)
 	now := timeNow()
 	v.vulnsMu.Lock()
 	defer v.vulnsMu.Unlock()
@@ -1147,7 +1144,7 @@ func (v *View) Vulnerabilities(modfiles ...span.URI) map[span.URI]*vulncheck.Res
 	return m
 }
 
-func (v *View) SetVulnerabilities(modfile span.URI, vulns *vulncheck.Result) {
+func (v *View) SetVulnerabilities(modfile span.URI, vulns *govulncheck.Result) {
 	v.vulnsMu.Lock()
 	defer v.vulnsMu.Unlock()
 
@@ -1236,7 +1233,7 @@ func (s *snapshot) vendorEnabled(ctx context.Context, modURI span.URI, modConten
 	// No vendor directory?
 	// TODO(golang/go#57514): this is wrong if the working dir is not the module
 	// root.
-	if fi, err := os.Stat(filepath.Join(s.view.goCommandDir.Filename(), "vendor")); err != nil || !fi.IsDir() {
+	if fi, err := os.Stat(filepath.Join(s.view.workingDir().Filename(), "vendor")); err != nil || !fi.IsDir() {
 		return false, nil
 	}
 

@@ -97,7 +97,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"go/types"
-	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -197,7 +197,7 @@ func parse(filename string, src interface{}) (*ast.File, error) {
 }
 
 func parseStdin() (*ast.File, error) {
-	src, err := io.ReadAll(os.Stdin)
+	src, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		return nil, err
 	}

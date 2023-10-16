@@ -4,6 +4,7 @@
 
 package completion
 
+/*
 import (
 	"go/types"
 
@@ -124,3 +125,4 @@ func (c *gopCompleter) editText(from, to token.Pos, newText string) ([]protocol.
 		New:   newText,
 	}})
 }
+*/

@@ -4,6 +4,7 @@
 
 package source
 
+/*
 import (
 	"context"
 	"fmt"
@@ -119,3 +120,4 @@ func hoverGopImport(ctx context.Context, snapshot Snapshot, pkg Package, pgf *Pa
 		FullDocumentation: docText,
 	}, nil
 }
+*/

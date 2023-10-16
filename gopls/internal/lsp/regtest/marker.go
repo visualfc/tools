@@ -11,7 +11,6 @@ import (
 	"flag"
 	"fmt"
 	"go/token"
-	"go/types"
 	"io/fs"
 	"log"
 	"os"
@@ -111,16 +110,11 @@ var update = flag.Bool("update", false, "if set, update test data during marker 
 //     in these directories before running the test.
 //     -skip_goos=a,b,c instructs the test runner to skip the test for the
 //     listed GOOS values.
-//     -ignore_extra_diags suppresses errors for unmatched diagnostics
 //     TODO(rfindley): using build constraint expressions for -skip_goos would
 //     be clearer.
 //     TODO(rfindley): support flag values containing whitespace.
 //   - "settings.json": this file is parsed as JSON, and used as the
 //     session configuration (see gopls/doc/settings.md)
-//   - "capabilities.json": this file is parsed as JSON client capabilities,
-//     and applied as an overlay over the default editor client capabilities.
-//     see https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#clientCapabilities
-//     for more details.
 //   - "env": this file is parsed as a list of VAR=VALUE fields specifying the
 //     editor environment.
 //   - Golden files: Within the archive, file names starting with '@' are
@@ -136,17 +130,7 @@ var update = flag.Bool("update", false, "if set, update test data during marker 
 //
 // # Marker types
 //
-// Markers are of two kinds. A few are "value markers" (e.g. @item), which are
-// processed in a first pass and each computes a value that may be referred to
-// by name later. Most are "action markers", which are processed in a second
-// pass and take some action such as testing an LSP operation; they may refer
-// to values computed by value markers.
-//
 // The following markers are supported within marker tests:
-//
-//   - acceptcompletion(location, label, golden): specifies that accepting the
-//     completion candidate produced at the given location with provided label
-//     results in the given golden state.
 //
 //   - codeaction(kind, start, end, golden): specifies a codeaction to request
 //     for the given range. To support multi-line ranges, the range is defined
@@ -156,16 +140,8 @@ var update = flag.Bool("update", false, "if set, update test data during marker 
 //   - codeactionerr(kind, start, end, wantError): specifies a codeaction that
 //     fails with an error that matches the expectation.
 //
-//   - codelens(location, title): specifies that a codelens is expected at the
-//     given location, with given title. Must be used in conjunction with
-//     @codelenses.
-//
-//   - codelenses(): specifies that textDocument/codeLens should be run for the
-//     current document, with results compared to the @codelens annotations in
-//     the current document.
-//
-//   - complete(location, ...items): specifies expected completion results at
-//     the given location. Must be used in conjunction with @item.
+//   - complete(location, ...labels): specifies expected completion results at
+//     the given location.
 //
 //   - diag(location, regexp): specifies an expected diagnostic matching the
 //     given regexp at the given location. The test runner requires
@@ -181,20 +157,11 @@ var update = flag.Bool("update", false, "if set, update test data during marker 
 //   - def(src, dst location): perform a textDocument/definition request at
 //     the src location, and check the result points to the dst location.
 //
-//   - foldingrange(golden): perform a textDocument/foldingRange for the
-//     current document, and compare with the golden content, which is the
-//     original source annotated with numbered tags delimiting the resulting
-//     ranges (e.g. <1 kind="..."> ... </1>).
-//
 //   - format(golden): perform a textDocument/format request for the enclosing
 //     file, and compare against the named golden file. If the formatting
 //     request succeeds, the golden file must contain the resulting formatted
 //     source. If the formatting request fails, the golden file must contain
 //     the error message.
-//
-//   - highlight(src location, dsts ...location): makes a
-//     textDocument/highlight request at the given src location, which should
-//     highlight the provided dst locations.
 //
 //   - hover(src, dst location, g Golden): perform a textDocument/hover at the
 //     src location, and checks that the result is the dst location, with hover
@@ -203,14 +170,6 @@ var update = flag.Bool("update", false, "if set, update test data during marker 
 //   - implementations(src location, want ...location): makes a
 //     textDocument/implementation query at the src location and
 //     checks that the resulting set of locations matches want.
-//
-//   - item(label, details, kind): defines a completion item with the provided
-//     fields. This information is not positional, and therefore @item markers
-//     may occur anywhere in the source. Used in conjunction with @complete,
-//     snippet, or rank.
-//
-//     TODO(rfindley): rethink whether floating @item annotations are the best
-//     way to specify completion results.
 //
 //   - loc(name, location): specifies the name for a location in the source. These
 //     locations may be referenced by other markers.
@@ -228,26 +187,9 @@ var update = flag.Bool("update", false, "if set, update test data during marker 
 //     This action is executed for its editing effects on the source files.
 //     Like rename, the golden directory contains the expected transformed files.
 //
-//   - rank(location, ...completionItem): executes a textDocument/completion
-//     request at the given location, and verifies that each expected
-//     completion item occurs in the results, in the expected order. Other
-//     unexpected completion items may occur in the results.
-//     TODO(rfindley): this exists for compatibility with the old marker tests.
-//     Replace this with rankl, and rename.
-//
-//   - rankl(location, ...label): like rank, but only cares about completion
-//     item labels.
-//
-//   - refs(location, want ...location): executes a textDocument/references
-//     request at the first location and asserts that the result is the set of
-//     'want' locations. The first want location must be the declaration
-//     (assumedly unique).
-//
-//   - snippet(location, completionItem, snippet): executes a
-//     textDocument/completion request at the location, and searches for a
-//     result with label matching that of the provided completion item
-//     (TODO(rfindley): accept a label rather than a completion item). Check
-//     the the result snippet matches the provided snippet.
+//   - refs(location, want ...location): executes a 'references' query at the
+//     first location and asserts that the result is the set of 'want' locations.
+//     The first want location must be the declaration (assumedly unique).
 //
 //   - symbol(golden): makes a textDocument/documentSymbol request
 //     for the enclosing file, formats the response with one symbol
@@ -354,7 +296,7 @@ var update = flag.Bool("update", false, "if set, update test data during marker 
 // internal/lsp/tests.
 //
 // Remaining TODO:
-//   - optimize test execution
+//   - parallelize/optimize test execution
 //   - reorganize regtest packages (and rename to just 'test'?)
 //   - Rename the files .txtar.
 //   - Provide some means by which locations in the standard library
@@ -363,19 +305,23 @@ var update = flag.Bool("update", false, "if set, update test data during marker 
 //
 // Existing marker tests (in ../testdata) to port:
 //   - CallHierarchy
+//   - CodeLens
 //   - Diagnostics
 //   - CompletionItems
 //   - Completions
 //   - CompletionSnippets
+//   - UnimportedCompletions
 //   - DeepCompletions
 //   - FuzzyCompletions
 //   - CaseSensitiveCompletions
 //   - RankCompletions
+//   - FoldingRanges
 //   - Formats
 //   - Imports
 //   - SemanticTokens
 //   - FunctionExtractions
 //   - MethodExtractions
+//   - Highlights
 //   - Renames
 //   - PrepareRenames
 //   - InlayHints
@@ -398,9 +344,7 @@ func RunMarkerTests(t *testing.T, dir string) {
 	cache := cache.New(nil)
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			if test.skipReason != "" {
 				t.Skip(test.skipReason)
 			}
@@ -423,25 +367,21 @@ func RunMarkerTests(t *testing.T, dir string) {
 				testenv.NeedsTool(t, "cgo")
 			}
 			config := fake.EditorConfig{
-				Settings:         test.settings,
-				CapabilitiesJSON: test.capabilities,
-				Env:              test.env,
+				Settings: test.settings,
+				Env:      test.env,
 			}
 			if _, ok := config.Settings["diagnosticsDelay"]; !ok {
 				if config.Settings == nil {
-					config.Settings = make(map[string]any)
+					config.Settings = make(map[string]interface{})
 				}
 				config.Settings["diagnosticsDelay"] = "10ms"
 			}
-			// inv: config.Settings != nil
 
 			run := &markerTestRun{
-				test:       test,
-				env:        newEnv(t, cache, test.files, test.proxyFiles, test.writeGoSum, config),
-				settings:   config.Settings,
-				values:     make(map[expect.Identifier]any),
-				diags:      make(map[protocol.Location][]protocol.Diagnostic),
-				extraNotes: make(map[protocol.DocumentURI]map[string][]*expect.Note),
+				test:      test,
+				env:       newEnv(t, cache, test.files, test.proxyFiles, test.writeGoSum, config),
+				locations: make(map[expect.Identifier]protocol.Location),
+				diags:     make(map[protocol.Location][]protocol.Diagnostic),
 			}
 			// TODO(rfindley): make it easier to clean up the regtest environment.
 			defer run.env.Editor.Shutdown(context.Background()) // ignore error
@@ -455,6 +395,19 @@ func RunMarkerTests(t *testing.T, dir string) {
 			for file := range test.files {
 				run.env.OpenFile(file)
 			}
+
+			// Pre-process locations.
+			var markers []marker
+			for _, note := range test.notes {
+				mark := marker{run: run, note: note}
+				switch note.Name {
+				case "loc":
+					mark.execute()
+				default:
+					markers = append(markers, mark)
+				}
+			}
+
 			// Wait for the didOpen notifications to be processed, then collect
 			// diagnostics.
 			var diags map[string]*protocol.PublishDiagnosticsParams
@@ -473,42 +426,15 @@ func RunMarkerTests(t *testing.T, dir string) {
 				}
 			}
 
-			var markers []marker
-			for _, note := range test.notes {
-				mark := marker{run: run, note: note}
-				if fn, ok := valueMarkerFuncs[note.Name]; ok {
-					fn(mark)
-				} else if _, ok := actionMarkerFuncs[note.Name]; ok {
-					markers = append(markers, mark) // save for later
-				} else {
-					uri := mark.uri()
-					if run.extraNotes[uri] == nil {
-						run.extraNotes[uri] = make(map[string][]*expect.Note)
-					}
-					run.extraNotes[uri][note.Name] = append(run.extraNotes[uri][note.Name], note)
-				}
-			}
-
 			// Invoke each remaining marker in the test.
 			for _, mark := range markers {
-				actionMarkerFuncs[mark.note.Name](mark)
+				mark.execute()
 			}
 
 			// Any remaining (un-eliminated) diagnostics are an error.
-			if !test.ignoreExtraDiags {
-				for loc, diags := range run.diags {
-					for _, diag := range diags {
-						t.Errorf("%s: unexpected diagnostic: %q", run.fmtLoc(loc), diag.Message)
-					}
-				}
-			}
-
-			// TODO(rfindley): use these for whole-file marker tests.
-			for uri, extras := range run.extraNotes {
-				for name, extra := range extras {
-					if len(extra) > 0 {
-						t.Errorf("%s: %d unused %q markers", run.env.Sandbox.Workdir.URIToPath(uri), len(extra), name)
-					}
+			for loc, diags := range run.diags {
+				for _, diag := range diags {
+					t.Errorf("%s: unexpected diagnostic: %q", run.fmtLoc(loc), diag.Message)
 				}
 			}
 
@@ -558,7 +484,7 @@ func (m marker) server() protocol.Server {
 // errorf reports an error with a prefix indicating the position of the marker note.
 //
 // It formats the error message using mark.sprintf.
-func (mark marker) errorf(format string, args ...any) {
+func (mark marker) errorf(format string, args ...interface{}) {
 	msg := mark.sprintf(format, args...)
 	// TODO(adonovan): consider using fmt.Fprintf(os.Stderr)+t.Fail instead of
 	// t.Errorf to avoid reporting uninteresting positions in the Go source of
@@ -567,164 +493,74 @@ func (mark marker) errorf(format string, args ...any) {
 	mark.run.env.T.Errorf("%s: %s", mark.run.fmtPos(mark.note.Pos), msg)
 }
 
-// valueMarkerFunc returns a wrapper around a function that allows it to be
-// called during the processing of value markers (e.g. @value(v, 123)) with marker
-// arguments converted to function parameters. The provided function's first
-// parameter must be of type 'marker', and it must return a value.
-//
-// Unlike action markers, which are executed for actions such as test
-// assertions, value markers are all evaluated first, and each computes
-// a value that is recorded by its identifier, which is the marker's first
-// argument. These values may be referred to from an action marker by
-// this identifier, e.g. @action(... , v, ...).
-//
-// For example, given a fn with signature
-//
-//	func(mark marker, label, details, kind string) CompletionItem
-//
-// The result of valueMarkerFunc can associated with @item notes, and invoked
-// as follows:
-//
-//	//@item(FooCompletion, "Foo", "func() int", "func")
-//
-// The provided fn should not mutate the test environment.
-func valueMarkerFunc(fn any) func(marker) {
-	ftype := reflect.TypeOf(fn)
-	if ftype.NumIn() == 0 || ftype.In(0) != markerType {
-		panic(fmt.Sprintf("value marker function %#v must accept marker as its first argument", ftype))
-	}
-	if ftype.NumOut() != 1 {
-		panic(fmt.Sprintf("value marker function %#v must have exactly 1 result", ftype))
+// execute invokes the marker's function with the arguments from note.
+func (mark marker) execute() {
+	fn, ok := markerFuncs[mark.note.Name]
+	if !ok {
+		mark.errorf("no marker function named %s", mark.note.Name)
+		return
 	}
 
-	return func(mark marker) {
-		if len(mark.note.Args) == 0 || !is[expect.Identifier](mark.note.Args[0]) {
-			mark.errorf("first argument to a value marker function must be an identifier")
-			return
+	// The first converter corresponds to the *Env argument.
+	// All others must be converted from the marker syntax.
+	args := []reflect.Value{reflect.ValueOf(mark)}
+	var convert converter
+	for i, in := range mark.note.Args {
+		if i < len(fn.converters) {
+			convert = fn.converters[i]
+		} else if !fn.variadic {
+			goto arity // too many args
 		}
-		id := mark.note.Args[0].(expect.Identifier)
-		if alt, ok := mark.run.values[id]; ok {
-			mark.errorf("%s already declared as %T", id, alt)
-			return
+
+		// Special handling for the blank identifier: treat it as the zero value.
+		if ident, ok := in.(expect.Identifier); ok && ident == "_" {
+			zero := reflect.Zero(fn.paramTypes[i])
+			args = append(args, zero)
+			continue
 		}
-		args := append([]any{mark}, mark.note.Args[1:]...)
-		argValues, err := convertArgs(mark, ftype, args)
+
+		out, err := convert(mark, in)
 		if err != nil {
-			mark.errorf("converting args: %v", err)
+			mark.errorf("converting argument #%d of %s (%v): %v", i, mark.note.Name, in, err)
 			return
 		}
-		results := reflect.ValueOf(fn).Call(argValues)
-		mark.run.values[id] = results[0].Interface()
+		args = append(args, reflect.ValueOf(out))
 	}
+	if len(args) < len(fn.converters) {
+		goto arity // too few args
+	}
+
+	fn.fn.Call(args)
+	return
+
+arity:
+	mark.errorf("got %d arguments to %s, want %d",
+		len(mark.note.Args), mark.note.Name, len(fn.converters))
 }
 
-// actionMarkerFunc returns a wrapper around a function that allows it to be
-// called during the processing of action markers (e.g. @action("abc", 123))
-// with marker arguments converted to function parameters. The provided
-// function's first parameter must be of type 'marker', and it must not return
-// any values.
+// Supported marker functions.
 //
-// The provided fn should not mutate the test environment.
-func actionMarkerFunc(fn any) func(marker) {
-	ftype := reflect.TypeOf(fn)
-	if ftype.NumIn() == 0 || ftype.In(0) != markerType {
-		panic(fmt.Sprintf("action marker function %#v must accept marker as its first argument", ftype))
-	}
-	if ftype.NumOut() != 0 {
-		panic(fmt.Sprintf("action marker function %#v cannot have results", ftype))
-	}
-
-	return func(mark marker) {
-		args := append([]any{mark}, mark.note.Args...)
-		argValues, err := convertArgs(mark, ftype, args)
-		if err != nil {
-			mark.errorf("converting args: %v", err)
-			return
-		}
-		reflect.ValueOf(fn).Call(argValues)
-	}
-}
-
-func convertArgs(mark marker, ftype reflect.Type, args []any) ([]reflect.Value, error) {
-	var (
-		argValues []reflect.Value
-		pnext     int          // next param index
-		p         reflect.Type // current param
-	)
-	for i, arg := range args {
-		if i < ftype.NumIn() {
-			p = ftype.In(pnext)
-			pnext++
-		} else if p == nil || !ftype.IsVariadic() {
-			// The actual number of arguments expected by the mark varies, depending
-			// on whether this is a value marker or an action marker.
-			//
-			// Since this error indicates a bug, probably OK to have an imprecise
-			// error message here.
-			return nil, fmt.Errorf("too many arguments to %s", mark.note.Name)
-		}
-		elemType := p
-		if ftype.IsVariadic() && pnext == ftype.NumIn() {
-			elemType = p.Elem()
-		}
-		var v reflect.Value
-		if id, ok := arg.(expect.Identifier); ok && id == "_" {
-			v = reflect.Zero(elemType)
-		} else {
-			a, err := convert(mark, arg, elemType)
-			if err != nil {
-				return nil, err
-			}
-			v = reflect.ValueOf(a)
-		}
-		argValues = append(argValues, v)
-	}
-	// Check that we have sufficient arguments. If the function is variadic, we
-	// do not need arguments for the final parameter.
-	if pnext < ftype.NumIn()-1 || pnext == ftype.NumIn()-1 && !ftype.IsVariadic() {
-		// Same comment as above: OK to be vague here.
-		return nil, fmt.Errorf("not enough arguments to %s", mark.note.Name)
-	}
-	return argValues, nil
-}
-
-// is reports whether arg is a T.
-func is[T any](arg any) bool {
-	_, ok := arg.(T)
-	return ok
-}
-
-// Supported value marker functions. See [valueMarkerFunc] for more details.
-var valueMarkerFuncs = map[string]func(marker){
-	"loc":  valueMarkerFunc(locMarker),
-	"item": valueMarkerFunc(completionItemMarker),
-}
-
-// Supported action marker functions. See [actionMarkerFunc] for more details.
-var actionMarkerFuncs = map[string]func(marker){
-	"acceptcompletion": actionMarkerFunc(acceptCompletionMarker),
-	"codeaction":       actionMarkerFunc(codeActionMarker),
-	"codeactionerr":    actionMarkerFunc(codeActionErrMarker),
-	"codelenses":       actionMarkerFunc(codeLensesMarker),
-	"complete":         actionMarkerFunc(completeMarker),
-	"def":              actionMarkerFunc(defMarker),
-	"diag":             actionMarkerFunc(diagMarker),
-	"foldingrange":     actionMarkerFunc(foldingRangeMarker),
-	"format":           actionMarkerFunc(formatMarker),
-	"highlight":        actionMarkerFunc(highlightMarker),
-	"hover":            actionMarkerFunc(hoverMarker),
-	"implementation":   actionMarkerFunc(implementationMarker),
-	"rank":             actionMarkerFunc(rankMarker),
-	"rankl":            actionMarkerFunc(ranklMarker),
-	"refs":             actionMarkerFunc(refsMarker),
-	"rename":           actionMarkerFunc(renameMarker),
-	"renameerr":        actionMarkerFunc(renameErrMarker),
-	"signature":        actionMarkerFunc(signatureMarker),
-	"snippet":          actionMarkerFunc(snippetMarker),
-	"suggestedfix":     actionMarkerFunc(suggestedfixMarker),
-	"symbol":           actionMarkerFunc(symbolMarker),
-	"typedef":          actionMarkerFunc(typedefMarker),
-	"workspacesymbol":  actionMarkerFunc(workspaceSymbolMarker),
+// Each marker function must accept a marker as its first argument, with
+// subsequent arguments converted from the marker arguments.
+//
+// Marker funcs should not mutate the test environment (e.g. via opening files
+// or applying edits in the editor).
+var markerFuncs = map[string]markerFunc{
+	"codeaction":      makeMarkerFunc(codeActionMarker),
+	"codeactionerr":   makeMarkerFunc(codeActionErrMarker),
+	"complete":        makeMarkerFunc(completeMarker),
+	"def":             makeMarkerFunc(defMarker),
+	"diag":            makeMarkerFunc(diagMarker),
+	"hover":           makeMarkerFunc(hoverMarker),
+	"format":          makeMarkerFunc(formatMarker),
+	"implementation":  makeMarkerFunc(implementationMarker),
+	"loc":             makeMarkerFunc(locMarker),
+	"rename":          makeMarkerFunc(renameMarker),
+	"renameerr":       makeMarkerFunc(renameErrMarker),
+	"suggestedfix":    makeMarkerFunc(suggestedfixMarker),
+	"symbol":          makeMarkerFunc(symbolMarker),
+	"refs":            makeMarkerFunc(refsMarker),
+	"workspacesymbol": makeMarkerFunc(workspaceSymbolMarker),
 }
 
 // markerTest holds all the test data extracted from a test txtar archive.
@@ -732,27 +568,25 @@ var actionMarkerFuncs = map[string]func(marker){
 // See the documentation for RunMarkerTests for more information on the archive
 // format.
 type markerTest struct {
-	name         string                        // relative path to the txtar file in the testdata dir
-	fset         *token.FileSet                // fileset used for parsing notes
-	content      []byte                        // raw test content
-	archive      *txtar.Archive                // original test archive
-	settings     map[string]any                // gopls settings
-	capabilities []byte                        // content of capabilities.json file
-	env          map[string]string             // editor environment
-	proxyFiles   map[string][]byte             // proxy content
-	files        map[string][]byte             // data files from the archive (excluding special files)
-	notes        []*expect.Note                // extracted notes from data files
-	golden       map[expect.Identifier]*Golden // extracted golden content, by identifier name
+	name       string                 // relative path to the txtar file in the testdata dir
+	fset       *token.FileSet         // fileset used for parsing notes
+	content    []byte                 // raw test content
+	archive    *txtar.Archive         // original test archive
+	settings   map[string]interface{} // gopls settings
+	env        map[string]string      // editor environment
+	proxyFiles map[string][]byte      // proxy content
+	files      map[string][]byte      // data files from the archive (excluding special files)
+	notes      []*expect.Note         // extracted notes from data files
+	golden     map[string]*Golden     // extracted golden content, by identifier name
 
 	skipReason string   // the skip reason extracted from the "skip" archive file
 	flags      []string // flags extracted from the special "flags" archive file.
 
 	// Parsed flags values.
-	minGoVersion     string
-	cgo              bool
-	writeGoSum       []string // comma separated dirs to write go sum for
-	skipGOOS         []string // comma separated GOOS values to skip
-	ignoreExtraDiags bool
+	minGoVersion string
+	cgo          bool
+	writeGoSum   []string // comma separated dirs to write go sum for
+	skipGOOS     []string // comma separated GOOS values to skip
 }
 
 // flagSet returns the flagset used for parsing the special "flags" file in the
@@ -763,7 +597,6 @@ func (t *markerTest) flagSet() *flag.FlagSet {
 	flags.BoolVar(&t.cgo, "cgo", false, "if set, requires cgo (both the cgo tool and CGO_ENABLED=1)")
 	flags.Var((*stringListValue)(&t.writeGoSum), "write_sumfile", "if set, write the sumfile for these directories")
 	flags.Var((*stringListValue)(&t.skipGOOS), "skip_goos", "if set, skip this test on these GOOS values")
-	flags.BoolVar(&t.ignoreExtraDiags, "ignore_extra_diags", false, "if set, suppress errors for unmatched diagnostics")
 	return flags
 }
 
@@ -783,7 +616,7 @@ func (l stringListValue) String() string {
 	return strings.Join([]string(l), ",")
 }
 
-func (t *markerTest) getGolden(id expect.Identifier) *Golden {
+func (t *markerTest) getGolden(id string) *Golden {
 	golden, ok := t.golden[id]
 	// If there was no golden content for this identifier, we must create one
 	// to handle the case where -update is set: we need a place to store
@@ -805,7 +638,7 @@ func (t *markerTest) getGolden(id expect.Identifier) *Golden {
 // When -update is set, golden captures the updated golden contents for later
 // writing.
 type Golden struct {
-	id      expect.Identifier
+	id      string
 	data    map[string][]byte // key "" => @id itself
 	updated map[string][]byte
 }
@@ -884,7 +717,7 @@ func loadMarkerTest(name string, content []byte) (*markerTest, error) {
 		content: content,
 		archive: archive,
 		files:   make(map[string][]byte),
-		golden:  make(map[expect.Identifier]*Golden),
+		golden:  make(map[string]*Golden),
 	}
 	for _, file := range archive.Files {
 		switch {
@@ -904,14 +737,12 @@ func loadMarkerTest(name string, content []byte) (*markerTest, error) {
 				return nil, err
 			}
 
-		case file.Name == "capabilities.json":
-			test.capabilities = file.Data // lazily unmarshalled by the editor
-
 		case file.Name == "env":
 			test.env = make(map[string]string)
 			fields := strings.Fields(string(file.Data))
 			for _, field := range fields {
-				key, value, ok := strings.Cut(field, "=")
+				// TODO: use strings.Cut once we are on 1.18+.
+				key, value, ok := cut(field, "=")
 				if !ok {
 					return nil, fmt.Errorf("env vars must be formatted as var=value, got %q", field)
 				}
@@ -919,8 +750,7 @@ func loadMarkerTest(name string, content []byte) (*markerTest, error) {
 			}
 
 		case strings.HasPrefix(file.Name, "@"): // golden content
-			idstring, name, _ := strings.Cut(file.Name[len("@"):], "/")
-			id := expect.Identifier(idstring)
+			id, name, _ := cut(file.Name[len("@"):], "/")
 			// Note that a file.Name of just "@id" gives (id, name) = ("id", "").
 			if _, ok := test.golden[id]; !ok {
 				test.golden[id] = &Golden{
@@ -965,6 +795,16 @@ func loadMarkerTest(name string, content []byte) (*markerTest, error) {
 	return test, nil
 }
 
+// cut is a copy of strings.Cut.
+//
+// TODO: once we only support Go 1.18+, just use strings.Cut.
+func cut(s, sep string) (before, after string, found bool) {
+	if i := strings.Index(s, sep); i >= 0 {
+		return s[:i], s[i+len(sep):], true
+	}
+	return s, "", false
+}
+
 // formatTest formats the test as a txtar archive.
 func formatTest(test *markerTest) ([]byte, error) {
 	arch := &txtar.Archive{
@@ -974,7 +814,7 @@ func formatTest(test *markerTest) ([]byte, error) {
 	updatedGolden := make(map[string][]byte)
 	for id, g := range test.golden {
 		for name, data := range g.updated {
-			filename := "@" + path.Join(string(id), name) // name may be ""
+			filename := "@" + path.Join(id, name) // name may be ""
 			updatedGolden[filename] = data
 		}
 	}
@@ -984,7 +824,7 @@ func formatTest(test *markerTest) ([]byte, error) {
 		switch file.Name {
 		// Preserve configuration files exactly as they were. They must have parsed
 		// if we got this far.
-		case "skip", "flags", "settings.json", "capabilities.json", "env":
+		case "skip", "flags", "settings.json", "env":
 			arch.Files = append(arch.Files, file)
 		default:
 			if _, ok := test.files[file.Name]; ok { // ordinary file
@@ -1059,32 +899,34 @@ func newEnv(t *testing.T, cache *cache.Cache, files, proxyFiles map[string][]byt
 	}
 }
 
+// A markerFunc is a reflectively callable @mark implementation function.
+type markerFunc struct {
+	fn         reflect.Value  // the func to invoke
+	paramTypes []reflect.Type // parameter types, for zero values
+	converters []converter    // to convert non-blank arguments
+	variadic   bool
+}
+
 // A markerTestRun holds the state of one run of a marker test archive.
 type markerTestRun struct {
-	test     *markerTest
-	env      *Env
-	settings map[string]any
+	test *markerTest
+	env  *Env
 
 	// Collected information.
 	// Each @diag/@suggestedfix marker eliminates an entry from diags.
-	values map[expect.Identifier]any
-	diags  map[protocol.Location][]protocol.Diagnostic // diagnostics by position; location end == start
-
-	// Notes that weren't associated with a top-level marker func. They may be
-	// consumed by another marker (e.g. @codelenses collects @codelens markers).
-	// Any notes that aren't consumed are flagged as an error.
-	extraNotes map[protocol.DocumentURI]map[string][]*expect.Note
+	locations map[expect.Identifier]protocol.Location
+	diags     map[protocol.Location][]protocol.Diagnostic // diagnostics by position; location end == start
 }
 
 // sprintf returns a formatted string after applying pre-processing to
 // arguments of the following types:
 //   - token.Pos: formatted using (*markerTestRun).fmtPos
 //   - protocol.Location: formatted using (*markerTestRun).fmtLoc
-func (c *marker) sprintf(format string, args ...any) string {
+func (c *marker) sprintf(format string, args ...interface{}) string {
 	if false {
 		_ = fmt.Sprintf(format, args...) // enable vet printf checker
 	}
-	var args2 []any
+	var args2 []interface{}
 	for _, arg := range args {
 		switch arg := arg.(type) {
 		case token.Pos:
@@ -1101,11 +943,6 @@ func (c *marker) sprintf(format string, args ...any) string {
 // uri returns the URI of the file containing the marker.
 func (mark marker) uri() protocol.DocumentURI {
 	return mark.run.env.Sandbox.Workdir.URI(mark.run.test.fset.File(mark.note.Pos).Name())
-}
-
-// path returns the relative path to the file containing the marker.
-func (mark marker) path() string {
-	return mark.run.env.Sandbox.Workdir.RelPath(mark.run.test.fset.File(mark.note.Pos).Name())
 }
 
 // fmtLoc formats the given pos in the context of the test, using
@@ -1193,11 +1030,36 @@ func (run *markerTestRun) fmtLocDetails(loc protocol.Location, includeTxtPos boo
 	}
 }
 
+// makeMarkerFunc uses reflection to create a markerFunc for the given func value.
+func makeMarkerFunc(fn interface{}) markerFunc {
+	mi := markerFunc{
+		fn: reflect.ValueOf(fn),
+	}
+	mtyp := mi.fn.Type()
+	mi.variadic = mtyp.IsVariadic()
+	if mtyp.NumIn() == 0 || mtyp.In(0) != markerType {
+		panic(fmt.Sprintf("marker function %#v must accept marker as its first argument", mi.fn))
+	}
+	if mtyp.NumOut() != 0 {
+		panic(fmt.Sprintf("marker function %#v must not have results", mi.fn))
+	}
+	for a := 1; a < mtyp.NumIn(); a++ {
+		in := mtyp.In(a)
+		if mi.variadic && a == mtyp.NumIn()-1 {
+			in = in.Elem() // for ...T, convert to T
+		}
+		mi.paramTypes = append(mi.paramTypes, in)
+		c := makeConverter(in)
+		mi.converters = append(mi.converters, c)
+	}
+	return mi
+}
+
 // ---- converters ----
 
 // converter is the signature of argument converters.
 // A converter should return an error rather than calling marker.errorf().
-type converter func(marker, any) (any, error)
+type converter func(marker, interface{}) (interface{}, error)
 
 // Types with special conversions.
 var (
@@ -1208,39 +1070,28 @@ var (
 	wantErrorType = reflect.TypeOf(wantError{})
 )
 
-func convert(mark marker, arg any, paramType reflect.Type) (any, error) {
-	if paramType == goldenType {
-		id, ok := arg.(expect.Identifier)
-		if !ok {
-			return nil, fmt.Errorf("invalid input type %T: golden key must be an identifier", arg)
-		}
-		return mark.run.test.getGolden(id), nil
-	}
-	if id, ok := arg.(expect.Identifier); ok {
-		if arg, ok := mark.run.values[id]; ok {
-			if !reflect.TypeOf(arg).AssignableTo(paramType) {
-				return nil, fmt.Errorf("cannot convert %v to %s", arg, paramType)
+func makeConverter(paramType reflect.Type) converter {
+	switch paramType {
+	case goldenType:
+		return goldenConverter
+	case locationType:
+		return locationConverter
+	case wantErrorType:
+		return wantErrorConverter
+	default:
+		return func(_ marker, arg interface{}) (interface{}, error) {
+			if argType := reflect.TypeOf(arg); argType != paramType {
+				return nil, fmt.Errorf("cannot convert type %s to %s", argType, paramType)
 			}
 			return arg, nil
 		}
 	}
-	if reflect.TypeOf(arg).AssignableTo(paramType) {
-		return arg, nil // no conversion required
-	}
-	switch paramType {
-	case locationType:
-		return convertLocation(mark, arg)
-	case wantErrorType:
-		return convertWantError(mark, arg)
-	default:
-		return nil, fmt.Errorf("cannot convert %v to %s", arg, paramType)
-	}
 }
 
-// convertLocation converts a string or regexp argument into the protocol
-// location corresponding to the first position of the string (or first match
-// of the regexp) in the line preceding the note.
-func convertLocation(mark marker, arg any) (protocol.Location, error) {
+// locationConverter converts a string argument into the protocol location
+// corresponding to the first position of the string in the line preceding the
+// note.
+func locationConverter(mark marker, arg interface{}) (interface{}, error) {
 	switch arg := arg.(type) {
 	case string:
 		startOff, preceding, m, err := linePreceding(mark.run, mark.note.Pos)
@@ -1249,14 +1100,20 @@ func convertLocation(mark marker, arg any) (protocol.Location, error) {
 		}
 		idx := bytes.Index(preceding, []byte(arg))
 		if idx < 0 {
-			return protocol.Location{}, fmt.Errorf("substring %q not found in %q", arg, preceding)
+			return nil, fmt.Errorf("substring %q not found in %q", arg, preceding)
 		}
 		off := startOff + idx
 		return m.OffsetLocation(off, off+len(arg))
 	case *regexp.Regexp:
 		return findRegexpInLine(mark.run, mark.note.Pos, arg)
+	case expect.Identifier:
+		loc, ok := mark.run.locations[arg]
+		if !ok {
+			return nil, fmt.Errorf("no location named %q", arg)
+		}
+		return loc, nil
 	default:
-		return protocol.Location{}, fmt.Errorf("cannot convert argument type %T to location (must be a string to match the preceding line)", arg)
+		return nil, fmt.Errorf("cannot convert argument type %T to location (must be a string to match the preceding line)", arg)
 	}
 }
 
@@ -1304,22 +1161,22 @@ func linePreceding(run *markerTestRun, pos token.Pos) (int, []byte, *protocol.Ma
 	return startOff, m.Content[startOff:endOff], m, nil
 }
 
-// convertWantError converts a string, regexp, or identifier
+// wantErrorConverter converts a string, regexp, or identifier
 // argument into a wantError. The string is a substring of the
 // expected error, the regexp is a pattern than matches the expected
 // error, and the identifier is a golden file containing the expected
 // error.
-func convertWantError(mark marker, arg any) (wantError, error) {
+func wantErrorConverter(mark marker, arg interface{}) (interface{}, error) {
 	switch arg := arg.(type) {
 	case string:
 		return wantError{substr: arg}, nil
 	case *regexp.Regexp:
 		return wantError{pattern: arg}, nil
 	case expect.Identifier:
-		golden := mark.run.test.getGolden(arg)
+		golden := mark.run.test.getGolden(string(arg))
 		return wantError{golden: golden}, nil
 	default:
-		return wantError{}, fmt.Errorf("cannot convert %T to wantError (want: string, regexp, or identifier)", arg)
+		return nil, fmt.Errorf("cannot convert %T to wantError (want: string, regexp, or identifier)", arg)
 	}
 }
 
@@ -1379,6 +1236,17 @@ func (we wantError) check(mark marker, err error) {
 	}
 }
 
+// goldenConverter converts an identifier into the Golden directory of content
+// prefixed by @<ident> in the test archive file.
+func goldenConverter(mark marker, arg interface{}) (interface{}, error) {
+	switch arg := arg.(type) {
+	case expect.Identifier:
+		return mark.run.test.getGolden(string(arg)), nil
+	default:
+		return nil, fmt.Errorf("invalid input type %T: golden key must be an identifier", arg)
+	}
+}
+
 // checkChangedFiles compares the files changed by an operation with their expected (golden) state.
 func checkChangedFiles(mark marker, changed map[string][]byte, golden *Golden) {
 	// Check changed files match expectations.
@@ -1406,192 +1274,24 @@ func checkChangedFiles(mark marker, changed map[string][]byte, golden *Golden) {
 
 // ---- marker functions ----
 
-// TODO(rfindley): consolidate documentation of these markers. They are already
-// documented above, so much of the documentation here is redundant.
-
-// completionItem is a simplified summary of a completion item.
-type completionItem struct {
-	Label, Detail, Kind, Documentation string
-}
-
-func completionItemMarker(mark marker, label string, other ...string) completionItem {
-	if len(other) > 3 {
-		mark.errorf("too many arguments to @item: expect at most 4")
-	}
-	item := completionItem{
-		Label: label,
-	}
-	if len(other) > 0 {
-		item.Detail = other[0]
-	}
-	if len(other) > 1 {
-		item.Kind = other[1]
-	}
-	if len(other) > 2 {
-		item.Documentation = other[2]
-	}
-	return item
-}
-
-func rankMarker(mark marker, src protocol.Location, items ...completionItem) {
-	list := mark.run.env.Completion(src)
-	var got []string
-	// Collect results that are present in items, preserving their order.
-	for _, g := range list.Items {
-		for _, w := range items {
-			if g.Label == w.Label {
-				got = append(got, g.Label)
-				break
-			}
-		}
-	}
-	var want []string
-	for _, w := range items {
-		want = append(want, w.Label)
-	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		mark.errorf("completion rankings do not match (-want +got):\n%s", diff)
-	}
-}
-
-func ranklMarker(mark marker, src protocol.Location, labels ...string) {
-	list := mark.run.env.Completion(src)
-	var got []string
-	// Collect results that are present in items, preserving their order.
-	for _, g := range list.Items {
-		for _, label := range labels {
-			if g.Label == label {
-				got = append(got, g.Label)
-				break
-			}
-		}
-	}
-	if diff := cmp.Diff(labels, got); diff != "" {
-		mark.errorf("completion rankings do not match (-want +got):\n%s", diff)
-	}
-}
-
-func snippetMarker(mark marker, src protocol.Location, item completionItem, want string) {
-	list := mark.run.env.Completion(src)
-	var (
-		found bool
-		got   string
-		all   []string // for errors
-	)
-	items := filterBuiltinsAndKeywords(list.Items)
-	for _, i := range items {
-		all = append(all, i.Label)
-		if i.Label == item.Label {
-			found = true
-			if i.TextEdit != nil {
-				got = i.TextEdit.NewText
-			}
-			break
-		}
-	}
-	if !found {
-		mark.errorf("no completion item found matching %s (got: %v)", item.Label, all)
-		return
-	}
-	if got != want {
-		mark.errorf("snippets do not match: got %q, want %q", got, want)
-	}
-}
-
 // completeMarker implements the @complete marker, running
 // textDocument/completion at the given src location and asserting that the
 // results match the expected results.
-func completeMarker(mark marker, src protocol.Location, want ...completionItem) {
+//
+// TODO(rfindley): for now, this is just a quick check against the expected
+// completion labels. We could do more by assembling richer completion items,
+// as is done in the old marker tests. Does that add value? If so, perhaps we
+// should support a variant form of the argument, labelOrItem, which allows the
+// string form or item form.
+func completeMarker(mark marker, src protocol.Location, want ...string) {
 	list := mark.run.env.Completion(src)
-	items := filterBuiltinsAndKeywords(list.Items)
-	var got []completionItem
-	for i, item := range items {
-		simplified := completionItem{
-			Label:  item.Label,
-			Detail: item.Detail,
-			Kind:   fmt.Sprint(item.Kind),
-		}
-		if item.Documentation != nil {
-			switch v := item.Documentation.Value.(type) {
-			case string:
-				simplified.Documentation = v
-			case protocol.MarkupContent:
-				simplified.Documentation = strings.TrimSpace(v.Value) // trim newlines
-			}
-		}
-		// Support short-hand notation: if Detail, Kind, or Documentation are omitted from the
-		// item, don't match them.
-		if i < len(want) {
-			if want[i].Detail == "" {
-				simplified.Detail = ""
-			}
-			if want[i].Kind == "" {
-				simplified.Kind = ""
-			}
-			if want[i].Documentation == "" {
-				simplified.Documentation = ""
-			}
-		}
-		got = append(got, simplified)
-	}
-	if len(want) == 0 {
-		want = nil // got is nil if empty
+	var got []string
+	for _, item := range list.Items {
+		got = append(got, item.Label)
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		mark.errorf("Completion(...) returned unexpect results (-want +got):\n%s", diff)
 	}
-}
-
-// filterBuiltinsAndKeywords filters out builtins and keywords from completion
-// results.
-//
-// It over-approximates, and does not detect if builtins are shadowed.
-func filterBuiltinsAndKeywords(items []protocol.CompletionItem) []protocol.CompletionItem {
-	keep := 0
-	for _, item := range items {
-		if types.Universe.Lookup(item.Label) == nil && token.Lookup(item.Label) == token.IDENT {
-			items[keep] = item
-			keep++
-		}
-	}
-	return items[:keep]
-}
-
-// acceptCompletionMarker implements the @acceptCompletion marker, running
-// textDocument/completion at the given src location and accepting the
-// candidate with the given label. The resulting source must match the provided
-// golden content.
-func acceptCompletionMarker(mark marker, src protocol.Location, label string, golden *Golden) {
-	list := mark.run.env.Completion(src)
-	var selected *protocol.CompletionItem
-	for _, item := range list.Items {
-		if item.Label == label {
-			selected = &item
-			break
-		}
-	}
-	if selected == nil {
-		mark.errorf("Completion(...) did not return an item labeled %q", label)
-		return
-	}
-	filename := mark.path()
-	mapper, err := mark.run.env.Editor.Mapper(filename)
-	if err != nil {
-		mark.errorf("Editor.Mapper(%s) failed: %v", filename, err)
-		return
-	}
-
-	patched, _, err := source.ApplyProtocolEdits(mapper, append([]protocol.TextEdit{
-		*selected.TextEdit,
-	}, selected.AdditionalTextEdits...))
-
-	if err != nil {
-		mark.errorf("ApplyProtocolEdits failed: %v", err)
-		return
-	}
-	changes := map[string][]byte{filename: patched}
-	// Check the file state.
-	checkChangedFiles(mark, changes, golden)
 }
 
 // defMarker implements the @def marker, running textDocument/definition at
@@ -1607,55 +1307,6 @@ func defMarker(mark marker, src, dst protocol.Location) {
 	}
 }
 
-func typedefMarker(mark marker, src, dst protocol.Location) {
-	got := mark.run.env.TypeDefinition(src)
-	if got != dst {
-		mark.errorf("type definition location does not match:\n\tgot: %s\n\twant %s",
-			mark.run.fmtLoc(got), mark.run.fmtLoc(dst))
-	}
-}
-
-func foldingRangeMarker(mark marker, g *Golden) {
-	env := mark.run.env
-	ranges, err := mark.server().FoldingRange(env.Ctx, &protocol.FoldingRangeParams{
-		TextDocument: protocol.TextDocumentIdentifier{URI: mark.uri()},
-	})
-	if err != nil {
-		mark.errorf("foldingRange failed: %v", err)
-		return
-	}
-	var edits []protocol.TextEdit
-	insert := func(line, char uint32, text string) {
-		pos := protocol.Position{Line: line, Character: char}
-		edits = append(edits, protocol.TextEdit{
-			Range: protocol.Range{
-				Start: pos,
-				End:   pos,
-			},
-			NewText: text,
-		})
-	}
-	for i, rng := range ranges {
-		insert(rng.StartLine, rng.StartCharacter, fmt.Sprintf("<%d kind=%q>", i, rng.Kind))
-		insert(rng.EndLine, rng.EndCharacter, fmt.Sprintf("</%d>", i))
-	}
-	filename := mark.path()
-	mapper, err := env.Editor.Mapper(filename)
-	if err != nil {
-		mark.errorf("Editor.Mapper(%s) failed: %v", filename, err)
-		return
-	}
-	got, _, err := source.ApplyProtocolEdits(mapper, edits)
-	if err != nil {
-		mark.errorf("ApplyProtocolEdits failed: %v", err)
-		return
-	}
-	want, _ := g.Get(mark.run.env.T, "", got)
-	if diff := compare.Bytes(want, got); diff != "" {
-		mark.errorf("foldingRange mismatch:\n%s", diff)
-	}
-}
-
 // formatMarker implements the @format marker.
 func formatMarker(mark marker, golden *Golden) {
 	edits, err := mark.server().Formatting(mark.run.env.Ctx, &protocol.DocumentFormattingParams{
@@ -1666,7 +1317,7 @@ func formatMarker(mark marker, golden *Golden) {
 		got = []byte(err.Error() + "\n") // all golden content is newline terminated
 	} else {
 		env := mark.run.env
-		filename := mark.path()
+		filename := env.Sandbox.Workdir.URIToPath(mark.uri())
 		mapper, err := env.Editor.Mapper(filename)
 		if err != nil {
 			mark.errorf("Editor.Mapper(%s) failed: %v", filename, err)
@@ -1687,32 +1338,6 @@ func formatMarker(mark marker, golden *Golden) {
 
 	if diff := compare.Bytes(want, got); diff != "" {
 		mark.errorf("golden file @%s does not match format results:\n%s", golden.id, diff)
-	}
-}
-
-func highlightMarker(mark marker, src protocol.Location, dsts ...protocol.Location) {
-	highlights := mark.run.env.DocumentHighlight(src)
-	var got []protocol.Range
-	for _, h := range highlights {
-		got = append(got, h.Range)
-	}
-
-	var want []protocol.Range
-	for _, d := range dsts {
-		want = append(want, d.Range)
-	}
-
-	sortRanges := func(s []protocol.Range) {
-		sort.Slice(s, func(i, j int) bool {
-			return protocol.CompareRange(s[i], s[j]) < 0
-		})
-	}
-
-	sortRanges(got)
-	sortRanges(want)
-
-	if diff := cmp.Diff(want, got); diff != "" {
-		mark.errorf("DocumentHighlight(%v) mismatch (-want +got):\n%s", src, diff)
 	}
 }
 
@@ -1746,7 +1371,14 @@ func hoverMarker(mark marker, src, dst protocol.Location, golden *Golden) {
 
 // locMarker implements the @loc marker. It is executed before other
 // markers, so that locations are available.
-func locMarker(mark marker, loc protocol.Location) protocol.Location { return loc }
+func locMarker(mark marker, name expect.Identifier, loc protocol.Location) {
+	if prev, dup := mark.run.locations[name]; dup {
+		mark.errorf("location %q already declared at %s",
+			name, mark.run.fmtLoc(prev))
+		return
+	}
+	mark.run.locations[name] = loc
+}
 
 // diagMarker implements the @diag marker. It eliminates diagnostics from
 // the observed set in mark.test.
@@ -1775,8 +1407,8 @@ func removeDiagnostic(mark marker, loc protocol.Location, re *regexp.Regexp) (pr
 }
 
 // renameMarker implements the @rename(location, new, golden) marker.
-func renameMarker(mark marker, loc protocol.Location, newName string, golden *Golden) {
-	changed, err := rename(mark.run.env, loc, newName)
+func renameMarker(mark marker, loc protocol.Location, newName expect.Identifier, golden *Golden) {
+	changed, err := rename(mark.run.env, loc, string(newName))
 	if err != nil {
 		mark.errorf("rename failed: %v. (Use @renameerr for expected errors.)", err)
 		return
@@ -1785,20 +1417,9 @@ func renameMarker(mark marker, loc protocol.Location, newName string, golden *Go
 }
 
 // renameErrMarker implements the @renamererr(location, new, error) marker.
-func renameErrMarker(mark marker, loc protocol.Location, newName string, wantErr wantError) {
-	_, err := rename(mark.run.env, loc, newName)
+func renameErrMarker(mark marker, loc protocol.Location, newName expect.Identifier, wantErr wantError) {
+	_, err := rename(mark.run.env, loc, string(newName))
 	wantErr.check(mark, err)
-}
-
-func signatureMarker(mark marker, src protocol.Location, want string) {
-	got := mark.run.env.SignatureHelp(src)
-	if got == nil || len(got.Signatures) != 1 {
-		mark.errorf("signatureHelp = %v, want exactly 1 signature", got)
-		return
-	}
-	if got := got.Signatures[0].Label; got != want {
-		mark.errorf("signatureHelp: got %q, want %q", got, want)
-	}
 }
 
 // rename returns the new contents of the files that would be modified
@@ -1887,57 +1508,6 @@ func codeActionErrMarker(mark marker, actionKind string, start, end protocol.Loc
 	loc.Range.End = end.Range.End
 	_, err := codeAction(mark.run.env, loc.URI, loc.Range, actionKind, nil)
 	wantErr.check(mark, err)
-}
-
-// codeLensesMarker runs the @codelenses() marker, collecting @codelens marks
-// in the current file and comparing with the result of the
-// textDocument/codeLens RPC.
-func codeLensesMarker(mark marker) {
-	type codeLens struct {
-		Range protocol.Range
-		Title string
-	}
-
-	lenses := mark.run.env.CodeLens(mark.path())
-	var got []codeLens
-	for _, lens := range lenses {
-		title := ""
-		if lens.Command != nil {
-			title = lens.Command.Title
-		}
-		got = append(got, codeLens{lens.Range, title})
-	}
-
-	var want []codeLens
-	mark.consumeExtraNotes("codelens", actionMarkerFunc(func(mark marker, loc protocol.Location, title string) {
-		want = append(want, codeLens{loc.Range, title})
-	}))
-
-	for _, s := range [][]codeLens{got, want} {
-		sort.Slice(s, func(i, j int) bool {
-			li, lj := s[i], s[j]
-			if c := protocol.CompareRange(li.Range, lj.Range); c != 0 {
-				return c < 0
-			}
-			return li.Title < lj.Title
-		})
-	}
-
-	if diff := cmp.Diff(want, got); diff != "" {
-		mark.errorf("codelenses: unexpected diff (-want +got):\n%s", diff)
-	}
-}
-
-// consumeExtraNotes runs the provided func for each extra note with the given
-// name, and deletes all matching notes.
-func (mark marker) consumeExtraNotes(name string, f func(marker)) {
-	uri := mark.uri()
-	notes := mark.run.extraNotes[uri][name]
-	delete(mark.run.extraNotes[uri], name)
-
-	for _, note := range notes {
-		f(marker{run: mark.run, note: note})
-	}
 }
 
 // suggestedfixMarker implements the @suggestedfix(location, regexp,
@@ -2126,7 +1696,7 @@ func symbolMarker(mark marker, golden *Golden) {
 		if err != nil {
 			mark.run.env.T.Fatal(err)
 		}
-		if _, ok := symbol.(map[string]any)["location"]; ok {
+		if _, ok := symbol.(map[string]interface{})["location"]; ok {
 			// This case is not reached because Editor initialization
 			// enables HierarchicalDocumentSymbolSupport.
 			// TODO(adonovan): test this too.

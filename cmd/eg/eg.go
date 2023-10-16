@@ -15,6 +15,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,7 +77,7 @@ func doMain() error {
 	if err != nil {
 		return err
 	}
-	template, err := os.ReadFile(tAbs)
+	template, err := ioutil.ReadFile(tAbs)
 	if err != nil {
 		return err
 	}

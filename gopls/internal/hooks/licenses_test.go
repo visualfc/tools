@@ -6,7 +6,7 @@ package hooks
 
 import (
 	"bytes"
-	"os"
+	"io/ioutil"
 	"os/exec"
 	"runtime"
 	"testing"
@@ -18,12 +18,12 @@ func TestLicenses(t *testing.T) {
 	// License text differs for older Go versions because staticcheck or gofumpt
 	// isn't supported for those versions, and this fails for unknown, unrelated
 	// reasons on Kokoro legacy CI.
-	testenv.NeedsGo1Point(t, 21)
+	testenv.NeedsGo1Point(t, 19)
 
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		t.Skip("generating licenses only works on Unixes")
 	}
-	tmp, err := os.CreateTemp("", "")
+	tmp, err := ioutil.TempFile("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,11 +33,11 @@ func TestLicenses(t *testing.T) {
 		t.Fatalf("generating licenses failed: %q, %v", out, err)
 	}
 
-	got, err := os.ReadFile(tmp.Name())
+	got, err := ioutil.ReadFile(tmp.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := os.ReadFile("licenses.go")
+	want, err := ioutil.ReadFile("licenses.go")
 	if err != nil {
 		t.Fatal(err)
 	}

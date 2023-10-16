@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/types"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -151,10 +153,10 @@ func goListDriver(cfg *Config, patterns ...string) (*driverResponse, error) {
 	if cfg.Mode&NeedTypesSizes != 0 || cfg.Mode&NeedTypes != 0 {
 		sizeswg.Add(1)
 		go func() {
-			compiler, arch, err := packagesdriver.GetSizesForArgsGolist(ctx, state.cfgInvocation(), cfg.gocmdRunner)
-			sizeserr = err
-			response.dr.Compiler = compiler
-			response.dr.Arch = arch
+			var sizes types.Sizes
+			sizes, sizeserr = packagesdriver.GetSizesGolist(ctx, state.cfgInvocation(), cfg.gocmdRunner)
+			// types.SizesFor always returns nil or a *types.StdSizes.
+			response.dr.Sizes, _ = sizes.(*types.StdSizes)
 			sizeswg.Done()
 		}()
 	}
@@ -1108,7 +1110,7 @@ func (state *golistState) writeOverlays() (filename string, cleanup func(), err 
 	if len(state.cfg.Overlay) == 0 {
 		return "", func() {}, nil
 	}
-	dir, err := os.MkdirTemp("", "gopackages-*")
+	dir, err := ioutil.TempDir("", "gopackages-*")
 	if err != nil {
 		return "", nil, err
 	}
@@ -1127,7 +1129,7 @@ func (state *golistState) writeOverlays() (filename string, cleanup func(), err 
 		// Create a unique filename for the overlaid files, to avoid
 		// creating nested directories.
 		noSeparator := strings.Join(strings.Split(filepath.ToSlash(k), "/"), "")
-		f, err := os.CreateTemp(dir, fmt.Sprintf("*-%s", noSeparator))
+		f, err := ioutil.TempFile(dir, fmt.Sprintf("*-%s", noSeparator))
 		if err != nil {
 			return "", func() {}, err
 		}
@@ -1145,7 +1147,7 @@ func (state *golistState) writeOverlays() (filename string, cleanup func(), err 
 	}
 	// Write out the overlay file that contains the filepath mappings.
 	filename = filepath.Join(dir, "overlay.json")
-	if err := os.WriteFile(filename, b, 0665); err != nil {
+	if err := ioutil.WriteFile(filename, b, 0665); err != nil {
 		return "", func() {}, err
 	}
 	return filename, cleanup, nil

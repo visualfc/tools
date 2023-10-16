@@ -5,7 +5,7 @@
 package source
 
 // This file defines the refactor.inline code action.
-
+/*
 import (
 	"context"
 	"fmt"
@@ -136,3 +136,4 @@ func inlineCall(ctx context.Context, snapshot Snapshot, fh FileHandle, rng proto
 		TextEdits: diffToTextEdits(callerPGF.Tok, diff.Bytes(callerPGF.Src, got)),
 	}, nil
 }
+*/

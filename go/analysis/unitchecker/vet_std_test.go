@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/tools/go/analysis/passes/appends"
 	"golang.org/x/tools/go/analysis/passes/asmdecl"
 	"golang.org/x/tools/go/analysis/passes/assign"
 	"golang.org/x/tools/go/analysis/passes/atomic"
@@ -20,7 +19,6 @@ import (
 	"golang.org/x/tools/go/analysis/passes/cgocall"
 	"golang.org/x/tools/go/analysis/passes/composite"
 	"golang.org/x/tools/go/analysis/passes/copylock"
-	"golang.org/x/tools/go/analysis/passes/defers"
 	"golang.org/x/tools/go/analysis/passes/directive"
 	"golang.org/x/tools/go/analysis/passes/errorsas"
 	"golang.org/x/tools/go/analysis/passes/framepointer"
@@ -48,7 +46,6 @@ import (
 // Keep consistent with the actual vet in GOROOT/src/cmd/vet/main.go.
 func vet() {
 	unitchecker.Main(
-		appends.Analyzer,
 		asmdecl.Analyzer,
 		assign.Analyzer,
 		atomic.Analyzer,
@@ -57,7 +54,6 @@ func vet() {
 		cgocall.Analyzer,
 		composite.Analyzer,
 		copylock.Analyzer,
-		defers.Analyzer,
 		directive.Analyzer,
 		errorsas.Analyzer,
 		framepointer.Analyzer,
@@ -72,8 +68,8 @@ func vet() {
 		stdmethods.Analyzer,
 		stringintconv.Analyzer,
 		structtag.Analyzer,
-		testinggoroutine.Analyzer,
 		tests.Analyzer,
+		testinggoroutine.Analyzer,
 		timeformat.Analyzer,
 		unmarshal.Analyzer,
 		unreachable.Analyzer,

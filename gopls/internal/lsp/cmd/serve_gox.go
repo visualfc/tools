@@ -4,6 +4,7 @@
 
 package cmd
 
+/*
 import (
 	"io"
 	"os"
@@ -22,3 +23,4 @@ func (s *Serve) reqOut() io.WriteCloser {
 	}
 	return os.Stdout
 }
+*/

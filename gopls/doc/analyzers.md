@@ -6,21 +6,6 @@ Details about how to enable/disable these analyses can be found
 [here](settings.md#analyses).
 
 <!-- BEGIN Analyzers: DO NOT MANUALLY EDIT THIS SECTION -->
-## **appends**
-
-check for missing values after append
-
-This checker reports calls to append that pass
-no values to be appended to the slice.
-
-	s := []string{"a", "b", "c"}
-	_ = append(s)
-
-Such calls are always no-ops and often indicate an
-underlying mistake.
-
-**Enabled by default.**
-
 ## **asmdecl**
 
 report mismatches between assembly files and Go declarations
@@ -120,26 +105,6 @@ The deepequalerrors checker looks for calls of the form:
 
 where err1 and err2 are errors. Using reflect.DeepEqual to compare
 errors is discouraged.
-
-**Enabled by default.**
-
-## **defers**
-
-report common mistakes in defer statements
-
-The defers analyzer reports a diagnostic when a defer statement would
-result in a non-deferred call to time.Since, as experience has shown
-that this is nearly always a mistake.
-
-For example:
-
-	start := time.Now()
-	...
-	defer recordLatency(time.Since(start)) // error: call to time.Since is not deferred
-
-The correct code is:
-
-	defer func() { recordLatency(time.Since(start)) }()
 
 **Enabled by default.**
 
@@ -509,24 +474,6 @@ This is one of the simplifications that "gofmt -s" applies.
 
 **Enabled by default.**
 
-## **slog**
-
-check for invalid structured logging calls
-
-The slog checker looks for calls to functions from the log/slog
-package that take alternating key-value pairs. It reports calls
-where an argument in a key position is neither a string nor a
-slog.Attr, and where a final key is missing its value.
-For example,it would report
-
-	slog.Warn("message", 11, "k") // slog.Warn arg "11" should be a string or a slog.Attr
-
-and
-
-	slog.Info("message", "k1", v1, "k2") // call to slog.Info missing a final value
-
-**Enabled by default.**
-
 ## **sortslice**
 
 check the argument type of sort.Slice
@@ -665,7 +612,7 @@ any parameters that are not being used.
 
 To reduce false positives it ignores:
 - methods
-- parameters that do not have a name or have the name '_' (the blank identifier)
+- parameters that do not have a name or are underscored
 - functions in test files
 - functions with empty bodies or those with just a return stmt
 

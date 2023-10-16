@@ -6,27 +6,31 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/tools/gopls/internal/govulncheck"
 	"golang.org/x/tools/gopls/internal/lsp/fake"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
-	"golang.org/x/tools/gopls/internal/vulncheck"
 )
 
 func TestCaseInsensitiveFilesystem(t *testing.T) {
-	base := t.TempDir()
+	base, err := ioutil.TempDir("", t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	inner := filepath.Join(base, "a/B/c/DEFgh")
 	if err := os.MkdirAll(inner, 0777); err != nil {
 		t.Fatal(err)
 	}
 	file := filepath.Join(inner, "f.go")
-	if err := os.WriteFile(file, []byte("hi"), 0777); err != nil {
+	if err := ioutil.WriteFile(file, []byte("hi"), 0777); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(inner, "F.go")); err != nil {
@@ -216,19 +220,19 @@ func TestView_Vulnerabilities(t *testing.T) {
 	now := time.Now()
 
 	view := &View{
-		vulns: make(map[span.URI]*vulncheck.Result),
+		vulns: make(map[span.URI]*govulncheck.Result),
 	}
 	file1, file2 := span.URIFromPath("f1/go.mod"), span.URIFromPath("f2/go.mod")
 
-	vuln1 := &vulncheck.Result{AsOf: now.Add(-(maxGovulncheckResultAge * 3) / 4)} // already ~3/4*maxGovulncheckResultAge old
+	vuln1 := &govulncheck.Result{AsOf: now.Add(-(maxGovulncheckResultAge * 3) / 4)} // already ~3/4*maxGovulncheckResultAge old
 	view.SetVulnerabilities(file1, vuln1)
 
-	vuln2 := &vulncheck.Result{AsOf: now} // fresh.
+	vuln2 := &govulncheck.Result{AsOf: now} // fresh.
 	view.SetVulnerabilities(file2, vuln2)
 
 	t.Run("fresh", func(t *testing.T) {
 		got := view.Vulnerabilities()
-		want := map[span.URI]*vulncheck.Result{
+		want := map[span.URI]*govulncheck.Result{
 			file1: vuln1,
 			file2: vuln2,
 		}
@@ -242,7 +246,7 @@ func TestView_Vulnerabilities(t *testing.T) {
 	timeNow = func() time.Time { return now.Add(maxGovulncheckResultAge / 2) }
 	t.Run("after30min", func(t *testing.T) {
 		got := view.Vulnerabilities()
-		want := map[span.URI]*vulncheck.Result{
+		want := map[span.URI]*govulncheck.Result{
 			file1: nil, // expired.
 			file2: vuln2,
 		}
@@ -257,7 +261,7 @@ func TestView_Vulnerabilities(t *testing.T) {
 
 	t.Run("after1hr", func(t *testing.T) {
 		got := view.Vulnerabilities()
-		want := map[span.URI]*vulncheck.Result{
+		want := map[span.URI]*govulncheck.Result{
 			file1: nil,
 			file2: nil,
 		}

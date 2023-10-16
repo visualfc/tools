@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"golang.org/x/mod/semver"
-	"golang.org/x/tools/gopls/internal/vulncheck/osv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,14 +36,9 @@ func readReport(in io.Reader) (*Report, error) {
 }
 
 // Report represents a vulnerability report in the vulndb.
-// See https://go.googlesource.com/vulndb/+/refs/heads/master/doc/format.md
+// Remember to update doc/format.md when this structure changes.
 type Report struct {
-	ID string `yaml:",omitempty"`
-
 	Modules []*Module `yaml:",omitempty"`
-
-	// Summary is a short phrase describing the vulnerability.
-	Summary string `yaml:",omitempty"`
 
 	// Description is the CVE description from an existing CVE. If we are
 	// assigning a CVE ID ourselves, use CVEMetadata.Description instead.
@@ -159,7 +153,10 @@ var ReferenceTypes = []ReferenceType{
 //
 // For ease of typing, References are represented in the YAML as a
 // single-element mapping of type to URL.
-type Reference osv.Reference
+type Reference struct {
+	Type ReferenceType `json:"type,omitempty"`
+	URL  string        `json:"url,omitempty"`
+}
 
 func (r *Reference) MarshalYAML() (interface{}, error) {
 	return map[string]string{
@@ -173,7 +170,7 @@ func (r *Reference) UnmarshalYAML(n *yaml.Node) (err error) {
 			fmt.Sprintf("line %d: report.Reference must contain a mapping with one value", n.Line),
 		}}
 	}
-	r.Type = osv.ReferenceType(strings.ToUpper(n.Content[0].Value))
+	r.Type = ReferenceType(strings.ToUpper(n.Content[0].Value))
 	r.URL = n.Content[1].Value
 	return nil
 }

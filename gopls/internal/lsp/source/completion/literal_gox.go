@@ -4,6 +4,7 @@
 
 package completion
 
+/*
 import (
 	"context"
 	"fmt"
@@ -521,3 +522,4 @@ func (c *gopCompleter) typeParamInScope(tp *typeparams.TypeParam) bool {
 	_, foundObj := scope.LookupParent(obj.Name(), c.pos)
 	return obj == foundObj
 }
+*/

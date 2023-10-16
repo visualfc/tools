@@ -299,7 +299,8 @@ gopls also includes software made available under these licenses:
 `
 
 func (l *licenses) Run(ctx context.Context, args ...string) error {
-	opts := source.DefaultOptions(l.app.options)
+	opts := source.DefaultOptions()
+	l.app.options(opts)
 	txt := licensePreamble
 	if opts.LicensesText == "" {
 		txt += "(development gopls, license information not available)"

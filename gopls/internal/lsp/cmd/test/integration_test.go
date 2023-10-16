@@ -20,8 +20,8 @@ package cmdtest
 // TODO(adonovan):
 // - Use markers to represent positions in the input and in assertions.
 // - Coverage of cross-cutting things like cwd, environ, span parsing, etc.
-// - Subcommands that accept -write and -diff flags implement them
-//   consistently; factor their tests.
+// - Subcommands that accept -write and -diff flags should implement
+//   them consistently wrt the default behavior; factor their tests.
 // - Add missing test for 'vulncheck' subcommand.
 // - Add tests for client-only commands: serve, bug, help, api-json, licenses.
 
@@ -55,7 +55,7 @@ func TestVersion(t *testing.T) {
 	tree := writeTree(t, "")
 
 	// There's not much we can robustly assert about the actual version.
-	want := debug.Version() // e.g. "master"
+	const want = debug.Version // e.g. "master"
 
 	// basic
 	{
@@ -396,7 +396,7 @@ func _() {
 		res := gopls(t, tree, "imports", "a.go")
 		res.checkExit(true)
 		if res.stdout != want {
-			t.Errorf("imports: got <<%s>>, want <<%s>>", res.stdout, want)
+			t.Errorf("format: got <<%s>>, want <<%s>>", res.stdout, want)
 		}
 	}
 	// -diff: show a unified diff
@@ -783,13 +783,12 @@ go 1.18
 package a
 type T int
 func f() (int, string) { return }
-
--- b.go --
-package a
-import "io"
-var _ io.Reader = C{}
-type C struct{}
 `)
+	want := `
+package a
+type T int
+func f() (int, string) { return 0, "" }
+`[1:]
 
 	// no arguments
 	{
@@ -797,45 +796,20 @@ type C struct{}
 		res.checkExit(false)
 		res.checkStderr("expects at least 1 argument")
 	}
-	// success with default kinds, {quickfix}.
-	// -a is always required because no fix is currently "preferred" (!)
+	// success (-a enables fillreturns)
 	{
 		res := gopls(t, tree, "fix", "-a", "a.go")
 		res.checkExit(true)
 		got := res.stdout
-		want := `
-package a
-type T int
-func f() (int, string) { return 0, "" }
-
-`[1:]
 		if got != want {
 			t.Errorf("fix: got <<%s>>, want <<%s>>\nstderr:\n%s", got, want, res.stderr)
 		}
 	}
-	// success, with explicit CodeAction kind and diagnostics span.
-	{
-		res := gopls(t, tree, "fix", "-a", "b.go:#40", "quickfix")
-		res.checkExit(true)
-		got := res.stdout
-		want := `
-package a
-
-import "io"
-
-var _ io.Reader = C{}
-
-type C struct{}
-
-// Read implements io.Reader.
-func (C) Read(p []byte) (n int, err error) {
-	panic("unimplemented")
-}
-`[1:]
-		if got != want {
-			t.Errorf("fix: got <<%s>>, want <<%s>>\nstderr:\n%s", got, want, res.stderr)
-		}
-	}
+	// TODO(adonovan): more tests:
+	// - -write, -diff: factor with imports, format, rename.
+	// - without -all flag
+	// - args[2:] is an optional list of protocol.CodeActionKind enum values.
+	// - a span argument with a range causes filtering.
 }
 
 // TestWorkspaceSymbol tests the 'workspace_symbol' subcommand (../workspace_symbol.go).

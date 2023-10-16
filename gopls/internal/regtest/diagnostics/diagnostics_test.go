@@ -559,7 +559,7 @@ func f() {
 		// Deleting the import dismisses the warning.
 		env.RegexpReplace("a.go", `import "mod.com/hello"`, "")
 		env.AfterChange(
-			NoOutstandingWork(IgnoreTelemetryPromptWork),
+			NoOutstandingWork(),
 		)
 	})
 }
@@ -576,7 +576,7 @@ hi mom
 			).Run(t, files, func(t *testing.T, env *Env) {
 				env.OnceMet(
 					InitialWorkspaceLoad,
-					NoOutstandingWork(IgnoreTelemetryPromptWork),
+					NoOutstandingWork(),
 				)
 			})
 		})
@@ -1307,14 +1307,7 @@ func _() {
 		env.OpenFile("a/a_exclude.go")
 
 		loadOnce := LogMatching(protocol.Info, "query=.*file=.*a_exclude.go", 1, false)
-
-		// can't use OnceMet or AfterChange as logs are async
-		env.Await(loadOnce)
-		// ...but ensure that the change has been fully processed before editing.
-		// Otherwise, there may be a race where the snapshot is cloned before all
-		// state changes resulting from the load have been processed
-		// (golang/go#61521).
-		env.AfterChange()
+		env.Await(loadOnce) // can't use OnceMet or AfterChange as logs are async
 
 		// Check that orphaned files are not reloaded, by making a change in
 		// a.go file and confirming that the workspace diagnosis did not reload
@@ -1469,7 +1462,7 @@ package foo_
 		env.RegexpReplace("foo/foo_test.go", "_t", "_test")
 		env.AfterChange(
 			NoDiagnostics(ForFile("foo/foo_test.go")),
-			NoOutstandingWork(IgnoreTelemetryPromptWork),
+			NoOutstandingWork(),
 		)
 	})
 }
@@ -1503,7 +1496,7 @@ go 1.hello
 		env.RegexpReplace("go.mod", "go 1.hello", "go 1.12")
 		env.SaveBufferWithoutActions("go.mod")
 		env.AfterChange(
-			NoOutstandingWork(IgnoreTelemetryPromptWork),
+			NoOutstandingWork(),
 		)
 	})
 }

@@ -4,6 +4,7 @@
 
 package completion
 
+/*
 import (
 	"context"
 	"fmt"
@@ -337,3 +338,4 @@ func (c *gopCompleter) importEdits(imp *importInfo) ([]protocol.TextEdit, error)
 		FixType: imports.AddImport,
 	})
 }
+*/

@@ -4,6 +4,7 @@
 
 package source
 
+/*
 import (
 	"bytes"
 	"context"
@@ -105,3 +106,4 @@ func isClass(fh FileHandle) bool {
 	fext := filepath.Ext(fh.URI().Filename())
 	return goputil.FileKind(fext) == goputil.FileGopClass
 }
+*/

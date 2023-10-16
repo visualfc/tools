@@ -4,6 +4,7 @@
 
 package misc
 
+/*
 import (
 	"fmt"
 	"os"
@@ -229,3 +230,4 @@ func main() {
 		)
 	})
 }
+*/

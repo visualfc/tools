@@ -11,16 +11,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"sort"
 	"strings"
+	"time"
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/govulncheck"
 	"golang.org/x/tools/gopls/internal/lsp/cache"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/debug"
@@ -28,9 +32,7 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
-	"golang.org/x/tools/gopls/internal/telemetry"
 	"golang.org/x/tools/gopls/internal/vulncheck"
-	"golang.org/x/tools/gopls/internal/vulncheck/scan"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/gocommand"
 	"golang.org/x/tools/internal/tokeninternal"
@@ -42,7 +44,7 @@ func (s *Server) executeCommand(ctx context.Context, params *protocol.ExecuteCom
 	defer done()
 
 	var found bool
-	for _, name := range s.Options().SupportedCommands {
+	for _, name := range s.session.Options().SupportedCommands {
 		if name == params.Command {
 			found = true
 			break
@@ -62,20 +64,6 @@ func (s *Server) executeCommand(ctx context.Context, params *protocol.ExecuteCom
 type commandHandler struct {
 	s      *Server
 	params *protocol.ExecuteCommandParams
-}
-
-func (h *commandHandler) MaybePromptForTelemetry(ctx context.Context) error {
-	go h.s.maybePromptForTelemetry(ctx, true)
-	return nil
-}
-
-func (*commandHandler) AddTelemetryCounters(_ context.Context, args command.AddTelemetryCountersArgs) error {
-	if len(args.Names) != len(args.Values) {
-		return fmt.Errorf("Names and Values must have the same length")
-	}
-	// invalid counter update requests will be silently dropped. (no audience)
-	telemetry.AddForwardedCounters(args.Names, args.Values)
-	return nil
 }
 
 // commandConfig configures common command set-up and execution.
@@ -109,7 +97,7 @@ func (c *commandHandler) run(ctx context.Context, cfg commandConfig, run command
 	if cfg.requireSave {
 		var unsaved []string
 		for _, overlay := range c.s.session.Overlays() {
-			if !overlay.SameContentsOnDisk() {
+			if !overlay.Saved() {
 				unsaved = append(unsaved, overlay.URI().Filename())
 			}
 		}
@@ -439,7 +427,7 @@ func dropDependency(snapshot source.Snapshot, pm *source.ParsedModule, modulePat
 		return nil, err
 	}
 	// Calculate the edits to be made due to the change.
-	diff := snapshot.Options().ComputeEdits(string(pm.Mapper.Content), string(newContent))
+	diff := snapshot.View().Options().ComputeEdits(string(pm.Mapper.Content), string(newContent))
 	return source.ToProtocolEdits(pm.Mapper, diff)
 }
 
@@ -641,12 +629,12 @@ func collectFileEdits(ctx context.Context, snapshot source.Snapshot, uri span.UR
 	// file and leave it unsaved. We would rather apply the changes directly,
 	// especially to go.sum, which should be mostly invisible to the user.
 	if !snapshot.IsOpen(uri) {
-		err := os.WriteFile(uri.Filename(), newContent, 0666)
+		err := ioutil.WriteFile(uri.Filename(), newContent, 0666)
 		return nil, err
 	}
 
 	m := protocol.NewMapper(fh.URI(), oldContent)
-	diff := snapshot.Options().ComputeEdits(string(oldContent), string(newContent))
+	diff := snapshot.View().Options().ComputeEdits(string(oldContent), string(newContent))
 	edits, err := source.ToProtocolEdits(m, diff)
 	if err != nil {
 		return nil, err
@@ -909,10 +897,10 @@ type pkgLoadConfig struct {
 	Tests bool
 }
 
-func (c *commandHandler) FetchVulncheckResult(ctx context.Context, arg command.URIArg) (map[protocol.DocumentURI]*vulncheck.Result, error) {
-	ret := map[protocol.DocumentURI]*vulncheck.Result{}
+func (c *commandHandler) FetchVulncheckResult(ctx context.Context, arg command.URIArg) (map[protocol.DocumentURI]*govulncheck.Result, error) {
+	ret := map[protocol.DocumentURI]*govulncheck.Result{}
 	err := c.run(ctx, commandConfig{forURI: arg.URI}, func(ctx context.Context, deps commandDeps) error {
-		if deps.snapshot.Options().Vulncheck == source.ModeVulncheckImports {
+		if deps.snapshot.View().Options().Vulncheck == source.ModeVulncheckImports {
 			for _, modfile := range deps.snapshot.ModFiles() {
 				res, err := deps.snapshot.ModVuln(ctx, modfile)
 				if err != nil {
@@ -949,22 +937,60 @@ func (c *commandHandler) RunGovulncheck(ctx context.Context, args command.Vulnch
 	}, func(ctx context.Context, deps commandDeps) error {
 		tokenChan <- deps.work.Token()
 
-		workDoneWriter := progress.NewWorkDoneWriter(ctx, deps.work)
-		dir := filepath.Dir(args.URI.SpanURI().Filename())
-		pattern := args.Pattern
-
-		result, err := scan.RunGovulncheck(ctx, pattern, deps.snapshot, dir, workDoneWriter)
-		if err != nil {
-			return err
+		view := deps.snapshot.View()
+		opts := view.Options()
+		// quickly test if gopls is compiled to support govulncheck
+		// by checking vulncheck.Main. Alternatively, we can continue and
+		// let the `gopls vulncheck` command fail. This is lighter-weight.
+		if vulncheck.Main == nil {
+			return errors.New("vulncheck feature is not available")
 		}
 
-		deps.snapshot.View().SetVulnerabilities(args.URI.SpanURI(), result)
-		c.s.diagnoseSnapshot(deps.snapshot, nil, false, 0)
+		cmd := exec.CommandContext(ctx, os.Args[0], "vulncheck", "-config", args.Pattern)
+		cmd.Dir = filepath.Dir(args.URI.SpanURI().Filename())
 
-		affecting := make(map[string]bool, len(result.Entries))
-		for _, finding := range result.Findings {
-			if len(finding.Trace) > 1 { // at least 2 frames if callstack exists (vulnerability, entry)
-				affecting[finding.OSV] = true
+		var viewEnv []string
+		if e := opts.EnvSlice(); e != nil {
+			viewEnv = append(os.Environ(), e...)
+		}
+		cmd.Env = viewEnv
+
+		// stdin: gopls vulncheck expects JSON-encoded configuration from STDIN when -config flag is set.
+		var stdin bytes.Buffer
+		cmd.Stdin = &stdin
+
+		if err := json.NewEncoder(&stdin).Encode(pkgLoadConfig{
+			BuildFlags: opts.BuildFlags,
+			// TODO(hyangah): add `tests` flag in command.VulncheckArgs
+		}); err != nil {
+			return fmt.Errorf("failed to pass package load config: %v", err)
+		}
+
+		// stderr: stream gopls vulncheck's STDERR as progress reports
+		er := progress.NewEventWriter(ctx, "vulncheck")
+		stderr := io.MultiWriter(er, progress.NewWorkDoneWriter(ctx, deps.work))
+		cmd.Stderr = stderr
+		// TODO: can we stream stdout?
+		stdout, err := cmd.Output()
+		if err != nil {
+			return fmt.Errorf("failed to run govulncheck: %v", err)
+		}
+
+		var result govulncheck.Result
+		if err := json.Unmarshal(stdout, &result); err != nil {
+			// TODO: for easy debugging, log the failed stdout somewhere?
+			return fmt.Errorf("failed to parse govulncheck output: %v", err)
+		}
+		result.Mode = govulncheck.ModeGovulncheck
+		result.AsOf = time.Now()
+		deps.snapshot.View().SetVulnerabilities(args.URI.SpanURI(), &result)
+
+		c.s.diagnoseSnapshot(deps.snapshot, nil, false, 0)
+		vulns := result.Vulns
+		affecting := make([]string, 0, len(vulns))
+		for _, v := range vulns {
+			if v.IsCalled() {
+				affecting = append(affecting, v.OSV.ID)
 			}
 		}
 		if len(affecting) == 0 {
@@ -973,14 +999,10 @@ func (c *commandHandler) RunGovulncheck(ctx context.Context, args command.Vulnch
 				Message: "No vulnerabilities found",
 			})
 		}
-		affectingOSVs := make([]string, 0, len(affecting))
-		for id := range affecting {
-			affectingOSVs = append(affectingOSVs, id)
-		}
-		sort.Strings(affectingOSVs)
+		sort.Strings(affecting)
 		return c.s.client.ShowMessage(ctx, &protocol.ShowMessageParams{
 			Type:    protocol.Warning,
-			Message: fmt.Sprintf("Found %v", strings.Join(affectingOSVs, ", ")),
+			Message: fmt.Sprintf("Found %v", strings.Join(affecting, ", ")),
 		})
 	})
 	if err != nil {
@@ -1135,7 +1157,7 @@ func (c *commandHandler) RunGoWorkCommand(ctx context.Context, args command.RunG
 			if err != nil {
 				return fmt.Errorf("reading current go.work file: %v", err)
 			}
-			if !fh.SameContentsOnDisk() {
+			if !fh.Saved() {
 				return fmt.Errorf("must save workspace file %s before running go work commands", goworkURI)
 			}
 		} else {

@@ -7,7 +7,7 @@ package proxydir
 import (
 	"archive/zip"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +43,7 @@ func TestWriteModuleVersion(t *testing.T) {
 			},
 		},
 	}
-	dir, err := os.MkdirTemp("", "proxydirtest-")
+	dir, err := ioutil.TempDir("", "proxydirtest-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestWriteModuleVersion(t *testing.T) {
 			t.Fatal(err)
 		}
 		rootDir := filepath.Join(dir, filepath.FromSlash(test.modulePath), "@v")
-		gomod, err := os.ReadFile(filepath.Join(rootDir, test.version+".mod"))
+		gomod, err := ioutil.ReadFile(filepath.Join(rootDir, test.version+".mod"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +77,7 @@ func TestWriteModuleVersion(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer r.Close()
-			content, err := io.ReadAll(r)
+			content, err := ioutil.ReadAll(r)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -101,7 +101,7 @@ func TestWriteModuleVersion(t *testing.T) {
 
 	for _, test := range lists {
 		fp := filepath.Join(dir, filepath.FromSlash(test.modulePath), "@v", "list")
-		list, err := os.ReadFile(fp)
+		list, err := ioutil.ReadFile(fp)
 		if err != nil {
 			t.Fatal(err)
 		}

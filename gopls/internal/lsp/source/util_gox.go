@@ -4,6 +4,7 @@
 
 package source
 
+/*
 import (
 	"go/types"
 	"strconv"
@@ -168,3 +169,4 @@ func UnquoteGopImportPath(s *ast.ImportSpec) ImportPath {
 	}
 	return ImportPath(path)
 }
+*/

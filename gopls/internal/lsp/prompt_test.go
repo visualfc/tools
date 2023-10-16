@@ -4,6 +4,7 @@
 
 package lsp
 
+/*
 import (
 	"path/filepath"
 	"sync"
@@ -80,3 +81,4 @@ func TestReleaseAndAcquireFileLock(t *testing.T) {
 		t.Fatalf("failed to Acquire")
 	}
 }
+*/

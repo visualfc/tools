@@ -4,6 +4,7 @@
 
 package cache
 
+/*
 import (
 	"golang.org/x/tools/gopls/internal/goxls/goputil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -12,3 +13,4 @@ import (
 func checkGopFile(fh source.FileHandle, fext string) bool {
 	return goputil.FileKind(fext) != 0
 }
+*/

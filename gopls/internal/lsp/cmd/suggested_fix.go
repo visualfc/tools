@@ -8,21 +8,21 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
 
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
+	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
+	"golang.org/x/tools/internal/diff"
 	"golang.org/x/tools/internal/tool"
 )
 
-// TODO(adonovan): this command has a very poor user interface. It
-// should have a way to query the available fixes for a file (without
-// a span), enumerate the valid fix kinds, enable all fixes, and not
-// require the pointless -all flag. See issue #60290.
-
 // suggestedFix implements the fix verb for gopls.
 type suggestedFix struct {
-	EditFlags
-	All bool `flag:"a,all" help:"apply all fixes, not just preferred fixes"`
+	Diff  bool `flag:"d,diff" help:"display diffs instead of rewriting files"`
+	Write bool `flag:"w,write" help:"write result to (source) file instead of stdout"`
+	All   bool `flag:"a,all" help:"apply all fixes, not just preferred fixes"`
 
 	app *Application
 }
@@ -33,33 +33,8 @@ func (s *suggestedFix) Usage() string     { return "[fix-flags] <filename>" }
 func (s *suggestedFix) ShortHelp() string { return "apply suggested fixes" }
 func (s *suggestedFix) DetailedHelp(f *flag.FlagSet) {
 	fmt.Fprintf(f.Output(), `
-Example: apply fixes to this file, rewriting it:
-
-	$ gopls fix -a -w internal/lsp/cmd/check.go
-
-The -a (-all) flag causes all fixes, not just preferred ones, to be
-applied, but since no fixes are currently preferred, this flag is
-essentially mandatory.
-
-Arguments after the filename are interpreted as LSP CodeAction kinds
-to be applied; the default set is {"quickfix"}, but valid kinds include:
-
-	quickfix
-	refactor
-	refactor.extract
-	refactor.inline
-	refactor.rewrite
-	source.organizeImports
-	source.fixAll
-
-CodeAction kinds are hierarchical, so "refactor" includes
-"refactor.inline". There is currently no way to enable or even
-enumerate all kinds.
-
-Example: apply any "refactor.rewrite" fixes at the specific byte
-offset within this file:
-
-	$ gopls fix -a internal/lsp/cmd/check.go:#43 refactor.rewrite
+Example: apply suggested fixes for this file
+	$ gopls fix -w internal/lsp/cmd/check.go
 
 fix-flags:
 `)
@@ -74,7 +49,6 @@ func (s *suggestedFix) Run(ctx context.Context, args ...string) error {
 	if len(args) < 1 {
 		return tool.CommandLineErrorf("fix expects at least 1 argument")
 	}
-	s.app.editFlags = &s.EditFlags
 	conn, err := s.app.connect(ctx, nil)
 	if err != nil {
 		return err
@@ -127,30 +101,12 @@ func (s *suggestedFix) Run(ctx context.Context, args ...string) error {
 	// Gather edits from matching code actions.
 	var edits []protocol.TextEdit
 	for _, a := range actions {
-		// Without -all, apply only "preferred" fixes.
+		if a.Command != nil {
+			return fmt.Errorf("ExecuteCommand is not yet supported on the command line (action: %v)", a.Title)
+		}
 		if !a.IsPreferred && !s.All {
 			continue
 		}
-
-		// Execute any command.
-		// This may cause the server to make
-		// an ApplyEdit downcall to the client.
-		if a.Command != nil {
-			if _, err := conn.ExecuteCommand(ctx, &protocol.ExecuteCommandParams{
-				Command:   a.Command.Command,
-				Arguments: a.Command.Arguments,
-			}); err != nil {
-				return err
-			}
-			// The specification says that commands should
-			// be executed _after_ edits are applied, not
-			// instead of them, but we don't want to
-			// duplicate edits.
-			continue
-		}
-
-		// Partially apply CodeAction.Edit, a WorkspaceEdit.
-		// (See also conn.Client.applyWorkspaceEdit(a.Edit)).
 		if !from.HasPosition() {
 			for _, c := range a.Edit.DocumentChanges {
 				if c.TextDocumentEdit != nil {
@@ -189,5 +145,25 @@ func (s *suggestedFix) Run(ctx context.Context, args ...string) error {
 		}
 	}
 
-	return applyTextEdits(file.mapper, edits, s.app.editFlags)
+	newContent, sedits, err := source.ApplyProtocolEdits(file.mapper, edits)
+	if err != nil {
+		return fmt.Errorf("%v: %v", edits, err)
+	}
+
+	filename := file.uri.Filename()
+	switch {
+	case s.Write:
+		if len(edits) > 0 {
+			ioutil.WriteFile(filename, newContent, 0644)
+		}
+	case s.Diff:
+		diffs, err := diff.ToUnified(filename+".orig", filename, string(file.mapper.Content), sedits)
+		if err != nil {
+			return err
+		}
+		fmt.Print(diffs)
+	default:
+		os.Stdout.Write(newContent)
+	}
+	return nil
 }

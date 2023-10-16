@@ -9,22 +9,16 @@ import (
 
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
-	"golang.org/x/tools/gopls/internal/telemetry"
 	"golang.org/x/tools/internal/event"
 )
 
-func (s *Server) symbol(ctx context.Context, params *protocol.WorkspaceSymbolParams) (_ []protocol.SymbolInformation, rerr error) {
-	recordLatency := telemetry.StartLatencyTimer("symbol")
-	defer func() {
-		recordLatency(ctx, rerr)
-	}()
-
+func (s *Server) symbol(ctx context.Context, params *protocol.WorkspaceSymbolParams) ([]protocol.SymbolInformation, error) {
 	ctx, done := event.Start(ctx, "lsp.Server.symbol")
 	defer done()
 
 	views := s.session.Views()
-	matcher := s.Options().SymbolMatcher
-	style := s.Options().SymbolStyle
+	matcher := s.session.Options().SymbolMatcher
+	style := s.session.Options().SymbolStyle
 	// TODO(rfindley): it looks wrong that we need to pass views here.
 	//
 	// Evidence:

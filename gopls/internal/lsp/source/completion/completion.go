@@ -104,16 +104,15 @@ type CompletionItem struct {
 
 // completionOptions holds completion specific configuration.
 type completionOptions struct {
-	unimported            bool
-	documentation         bool
-	fullDocumentation     bool
-	placeholders          bool
-	literal               bool
-	snippets              bool
-	postfix               bool
-	matcher               source.Matcher
-	budget                time.Duration
-	completeFunctionCalls bool
+	unimported        bool
+	documentation     bool
+	fullDocumentation bool
+	placeholders      bool
+	literal           bool
+	snippets          bool
+	postfix           bool
+	matcher           source.Matcher
+	budget            time.Duration
 }
 
 // Snippet is a convenience returns the snippet if available, otherwise
@@ -232,15 +231,6 @@ type completer struct {
 
 	// mapper converts the positions in the file from which the completion originated.
 	mapper *protocol.Mapper
-
-	// startTime is when we started processing this completion request. It does
-	// not include any time the request spent in the queue.
-	//
-	// Note: in CL 503016, startTime move to *after* type checking, but it was
-	// subsequently determined that it was better to keep setting it *before*
-	// type checking, so that the completion budget best approximates the user
-	// experience. See golang/go#62665 for more details.
-	startTime time.Time
 
 	// scopes contains all scopes defined by nodes in our path,
 	// including nil values for nodes that don't defined a scope. It
@@ -447,8 +437,6 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 	ctx, done := event.Start(ctx, "completion.Completion")
 	defer done()
 
-	startTime := time.Now()
-
 	pkg, pgf, err := source.NarrowestPackageForFile(ctx, snapshot, fh.URI())
 	if err != nil || pgf.File.Package == token.NoPos {
 		// If we can't parse this file or find position for the package
@@ -463,7 +451,6 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 		}
 		return items, surrounding, nil
 	}
-
 	pos, err := pgf.PositionPos(protoPos)
 	if err != nil {
 		return nil, nil, err
@@ -521,7 +508,7 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 	scopes := source.CollectScopes(pkg.GetTypesInfo(), path, pos)
 	scopes = append(scopes, pkg.GetTypes().Scope(), types.Universe)
 
-	opts := snapshot.Options()
+	opts := snapshot.View().Options()
 	c := &completer{
 		pkg:      pkg,
 		snapshot: snapshot,
@@ -544,27 +531,24 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 			enabled: opts.DeepCompletion,
 		},
 		opts: &completionOptions{
-			matcher:               opts.Matcher,
-			unimported:            opts.CompleteUnimported,
-			documentation:         opts.CompletionDocumentation && opts.HoverKind != source.NoDocumentation,
-			fullDocumentation:     opts.HoverKind == source.FullDocumentation,
-			placeholders:          opts.UsePlaceholders,
-			literal:               opts.LiteralCompletions && opts.InsertTextFormat == protocol.SnippetTextFormat,
-			budget:                opts.CompletionBudget,
-			snippets:              opts.InsertTextFormat == protocol.SnippetTextFormat,
-			postfix:               opts.ExperimentalPostfixCompletions,
-			completeFunctionCalls: opts.CompleteFunctionCalls,
+			matcher:           opts.Matcher,
+			unimported:        opts.CompleteUnimported,
+			documentation:     opts.CompletionDocumentation && opts.HoverKind != source.NoDocumentation,
+			fullDocumentation: opts.HoverKind == source.FullDocumentation,
+			placeholders:      opts.UsePlaceholders,
+			literal:           opts.LiteralCompletions && opts.InsertTextFormat == protocol.SnippetTextFormat,
+			budget:            opts.CompletionBudget,
+			snippets:          opts.InsertTextFormat == protocol.SnippetTextFormat,
+			postfix:           opts.ExperimentalPostfixCompletions,
 		},
 		// default to a matcher that always matches
 		matcher:        prefixMatcher(""),
 		methodSetCache: make(map[methodSetKey]*types.MethodSet),
 		mapper:         pgf.Mapper,
-		startTime:      startTime,
 		scopes:         scopes,
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	// Compute the deadline for this operation. Deadline is relative to the
 	// search operation, not the entire completion RPC, as the work up until this
@@ -578,11 +562,14 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 	// Don't overload the context with this deadline, as we don't want to
 	// conflate user cancellation (=fail the operation) with our time limit
 	// (=stop searching and succeed with partial results).
+	start := time.Now()
 	var deadline *time.Time
 	if c.opts.budget > 0 {
-		d := startTime.Add(c.opts.budget)
+		d := start.Add(c.opts.budget)
 		deadline = &d
 	}
+
+	defer cancel()
 
 	if surrounding := c.containingIdent(pgf.Src); surrounding != nil {
 		c.setSurrounding(surrounding)
@@ -596,30 +583,17 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 	}
 
 	// Deep search collected candidates and their members for more candidates.
-	c.deepSearch(ctx, 1, deadline)
-
-	// At this point we have a sufficiently complete set of results, and want to
-	// return as close to the completion budget as possible. Previously, we
-	// avoided cancelling the context because it could result in partial results
-	// for e.g. struct fields. At this point, we have a minimal valid set of
-	// candidates, and so truncating due to context cancellation is acceptable.
-	if c.opts.budget > 0 {
-		timeoutDuration := time.Until(c.startTime.Add(c.opts.budget))
-		ctx, cancel = context.WithTimeout(ctx, timeoutDuration)
-		defer cancel()
-	}
+	c.deepSearch(ctx, start, deadline)
 
 	for _, callback := range c.completionCallbacks {
-		if deadline == nil || time.Now().Before(*deadline) {
-			if err := c.snapshot.RunProcessEnvFunc(ctx, callback); err != nil {
-				return nil, nil, err
-			}
+		if err := c.snapshot.RunProcessEnvFunc(ctx, callback); err != nil {
+			return nil, nil, err
 		}
 	}
 
 	// Search candidates populated by expensive operations like
 	// unimportedMembers etc. for more completion items.
-	c.deepSearch(ctx, 0, deadline)
+	c.deepSearch(ctx, start, deadline)
 
 	// Statement candidates offer an entire statement in certain contexts, as
 	// opposed to a single object. Add statement candidates last because they
@@ -1296,7 +1270,7 @@ func (c *completer) selector(ctx context.Context, sel *ast.SelectorExpr) error {
 				Label:      id.Name,
 				Detail:     fmt.Sprintf("%s (from %q)", strings.ToLower(tok.String()), m.PkgPath),
 				InsertText: id.Name,
-				Score:      float64(score) * unimportedScore(relevances[path]),
+				Score:      unimportedScore(relevances[path]),
 			}
 			switch tok {
 			case token.FUNC:
@@ -1320,18 +1294,32 @@ func (c *completer) selector(ctx context.Context, sel *ast.SelectorExpr) error {
 
 			// For functions, add a parameter snippet.
 			if fn != nil {
-				paramList := func(list *ast.FieldList) []string {
-					var params []string
+				var sn snippet.Builder
+				sn.WriteText(id.Name)
+
+				paramList := func(open, close string, list *ast.FieldList) {
 					if list != nil {
 						var cfg printer.Config // slight overkill
+						var nparams int
 						param := func(name string, typ ast.Expr) {
-							var buf strings.Builder
-							buf.WriteString(name)
-							buf.WriteByte(' ')
-							cfg.Fprint(&buf, token.NewFileSet(), typ)
-							params = append(params, buf.String())
+							if nparams > 0 {
+								sn.WriteText(", ")
+							}
+							nparams++
+							if c.opts.placeholders {
+								sn.WritePlaceholder(func(b *snippet.Builder) {
+									var buf strings.Builder
+									buf.WriteString(name)
+									buf.WriteByte(' ')
+									cfg.Fprint(&buf, token.NewFileSet(), typ)
+									b.WriteText(buf.String())
+								})
+							} else {
+								sn.WriteText(name)
+							}
 						}
 
+						sn.WriteText(open)
 						for _, field := range list.List {
 							if field.Names != nil {
 								for _, name := range field.Names {
@@ -1341,14 +1329,13 @@ func (c *completer) selector(ctx context.Context, sel *ast.SelectorExpr) error {
 								param("_", field.Type)
 							}
 						}
+						sn.WriteText(close)
 					}
-					return params
 				}
 
-				tparams := paramList(fn.Type.TypeParams)
-				params := paramList(fn.Type.Params)
-				var sn snippet.Builder
-				c.functionCallSnippet(id.Name, tparams, params, &sn)
+				paramList("[", "]", typeparams.ForFuncType(fn.Type))
+				paramList("(", ")", fn.Type.Params)
+
 				item.snippet = &sn
 			}
 
@@ -1381,10 +1368,6 @@ func (c *completer) selector(ctx context.Context, sel *ast.SelectorExpr) error {
 	ctx, cancel := context.WithCancel(ctx)
 	var mu sync.Mutex
 	add := func(pkgExport imports.PackageExport) {
-		if ignoreUnimportedCompletion(pkgExport.Fix) {
-			return
-		}
-
 		mu.Lock()
 		defer mu.Unlock()
 		// TODO(adonovan): what if the actual package has a vendor/ prefix?
@@ -1434,13 +1417,6 @@ func (c *completer) packageMembers(pkg *types.Package, score float64, imp *impor
 			addressable: isVar(obj),
 		})
 	}
-}
-
-// ignoreUnimportedCompletion reports whether an unimported completion
-// resulting in the given import should be ignored.
-func ignoreUnimportedCompletion(fix *imports.ImportFix) bool {
-	// golang/go#60062: don't add unimported completion to golang.org/toolchain.
-	return fix != nil && strings.HasPrefix(fix.StmtInfo.ImportPath, "golang.org/toolchain")
 }
 
 func (c *completer) methodsAndFields(typ types.Type, addressable bool, imp *importInfo, cb func(candidate)) {
@@ -1755,9 +1731,6 @@ func (c *completer) unimportedPackages(ctx context.Context, seen map[string]stru
 
 	var mu sync.Mutex
 	add := func(pkg imports.ImportFix) {
-		if ignoreUnimportedCompletion(&pkg) {
-			return
-		}
 		mu.Lock()
 		defer mu.Unlock()
 		if _, ok := seen[pkg.IdentName]; ok {

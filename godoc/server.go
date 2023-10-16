@@ -16,6 +16,7 @@ import (
 	htmlpkg "html"
 	htmltemplate "html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -84,7 +85,7 @@ func (h *handlerServer) GetPageInfo(abspath, relpath string, mode PageInfoMode, 
 		if err != nil {
 			return nil, err
 		}
-		return io.NopCloser(bytes.NewReader(data)), nil
+		return ioutil.NopCloser(bytes.NewReader(data)), nil
 	}
 
 	// Make the syscall/js package always visible by default.

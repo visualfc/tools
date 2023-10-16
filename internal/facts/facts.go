@@ -40,7 +40,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"go/types"
-	"io"
+	"io/ioutil"
 	"log"
 	"reflect"
 	"sort"
@@ -247,7 +247,7 @@ func (d *Decoder) Decode(skipMethodSorting bool, read func(pkgPath string) ([]by
 			key := key{pkg: factPkg, t: reflect.TypeOf(f.Fact)}
 			if f.Object != "" {
 				// object fact
-				obj, err := typesinternal.ObjectpathObject(factPkg, string(f.Object), skipMethodSorting)
+				obj, err := typesinternal.ObjectpathObject(factPkg, f.Object, skipMethodSorting)
 				if err != nil {
 					// (most likely due to unexported object)
 					// TODO(adonovan): audit for other possibilities.
@@ -356,7 +356,7 @@ func (s *Set) Encode(skipMethodSorting bool) []byte {
 		if err := gob.NewEncoder(&buf).Encode(gobFacts); err != nil {
 			// Fact encoding should never fail. Identify the culprit.
 			for _, gf := range gobFacts {
-				if err := gob.NewEncoder(io.Discard).Encode(gf); err != nil {
+				if err := gob.NewEncoder(ioutil.Discard).Encode(gf); err != nil {
 					fact := gf.Fact
 					pkgpath := reflect.TypeOf(fact).Elem().PkgPath()
 					log.Panicf("internal error: gob encoding of analysis fact %s failed: %v; please report a bug against fact %T in package %q",

@@ -15,15 +15,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/gopls/internal/bug"
-	"golang.org/x/tools/gopls/internal/goxls/packages"         // goxls: replace golang.org/x/tools/go/packages
-	"golang.org/x/tools/gopls/internal/goxls/packagesinternal" // goxls: replace golang.org/x/tools/internal/packagesinternal
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/event/tag"
 	"golang.org/x/tools/internal/gocommand"
+	"golang.org/x/tools/internal/packagesinternal"
 )
 
 var loadID uint64 // atomic identifier for loads
@@ -67,7 +67,7 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 				panic(fmt.Sprintf("internal error: load called with multiple scopes when a file scope is present (file: %s)", uri))
 			}
 			fh := s.FindFile(uri)
-			if fh == nil || s.FileKind(fh) != source.Go {
+			if fh == nil || s.View().FileKind(fh) != source.Go {
 				// Don't try to load a file that doesn't exist, or isn't a go file.
 				continue
 			}
@@ -75,7 +75,7 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 			if err != nil {
 				continue
 			}
-			if isStandaloneFile(contents, s.options.StandaloneTags) {
+			if isStandaloneFile(contents, s.view.Options().StandaloneTags) {
 				standalone = true
 				query = append(query, uri.Filename())
 			} else {
@@ -117,7 +117,7 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 		flags |= source.AllowNetwork
 	}
 	_, inv, cleanup, err := s.goCommandInvocation(ctx, flags, &gocommand.Invocation{
-		WorkingDir: s.view.goCommandDir.Filename(),
+		WorkingDir: s.view.workingDir().Filename(),
 	})
 	if err != nil {
 		return err
@@ -160,7 +160,7 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 	}
 
 	moduleErrs := make(map[string][]packages.Error) // module path -> errors
-	filterFunc := s.filterFunc()
+	filterFunc := s.view.filterFunc()
 	newMetadata := make(map[PackageID]*source.Metadata)
 	for _, pkg := range pkgs {
 		// The Go command returns synthetic list results for module queries that
@@ -178,7 +178,7 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 			continue
 		}
 
-		if !containsDir || s.options.VerboseOutput {
+		if !containsDir || s.view.Options().VerboseOutput {
 			event.Log(ctx, eventName, append(
 				source.SnapshotLabels(s),
 				tag.Package.Of(pkg.ID),
@@ -217,7 +217,8 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 	s.mu.Lock()
 
 	// Assert the invariant s.packages.Get(id).m == s.meta.metadata[id].
-	s.packages.Range(func(id PackageID, ph *packageHandle) {
+	s.packages.Range(func(k, v interface{}) {
+		id, ph := k.(PackageID), v.(*packageHandle)
 		if s.meta.metadata[id] != ph.m {
 			panic("inconsistent metadata")
 		}
@@ -359,7 +360,7 @@ func (s *snapshot) applyCriticalErrorToFiles(ctx context.Context, msg string, fi
 	for _, fh := range files {
 		// Place the diagnostics on the package or module declarations.
 		var rng protocol.Range
-		switch s.FileKind(fh) {
+		switch s.view.FileKind(fh) {
 		case source.Go:
 			if pgf, err := s.ParseGo(ctx, fh, source.ParseHeader); err == nil {
 				// Check that we have a valid `package foo` range to use for positioning the error.
@@ -436,16 +437,6 @@ func buildMetadata(updates map[PackageID]*source.Metadata, pkg *packages.Package
 	for _, filename := range pkg.GoFiles {
 		uri := span.URIFromPath(filename)
 		m.GoFiles = append(m.GoFiles, uri)
-	}
-	if true { // goxls: Go+ files
-		for _, filename := range pkg.GopFiles {
-			uri := span.URIFromPath(filename)
-			m.GopFiles = append(m.GopFiles, uri)
-		}
-		for _, filename := range pkg.CompiledGopFiles {
-			uri := span.URIFromPath(filename)
-			m.CompiledGopFiles = append(m.CompiledGopFiles, uri)
-		}
 	}
 	for _, filename := range pkg.IgnoredFiles {
 		uri := span.URIFromPath(filename)
@@ -626,7 +617,7 @@ func containsPackageLocked(s *snapshot, m *source.Metadata) bool {
 			uris[uri] = struct{}{}
 		}
 
-		filterFunc := s.filterFunc()
+		filterFunc := s.view.filterFunc()
 		for uri := range uris {
 			// Don't use view.contains here. go.work files may include modules
 			// outside of the workspace folder.
@@ -681,7 +672,7 @@ func containsFileInWorkspaceLocked(s *snapshot, m *source.Metadata) bool {
 
 		// The package's files are in this view. It may be a workspace package.
 		// Vendored packages are not likely to be interesting to the user.
-		if !strings.Contains(string(uri), "/vendor/") && s.contains(uri) {
+		if !strings.Contains(string(uri), "/vendor/") && s.view.contains(uri) {
 			return true
 		}
 	}

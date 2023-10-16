@@ -20,6 +20,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -127,7 +128,7 @@ func main() {
 			}
 			fails++
 			dir, path := filepath.Split(*flagOutput)
-			f, err := os.CreateTemp(dir, path)
+			f, err := ioutil.TempFile(dir, path)
 			if err != nil {
 				fmt.Printf("failed to create temp file: %v\n", err)
 				os.Exit(1)

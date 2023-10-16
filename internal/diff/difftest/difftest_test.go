@@ -9,6 +9,7 @@ package difftest_test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -40,7 +41,7 @@ func TestVerifyUnified(t *testing.T) {
 }
 
 func getDiffOutput(a, b string) (string, error) {
-	fileA, err := os.CreateTemp("", "myers.in")
+	fileA, err := ioutil.TempFile("", "myers.in")
 	if err != nil {
 		return "", err
 	}
@@ -51,7 +52,7 @@ func getDiffOutput(a, b string) (string, error) {
 	if err := fileA.Close(); err != nil {
 		return "", err
 	}
-	fileB, err := os.CreateTemp("", "myers.in")
+	fileB, err := ioutil.TempFile("", "myers.in")
 	if err != nil {
 		return "", err
 	}

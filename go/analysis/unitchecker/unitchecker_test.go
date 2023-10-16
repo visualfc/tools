@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build go1.19
-
 package unitchecker_test
 
 import (
@@ -30,9 +28,6 @@ func TestMain(m *testing.M) {
 		panic("unreachable")
 	case "minivet":
 		minivet()
-		panic("unreachable")
-	case "worker":
-		worker() // see ExampleSeparateAnalysis
 		panic("unreachable")
 	}
 

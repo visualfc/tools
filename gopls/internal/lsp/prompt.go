@@ -4,6 +4,7 @@
 
 package lsp
 
+/*
 import (
 	"context"
 	"fmt"
@@ -315,3 +316,4 @@ func acquireLockFile(path string) (func(), bool, error) {
 	}
 	return release, true, nil
 }
+*/

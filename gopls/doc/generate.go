@@ -18,6 +18,7 @@ import (
 	"go/token"
 	"go/types"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +32,7 @@ import (
 
 	"github.com/jba/printsrc"
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/gopls/internal/goxls/packages"
+	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/command/commandmeta"
 	"golang.org/x/tools/gopls/internal/lsp/mod"
@@ -84,13 +85,9 @@ func doMain(write bool) (bool, error) {
 
 // pkgDir returns the directory corresponding to the import path pkgPath.
 func pkgDir(pkgPath string) (string, error) {
-	cmd := exec.Command("go", "list", "-f", "{{.Dir}}", pkgPath)
-	out, err := cmd.Output()
+	out, err := exec.Command("go", "list", "-f", "{{.Dir}}", pkgPath).Output()
 	if err != nil {
-		if ee, _ := err.(*exec.ExitError); ee != nil && len(ee.Stderr) > 0 {
-			return "", fmt.Errorf("%v: %w\n%s", cmd, err, ee.Stderr)
-		}
-		return "", fmt.Errorf("%v: %w", cmd, err)
+		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -572,7 +569,7 @@ func fileForPos(pkg *packages.Package, pos token.Pos) (*ast.File, error) {
 }
 
 func rewriteFile(file string, api *source.APIJSON, write bool, rewrite func([]byte, *source.APIJSON) ([]byte, error)) (bool, error) {
-	old, err := os.ReadFile(file)
+	old, err := ioutil.ReadFile(file)
 	if err != nil {
 		return false, err
 	}
@@ -586,7 +583,7 @@ func rewriteFile(file string, api *source.APIJSON, write bool, rewrite func([]by
 		return bytes.Equal(old, new), nil
 	}
 
-	if err := os.WriteFile(file, new, 0); err != nil {
+	if err := ioutil.WriteFile(file, new, 0); err != nil {
 		return false, err
 	}
 

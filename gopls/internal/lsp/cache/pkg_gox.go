@@ -4,6 +4,7 @@
 
 package cache
 
+/*
 import (
 	"fmt"
 
@@ -29,3 +30,4 @@ func (pkg *syntaxPackage) GopFile(uri span.URI) (*source.ParsedGopFile, error) {
 	}
 	return nil, fmt.Errorf("no parsed file for %s in %v", uri, pkg.id)
 }
+*/

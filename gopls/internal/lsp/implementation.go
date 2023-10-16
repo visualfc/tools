@@ -9,17 +9,11 @@ import (
 
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
-	"golang.org/x/tools/gopls/internal/telemetry"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/event/tag"
 )
 
-func (s *Server) implementation(ctx context.Context, params *protocol.ImplementationParams) (_ []protocol.Location, rerr error) {
-	recordLatency := telemetry.StartLatencyTimer("implementation")
-	defer func() {
-		recordLatency(ctx, rerr)
-	}()
-
+func (s *Server) implementation(ctx context.Context, params *protocol.ImplementationParams) ([]protocol.Location, error) {
 	ctx, done := event.Start(ctx, "lsp.Server.implementation", tag.URI.Of(params.TextDocument.URI))
 	defer done()
 

@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
@@ -83,7 +84,7 @@ func main() {
 // If writeBack is true, the converted version is written back to file.
 // If writeBack is false, the converted version is printed to standard output.
 func convert(r io.Reader, file string, writeBack bool) error {
-	data, err := io.ReadAll(r)
+	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return err
 	}
@@ -183,7 +184,7 @@ func convert(r io.Reader, file string, writeBack bool) error {
 		os.Stdout.Write(md.Bytes())
 		return nil
 	}
-	return os.WriteFile(file, md.Bytes(), 0666)
+	return ioutil.WriteFile(file, md.Bytes(), 0666)
 }
 
 func printSectionBody(file string, depth int, w *bytes.Buffer, elems []present.Elem) {

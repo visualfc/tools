@@ -4,6 +4,7 @@
 
 package source
 
+/*
 import (
 	"context"
 	"fmt"
@@ -99,3 +100,4 @@ func NarrowestPackageForGopFile(ctx context.Context, snapshot Snapshot, uri span
 	}
 	return pkg, pgf, err
 }
+*/

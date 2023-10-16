@@ -41,22 +41,6 @@ Args:
 }
 ```
 
-### **update the given telemetry counters.**
-Identifier: `gopls.add_telemetry_counters`
-
-Gopls will prepend "fwd/" to all the counters updated using this command
-to avoid conflicts with other counters gopls collects.
-
-Args:
-
-```
-{
-	// Names and Values must have the same length.
-	"Names": []string,
-	"Values": []int64,
-}
-```
-
 ### **Apply a fix**
 Identifier: `gopls.apply_fix`
 
@@ -133,7 +117,7 @@ Args:
 Result:
 
 ```
-map[golang.org/x/tools/gopls/internal/lsp/protocol.DocumentURI]*golang.org/x/tools/gopls/internal/vulncheck.Result
+map[golang.org/x/tools/gopls/internal/lsp/protocol.DocumentURI]*golang.org/x/tools/gopls/internal/govulncheck.Result
 ```
 
 ### **Toggle gc_details**
@@ -238,12 +222,6 @@ Result:
 }
 ```
 
-### **checks for the right conditions, and then prompts**
-Identifier: `gopls.maybe_prompt_for_telemetry`
-
-the user to ask if they want to enable Go telemetry uploading. If the user
-responds 'Yes', the telemetry mode is set to "on".
-
 ### **fetch memory statistics**
 Identifier: `gopls.mem_stats`
 
@@ -329,7 +307,7 @@ Args:
 }
 ```
 
-### **Run vulncheck.**
+### **Run govulncheck.**
 Identifier: `gopls.run_govulncheck`
 
 Run vulnerability check (`govulncheck`).

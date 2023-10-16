@@ -6,6 +6,7 @@ package fake
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -31,7 +32,7 @@ Hello World!
 func newWorkdir(t *testing.T, txt string) (*Workdir, *eventBuffer, func()) {
 	t.Helper()
 
-	tmpdir, err := os.MkdirTemp("", "goplstest-workdir-")
+	tmpdir, err := ioutil.TempDir("", "goplstest-workdir-")
 	if err != nil {
 		t.Fatal(err)
 	}

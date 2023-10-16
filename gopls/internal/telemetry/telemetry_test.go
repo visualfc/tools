@@ -7,6 +7,7 @@
 
 package telemetry_test
 
+/*
 import (
 	"context"
 	"errors"
@@ -213,3 +214,4 @@ func _() {
 		}
 	})
 }
+*/

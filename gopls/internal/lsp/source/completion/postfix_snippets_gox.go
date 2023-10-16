@@ -4,6 +4,7 @@
 
 package completion
 
+/*
 import (
 	"context"
 	"fmt"
@@ -168,3 +169,4 @@ func (c *gopCompleter) importIfNeeded(pkgPath string, scope *types.Scope) (strin
 
 	return defaultName, edits, nil
 }
+*/

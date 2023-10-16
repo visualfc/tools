@@ -4,6 +4,7 @@
 
 package completion
 
+/*
 import (
 	"go/types"
 	"strings"
@@ -97,3 +98,4 @@ func gopDefinition(path []ast.Node, obj types.Object, pgf *source.ParsedGopFile)
 	}
 	return ans, sel
 }
+*/

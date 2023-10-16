@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"go/build"
 	"go/types"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -196,7 +197,7 @@ func genPrefixes(out chan string, all bool) {
 }
 
 func walkDir(dirname, prefix string, out chan string) {
-	fiList, err := os.ReadDir(dirname)
+	fiList, err := ioutil.ReadDir(dirname)
 	if err != nil {
 		return
 	}

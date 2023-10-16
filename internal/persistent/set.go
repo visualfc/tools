@@ -4,6 +4,7 @@
 
 package persistent
 
+/*
 import "golang.org/x/tools/internal/constraints"
 
 // Set is a collection of elements of type K.
@@ -76,3 +77,4 @@ func (s *Set[K]) Remove(key K) {
 		s.impl.Delete(key)
 	}
 }
+*/

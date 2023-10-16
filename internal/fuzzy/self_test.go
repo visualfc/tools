@@ -4,6 +4,7 @@
 
 package fuzzy_test
 
+/*
 import (
 	"testing"
 
@@ -37,3 +38,4 @@ func BenchmarkSelf_SymbolMatcher(b *testing.B) {
 		}
 	}
 }
+*/

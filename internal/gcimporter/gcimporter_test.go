@@ -17,6 +17,7 @@ import (
 	goparser "go/parser"
 	"go/token"
 	"go/types"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -104,7 +105,7 @@ func testPath(t *testing.T, path, srcDir string) *types.Package {
 }
 
 func mktmpdir(t *testing.T) string {
-	tmpdir, err := os.MkdirTemp("", "gcimporter_test")
+	tmpdir, err := ioutil.TempDir("", "gcimporter_test")
 	if err != nil {
 		t.Fatal("mktmpdir:", err)
 	}
@@ -285,7 +286,7 @@ func TestVersionHandling(t *testing.T) {
 	needsCompiler(t, "gc")
 
 	const dir = "./testdata/versions"
-	list, err := os.ReadDir(dir)
+	list, err := ioutil.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +321,7 @@ func TestVersionHandling(t *testing.T) {
 
 		// create file with corrupted export data
 		// 1) read file
-		data, err := os.ReadFile(filepath.Join(dir, name))
+		data, err := ioutil.ReadFile(filepath.Join(dir, name))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -337,7 +338,7 @@ func TestVersionHandling(t *testing.T) {
 		// 4) write the file
 		pkgpath += "_corrupted"
 		filename := filepath.Join(corruptdir, pkgpath) + ".a"
-		os.WriteFile(filename, data, 0666)
+		ioutil.WriteFile(filename, data, 0666)
 
 		// test that importing the corrupted file results in an error
 		_, err = Import(make(map[string]*types.Package), pkgpath, corruptdir, nil)

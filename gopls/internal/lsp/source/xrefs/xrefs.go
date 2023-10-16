@@ -172,7 +172,8 @@ func Lookup(m *source.Metadata, data []byte, targets map[source.PackagePath]map[
 // The gobRef.Range field is the obvious place to begin.
 
 // (The name says gob but in fact we use frob.)
-var packageCodec = frob.CodecFor[[]*gobPackage]()
+// var packageCodec = frob.For[[]*gobPackage]()
+var packageCodec = frob.CodecFor117(new([]*gobPackage))
 
 // A gobPackage records the set of outgoing references from the index
 // package to symbols defined in a dependency package.

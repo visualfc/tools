@@ -4,6 +4,7 @@
 
 package unitchecker
 
+/*
 import (
 	"go/token"
 	"go/types"
@@ -24,3 +25,4 @@ func SetTypeImportExport(
 	makeTypesImporter = MakeTypesImporter
 	exportTypes = ExportTypes
 }
+*/

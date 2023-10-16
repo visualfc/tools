@@ -7,6 +7,7 @@ package present
 import (
 	"bytes"
 	"html/template"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,7 +33,7 @@ func TestTestdata(t *testing.T) {
 			continue
 		}
 		t.Run(name, func(t *testing.T) {
-			data, err := os.ReadFile(file)
+			data, err := ioutil.ReadFile(file)
 			if err != nil {
 				t.Fatalf("%s: %v", file, err)
 			}
@@ -93,7 +94,7 @@ func diff(prefix string, name1 string, b1 []byte, name2 string, b2 []byte) ([]by
 }
 
 func writeTempFile(prefix string, data []byte) (string, error) {
-	file, err := os.CreateTemp("", prefix)
+	file, err := ioutil.TempFile("", prefix)
 	if err != nil {
 		return "", err
 	}

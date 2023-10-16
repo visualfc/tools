@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"go/build"
 	"go/token"
-	"io"
+	"io/ioutil"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -387,7 +387,7 @@ var _ foo.T
 				t.Errorf("unexpected error opening file: %s", err)
 				return
 			}
-			bytes, err := io.ReadAll(f)
+			bytes, err := ioutil.ReadAll(f)
 			f.Close()
 			if err != nil {
 				t.Errorf("unexpected error reading file: %s", err)

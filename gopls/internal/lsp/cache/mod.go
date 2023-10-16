@@ -52,7 +52,7 @@ func (s *snapshot) ParseMod(ctx context.Context, fh source.FileHandle) (*source.
 	}
 
 	// Await result.
-	v, err := s.awaitPromise(ctx, entry)
+	v, err := s.awaitPromise(ctx, entry.(*memoize.Promise))
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (s *snapshot) ParseWork(ctx context.Context, fh source.FileHandle) (*source
 	}
 
 	// Await result.
-	v, err := s.awaitPromise(ctx, entry)
+	v, err := s.awaitPromise(ctx, entry.(*memoize.Promise))
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func sumFilename(modURI span.URI) string {
 func (s *snapshot) ModWhy(ctx context.Context, fh source.FileHandle) (map[string]string, error) {
 	uri := fh.URI()
 
-	if s.FileKind(fh) != source.Mod {
+	if s.View().FileKind(fh) != source.Mod {
 		return nil, fmt.Errorf("%s is not a go.mod file", uri)
 	}
 
@@ -240,7 +240,7 @@ func (s *snapshot) ModWhy(ctx context.Context, fh source.FileHandle) (map[string
 	}
 
 	// Await result.
-	v, err := s.awaitPromise(ctx, entry)
+	v, err := s.awaitPromise(ctx, entry.(*memoize.Promise))
 	if err != nil {
 		return nil, err
 	}

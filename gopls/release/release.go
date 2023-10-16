@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"go/types"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ import (
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/semver"
-	"golang.org/x/tools/gopls/internal/goxls/packages"
+	"golang.org/x/tools/go/packages"
 )
 
 var versionFlag = flag.String("version", "", "version to tag")
@@ -108,7 +109,7 @@ func validateHardcodedVersion(version string) error {
 
 func validateGoModFile(goplsDir string) error {
 	filename := filepath.Join(goplsDir, "go.mod")
-	data, err := os.ReadFile(filename)
+	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return err
 	}

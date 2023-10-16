@@ -12,17 +12,11 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/lsp/template"
 	"golang.org/x/tools/gopls/internal/lsp/work"
-	"golang.org/x/tools/gopls/internal/telemetry"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/event/tag"
 )
 
-func (s *Server) hover(ctx context.Context, params *protocol.HoverParams) (_ *protocol.Hover, rerr error) {
-	recordLatency := telemetry.StartLatencyTimer("hover")
-	defer func() {
-		recordLatency(ctx, rerr)
-	}()
-
+func (s *Server) hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 	ctx, done := event.Start(ctx, "lsp.Server.hover", tag.URI.Of(params.TextDocument.URI))
 	defer done()
 
@@ -31,13 +25,11 @@ func (s *Server) hover(ctx context.Context, params *protocol.HoverParams) (_ *pr
 	if !ok {
 		return nil, err
 	}
-	switch snapshot.FileKind(fh) {
+	switch snapshot.View().FileKind(fh) {
 	case source.Mod:
 		return mod.Hover(ctx, snapshot, fh, params.Position)
 	case source.Go:
 		return source.Hover(ctx, snapshot, fh, params.Position)
-	case source.Gop: // goxls: Go+
-		return source.HoverGop(ctx, snapshot, fh, params.Position)
 	case source.Tmpl:
 		return template.Hover(ctx, snapshot, fh, params.Position)
 	case source.Work:

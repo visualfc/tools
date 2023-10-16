@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
-	"os"
+	"io/ioutil"
 	"unicode"
 )
 
@@ -71,7 +71,7 @@ func Generate() ([]byte, error) {
 	fmt.Fprintf(buf, "%v\n\n%v\n\npackage static\n\n", license, warning)
 	fmt.Fprintf(buf, "var Files = map[string]string{\n")
 	for _, fn := range files {
-		b, err := os.ReadFile(fn)
+		b, err := ioutil.ReadFile(fn)
 		if err != nil {
 			return b, err
 		}

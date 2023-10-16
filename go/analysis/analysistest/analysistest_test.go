@@ -70,8 +70,6 @@ func main() {
 
 	// OK (multiple expectations on same line)
 	println(); println() // want "call of println(...)" "call of println(...)"
-
-	// A Line that is not formatted correctly in the golden file.
 }
 
 // OK (facts and diagnostics on same line)
@@ -111,8 +109,6 @@ func main() {
 	// OK (multiple expectations on same line)
 	println_TEST_()
 	println_TEST_() // want "call of println(...)" "call of println(...)"
-	
-			// A Line that is not formatted correctly in the golden file.
 }
 
 // OK (facts and diagnostics on same line)

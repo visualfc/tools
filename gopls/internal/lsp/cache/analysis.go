@@ -192,7 +192,7 @@ func (snapshot *snapshot) Analyze(ctx context.Context, pkgs map[PackageID]unit, 
 	toSrc := make(map[*analysis.Analyzer]*source.Analyzer)
 	var enabled []*analysis.Analyzer // enabled subset + transitive requirements
 	for _, a := range analyzers {
-		if a.IsEnabled(snapshot.options) {
+		if a.IsEnabled(snapshot.view.Options()) {
 			toSrc[a.Analyzer] = a
 			enabled = append(enabled, a.Analyzer)
 		}
@@ -309,7 +309,7 @@ func (snapshot *snapshot) Analyze(ctx context.Context, pkgs map[PackageID]unit, 
 	// Now that we have read all files,
 	// we no longer need the snapshot.
 	// (but options are needed for progress reporting)
-	options := snapshot.options
+	options := snapshot.view.Options()
 	snapshot = nil
 
 	// Progress reporting. If supported, gopls reports progress on analysis
@@ -707,9 +707,10 @@ func (an *analysisNode) cacheKey() [sha256.Size]byte {
 	// uses those fields, we account for them by hashing vdeps.
 
 	// type sizes
-	wordSize := an.m.TypesSizes.Sizeof(types.Typ[types.Int])
-	maxAlign := an.m.TypesSizes.Alignof(types.NewPointer(types.Typ[types.Int64]))
-	fmt.Fprintf(hasher, "sizes: %d %d\n", wordSize, maxAlign)
+	// This assertion is safe, but if a black-box implementation
+	// is ever needed, record Sizeof(*int) and Alignof(int64).
+	sz := m.TypesSizes.(*types.StdSizes)
+	fmt.Fprintf(hasher, "sizes: %d %d\n", sz.WordSize, sz.MaxAlign)
 
 	// metadata errors: used for 'compiles' field
 	fmt.Fprintf(hasher, "errors: %d", len(m.Errors))
@@ -1395,12 +1396,22 @@ func requiredAnalyzers(analyzers []*analysis.Analyzer) []*analysis.Analyzer {
 	return result
 }
 
-var analyzeSummaryCodec = frob.CodecFor[*analyzeSummary]()
+func mustEncode(x interface{}) []byte {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(x); err != nil {
+		log.Fatalf("internal error encoding %T: %v", x, err)
+	}
+	return buf.Bytes()
+}
+
+// var analyzeSummaryCodec = frob.For[*analyzeSummary]()
+var analyzeSummaryCodec = frob.CodecFor117(new(*analyzeSummary))
 
 // -- data types for serialization of analysis.Diagnostic and source.Diagnostic --
 
 // (The name says gob but we use frob.)
-var diagnosticsCodec = frob.CodecFor[[]gobDiagnostic]()
+// var diagnosticsCodec = frob.For[[]gobDiagnostic]()
+var diagnosticsCodec = frob.CodecFor117(new([]gobDiagnostic))
 
 type gobDiagnostic struct {
 	Location       protocol.Location

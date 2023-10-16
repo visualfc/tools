@@ -4,6 +4,7 @@
 
 package persistent_test
 
+/*
 import (
 	"fmt"
 	"strings"
@@ -130,3 +131,4 @@ func diff[K constraints.Ordered](got *persistent.Set[K], want []K) string {
 	}
 	return ""
 }
+*/

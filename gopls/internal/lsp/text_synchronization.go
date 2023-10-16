@@ -20,27 +20,28 @@ import (
 	"golang.org/x/tools/internal/jsonrpc2"
 )
 
-// ModificationSource identifies the origin of a change.
+// ModificationSource identifies the originating cause of a file modification.
 type ModificationSource int
 
 const (
-	// FromDidOpen is from a didOpen notification.
+	// FromDidOpen is a file modification caused by opening a file.
 	FromDidOpen = ModificationSource(iota)
 
-	// FromDidChange is from a didChange notification.
+	// FromDidChange is a file modification caused by changing a file.
 	FromDidChange
 
-	// FromDidChangeWatchedFiles is from didChangeWatchedFiles notification.
+	// FromDidChangeWatchedFiles is a file modification caused by a change to a
+	// watched file.
 	FromDidChangeWatchedFiles
 
-	// FromDidSave is from a didSave notification.
+	// FromDidSave is a file modification caused by a file save.
 	FromDidSave
 
-	// FromDidClose is from a didClose notification.
+	// FromDidClose is a file modification caused by closing a file.
 	FromDidClose
 
-	// FromDidChangeConfiguration is from a didChangeConfiguration notification.
-	FromDidChangeConfiguration
+	// TODO: add FromDidChangeConfiguration, once configuration changes cause a
+	// new snapshot to be created.
 
 	// FromRegenerateCgo refers to file modifications caused by regenerating
 	// the cgo sources for the workspace.
@@ -87,8 +88,6 @@ func (s *Server) didOpen(ctx context.Context, params *protocol.DidOpenTextDocume
 	// views, but it won't because ViewOf only returns an error when there
 	// are no views in the session. I don't know if that logic should go
 	// here, or if we can continue to rely on that implementation detail.
-	//
-	// TODO(golang/go#57979): this will be generalized to a different view calculation.
 	if _, err := s.session.ViewOf(uri); err != nil {
 		dir := filepath.Dir(uri.Filename())
 		if err := s.addFolders(ctx, []protocol.WorkspaceFolder{{
@@ -240,7 +239,7 @@ func (s *Server) didModifyFiles(ctx context.Context, modifications []source.File
 	wg.Add(1)
 	defer wg.Done()
 
-	if s.Options().VerboseWorkDoneProgress {
+	if s.session.Options().VerboseWorkDoneProgress {
 		work := s.progress.Start(ctx, DiagnosticWorkTitle(cause), "Calculating file diagnostics...", nil, nil)
 		go func() {
 			wg.Wait()
@@ -281,7 +280,7 @@ func (s *Server) didModifyFiles(ctx context.Context, modifications []source.File
 	for snapshot, uris := range snapshots {
 		for _, uri := range uris {
 			mod := modMap[uri]
-			if snapshot.Options().ChattyDiagnostics || mod.Action == source.Open || mod.Action == source.Close {
+			if snapshot.View().Options().ChattyDiagnostics || mod.Action == source.Open || mod.Action == source.Close {
 				s.mustPublishDiagnostics(uri)
 			}
 		}

@@ -7,6 +7,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +15,6 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp"
 	"golang.org/x/tools/gopls/internal/lsp/cache"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
-	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/internal/testenv"
 )
 
@@ -27,15 +27,15 @@ func TestCapabilities(t *testing.T) {
 	// Is there some missing error reporting somewhere?
 	testenv.NeedsTool(t, "go")
 
-	tmpDir, err := os.MkdirTemp("", "fake")
+	tmpDir, err := ioutil.TempDir("", "fake")
 	if err != nil {
 		t.Fatal(err)
 	}
 	tmpFile := filepath.Join(tmpDir, "fake.go")
-	if err := os.WriteFile(tmpFile, []byte(""), 0775); err != nil {
+	if err := ioutil.WriteFile(tmpFile, []byte(""), 0775); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module fake\n\ngo 1.12\n"), 0775); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module fake\n\ngo 1.12\n"), 0775); err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
@@ -49,8 +49,7 @@ func TestCapabilities(t *testing.T) {
 	// Send an initialize request to the server.
 	ctx := context.Background()
 	client := newClient(app, nil)
-	options := source.DefaultOptions(app.options)
-	server := lsp.NewServer(cache.NewSession(ctx, cache.New(nil)), client, options)
+	server := lsp.NewServer(cache.NewSession(ctx, cache.New(nil), app.options), client)
 	result, err := server.Initialize(ctx, params)
 	if err != nil {
 		t.Fatal(err)
