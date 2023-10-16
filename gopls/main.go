@@ -9,7 +9,7 @@
 //
 // See https://github.com/golang/tools/blob/master/gopls/README.md
 // for the most up-to-date documentation.
-package main // import "golang.org/x/tools/gopls"
+package gopls
 
 //go:generate go run doc/generate.go
 
