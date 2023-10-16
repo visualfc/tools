@@ -5,6 +5,8 @@
 package main
 
 import (
+	"os"
+
 	"golang.org/x/tools/gopls/goxls/proxy"
 )
 
@@ -14,5 +16,5 @@ const (
 )
 
 func main() {
-	proxy.Main(gopls, goxls)
+	proxy.Main(gopls, goxls, os.Args[1:]...)
 }

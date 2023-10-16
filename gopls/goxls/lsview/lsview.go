@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -21,16 +22,24 @@ import (
 	"golang.org/x/tools/internal/jsonrpc2"
 )
 
-func Main(app, goxls string) {
-	fin, err := os.Open(app + ".in")
+func Main(app, goxls string, args ...string) {
+	flag := flag.NewFlagSet("lsview", flag.ExitOnError)
+	var (
+		fSummary = flag.Bool("s", false, "show summary information for jsonrpc")
+		fSel     = flag.String("sel", "", "select a method to print")
+	)
+	flag.Parse(args)
+	sel := *fSel
+
+	fin, err := os.Open("gopls.in")
 	check(err)
 	defer fin.Close()
 
-	fview, err := os.Create(app + ".view")
+	fview, err := os.Create("gopls.view")
 	check(err)
 	defer fview.Close()
 
-	fdiff, err := os.Create(app + ".diff")
+	fdiff, err := os.Create("gopls.diff")
 	check(err)
 	defer fdiff.Close()
 
@@ -55,48 +64,52 @@ func Main(app, goxls string) {
 			}
 			switch req := msg.(type) {
 			case *jsonrpc2.Call:
-				id := req.ID()
-				log.Printf("[%v] %s:\n%s", id, req.Method(), params(req.Params()))
+				id, method := req.ID(), req.Method()
+				summary := *fSummary && method != sel
+				log.Printf("[%v] %s\n%s", id, method, params(req.Params(), summary))
 				reqChan <- id
-				resp, ret := respFetch(respChan)
+				resp, ret := respFetch(respChan, summary)
 				if resp != nil {
-					log.Printf("[%v] %s ret:\n%s", id, app, resp)
+					log.Printf("[%v] %s ret\n%s", id, app, resp)
 				}
 				if goxls != "" {
+					var resp2, ret2 any
 					select { // allow send request failed
 					case <-time.After(time.Second):
 					case reqChan2 <- id:
-						if resp2, ret2 := respFetch(respChan2); resp2 != nil {
-							log.Printf("[%v] %s ret:\n%s", id, goxls, resp2)
-							if !reflect.DeepEqual(ret, ret2) {
-								logd.Printf("[%v] %s:\n%s", id, req.Method(), params(req.Params()))
-								logd.Printf("[%v] %s ret:\n%s", id, app, resp)
-								logd.Printf("[%v] %s ret:\n%s", id, goxls, resp2)
-							}
+						if resp2, ret2 = respFetch(respChan2, summary); resp2 != nil {
+							log.Printf("[%v] %s ret\n%s", id, goxls, resp2)
 						}
+					}
+					if eq, resp, resp2 := checkEqual(id, ret, ret2, resp, resp2); !eq {
+						logd.Printf("[%v] %s\n%s", id, method, params(req.Params(), summary))
+						logd.Printf("[%v] %s ret\n%s", id, app, resp)
+						logd.Printf("[%v] %s ret\n%s", id, goxls, resp2)
 					}
 				}
 			case *jsonrpc2.Notification:
-				log.Printf("[] %s:\n%s", req.Method(), params(req.Params()))
+				method := req.Method()
+				summary := *fSummary && method != sel
+				log.Printf("[] %s:\n%s", method, params(req.Params(), summary))
 			}
 		}
 	}()
 	go respLoop(app, respChan, reqChan)
 	if goxls != "" {
-		go respLoop(app, respChan2, reqChan2)
+		go respLoop(goxls, respChan2, reqChan2)
 	}
 	select {}
 }
 
-func respFetch(respChan chan *jsonrpc2.Response) (any, any) {
+func respFetch(respChan chan *jsonrpc2.Response, summary bool) (any, any) {
 	select {
 	case <-time.After(time.Second):
 	case resp := <-respChan:
 		ret := any(resp.Err())
 		if ret == nil {
-			return paramsEx(resp.Result())
+			return paramsEx(resp.Result(), summary)
 		}
-		return fmt.Sprintf("%serror: %v\n", indent, ret), nil
+		return fmt.Sprintf("%serror: %v\n", indent, ret), ret
 	}
 	return nil, nil
 }
@@ -147,25 +160,31 @@ type slice = []any
 
 const indent = "  "
 
-func params(raw json.RawMessage) []byte {
+func params(raw json.RawMessage, summary bool) []byte {
+	if summary {
+		return nil
+	}
 	var ret any
 	err := json.Unmarshal(raw, &ret)
 	if err != nil {
 		return raw
 	}
-	return paramsFmt(ret, indent)
+	return paramsFmt(ret, indent, false)
 }
 
-func paramsEx(raw json.RawMessage) ([]byte, any) {
+func paramsEx(raw json.RawMessage, summary bool) ([]byte, any) {
 	var ret any
 	err := json.Unmarshal(raw, &ret)
 	if err != nil {
 		return raw, ret
 	}
-	return paramsFmt(ret, indent), ret
+	return paramsFmt(ret, indent, summary), ret
 }
 
-func paramsFmt(ret any, prefix string) []byte {
+func paramsFmt(ret any, prefix string, summary bool) []byte {
+	if summary {
+		return nil
+	}
 	var b bytes.Buffer
 	switch val := ret.(type) {
 	case mapt:
@@ -173,7 +192,7 @@ func paramsFmt(ret any, prefix string) []byte {
 		for _, k := range keys {
 			v := val[k]
 			if isComplex(v) {
-				fmt.Fprintf(&b, "%s%s:\n%s", prefix, k, paramsFmt(v, prefix+indent))
+				fmt.Fprintf(&b, "%s%s:\n%s", prefix, k, paramsFmt(v, prefix+indent, false))
 			} else {
 				fmt.Fprintf(&b, "%s%s: %v\n", prefix, k, v)
 			}
@@ -206,6 +225,42 @@ func isComplex(v any) bool {
 	}
 	_, ok := v.(slice)
 	return ok
+}
+
+func checkEqual(id jsonrpc2.ID, a, b, resp, resp2 any) (eq bool, fmta, fmtb any) {
+	ma, oka := a.(mapt)
+	mb, okb := b.(mapt)
+	if oka && okb {
+		if id == jsonrpc2.NewIntID(0) {
+			delete(ma, "serverInfo")
+			delete(mb, "serverInfo")
+		}
+		if eq = mapEqual(ma, mb); !eq {
+			fmta, fmtb = paramsFmt(a, indent, false), paramsFmt(b, indent, false)
+		}
+		return
+	}
+	return reflect.DeepEqual(a, b), resp, resp2
+}
+
+func mapEqual(ma, mb mapt) bool {
+	for k, va := range ma {
+		if vb, ok := mb[k]; ok {
+			mva, oka := va.(mapt)
+			mvb, okb := vb.(mapt)
+			eq := false
+			if oka && okb {
+				eq = mapEqual(mva, mvb)
+			} else {
+				eq = reflect.DeepEqual(va, vb)
+			}
+			if eq {
+				delete(ma, k)
+				delete(mb, k)
+			}
+		}
+	}
+	return len(ma) == 0 && len(mb) == 0
 }
 
 func keys(v mapt) []string {
