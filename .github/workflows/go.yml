@@ -30,8 +30,3 @@ jobs:
       run: |
         cd gopls
         go test -v ./...
-
-    - name: Install Goxls
-      run: |
-        cd goxls
-        go install -v ./...
