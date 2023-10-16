@@ -6,6 +6,7 @@ package main_test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -314,7 +315,7 @@ func buildGorename(t *testing.T) (tmp, bin string, cleanup func()) {
 		t.Skipf("the dependencies are not available on android")
 	}
 
-	tmp, err := os.MkdirTemp("", "gorename-regtest-")
+	tmp, err := ioutil.TempDir("", "gorename-regtest-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +352,7 @@ func setUpPackages(t *testing.T, dir string, packages map[string][]string) (clea
 		// Write the packages files
 		for i, val := range files {
 			file := filepath.Join(pkgDir, strconv.Itoa(i)+".go")
-			if err := os.WriteFile(file, []byte(val), os.ModePerm); err != nil {
+			if err := ioutil.WriteFile(file, []byte(val), os.ModePerm); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -372,7 +373,7 @@ func modifiedFiles(t *testing.T, dir string, packages map[string][]string) (resu
 		for i, val := range files {
 			file := filepath.Join(pkgDir, strconv.Itoa(i)+".go")
 			// read file contents and compare to val
-			if contents, err := os.ReadFile(file); err != nil {
+			if contents, err := ioutil.ReadFile(file); err != nil {
 				t.Fatalf("File missing: %s", err)
 			} else if string(contents) != val {
 				results = append(results, strings.TrimPrefix(dir, file))

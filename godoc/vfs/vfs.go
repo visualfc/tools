@@ -8,6 +8,7 @@ package vfs // import "golang.org/x/tools/godoc/vfs"
 
 import (
 	"io"
+	"io/ioutil"
 	"os"
 )
 
@@ -53,5 +54,5 @@ func ReadFile(fs Opener, path string) ([]byte, error) {
 		return nil, err
 	}
 	defer rc.Close()
-	return io.ReadAll(rc)
+	return ioutil.ReadAll(rc)
 }

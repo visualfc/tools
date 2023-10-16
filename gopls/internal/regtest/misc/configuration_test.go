@@ -42,8 +42,10 @@ var FooErr = errors.New("foo")
 		cfg.Settings = map[string]interface{}{
 			"staticcheck": true,
 		}
+		// TODO(rfindley): support waiting on diagnostics following a configuration
+		// change.
 		env.ChangeConfiguration(cfg)
-		env.AfterChange(
+		env.Await(
 			Diagnostics(env.AtRegexp("a/a.go", "var (FooErr)")),
 		)
 	})
@@ -87,8 +89,10 @@ var ErrFoo = errors.New("foo")
 		cfg.Settings = map[string]interface{}{
 			"staticcheck": true,
 		}
+		// TODO(rfindley): support waiting on diagnostics following a configuration
+		// change.
 		env.ChangeConfiguration(cfg)
-		env.AfterChange(
+		env.Await(
 			Diagnostics(env.AtRegexp("a/a.go", "var (FooErr)")),
 		)
 	})

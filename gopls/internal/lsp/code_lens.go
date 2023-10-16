@@ -27,10 +27,10 @@ func (s *Server) codeLens(ctx context.Context, params *protocol.CodeLensParams) 
 		return nil, err
 	}
 	var lenses map[command.Command]source.LensFunc
-	switch snapshot.FileKind(fh) {
+	switch snapshot.View().FileKind(fh) {
 	case source.Mod:
 		lenses = mod.LensFuncs()
-	case source.Go, source.Gop: // goxls: Go+
+	case source.Go:
 		lenses = source.LensFuncs()
 	default:
 		// Unsupported file kind for a code lens.
@@ -38,7 +38,7 @@ func (s *Server) codeLens(ctx context.Context, params *protocol.CodeLensParams) 
 	}
 	var result []protocol.CodeLens
 	for cmd, lf := range lenses {
-		if !snapshot.Options().Codelenses[string(cmd)] {
+		if !snapshot.View().Options().Codelenses[string(cmd)] {
 			continue
 		}
 		added, err := lf(ctx, snapshot, fh)

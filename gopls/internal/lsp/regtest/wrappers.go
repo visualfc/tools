@@ -155,20 +155,9 @@ func (e *Env) SaveBufferWithoutActions(name string) {
 
 // GoToDefinition goes to definition in the editor, calling t.Fatal on any
 // error. It returns the path and position of the resulting jump.
-//
-// TODO(rfindley): rename this to just 'Definition'.
 func (e *Env) GoToDefinition(loc protocol.Location) protocol.Location {
 	e.T.Helper()
-	loc, err := e.Editor.Definition(e.Ctx, loc)
-	if err != nil {
-		e.T.Fatal(err)
-	}
-	return loc
-}
-
-func (e *Env) TypeDefinition(loc protocol.Location) protocol.Location {
-	e.T.Helper()
-	loc, err := e.Editor.TypeDefinition(e.Ctx, loc)
+	loc, err := e.Editor.GoToDefinition(e.Ctx, loc)
 	if err != nil {
 		e.T.Fatal(err)
 	}
@@ -256,7 +245,7 @@ func (e *Env) RunGenerate(dir string) {
 	if err := e.Editor.RunGenerate(e.Ctx, dir); err != nil {
 		e.T.Fatal(err)
 	}
-	e.Await(NoOutstandingWork(IgnoreTelemetryPromptWork))
+	e.Await(NoOutstandingWork())
 	// Ideally the fake.Workspace would handle all synthetic file watching, but
 	// we help it out here as we need to wait for the generate command to
 	// complete before checking the filesystem.

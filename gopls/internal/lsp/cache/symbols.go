@@ -15,6 +15,7 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
+	"golang.org/x/tools/internal/memoize"
 )
 
 // symbolize returns the result of symbolizing the file identified by uri, using a cache.
@@ -50,7 +51,7 @@ func (s *snapshot) symbolize(ctx context.Context, uri span.URI) ([]source.Symbol
 	}
 
 	// Await result.
-	v, err := s.awaitPromise(ctx, entry)
+	v, err := s.awaitPromise(ctx, entry.(*memoize.Promise))
 	if err != nil {
 		return nil, err
 	}

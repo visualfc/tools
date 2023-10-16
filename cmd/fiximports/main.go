@@ -76,6 +76,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -99,7 +100,7 @@ var (
 // seams for testing
 var (
 	stderr    io.Writer = os.Stderr
-	writeFile           = os.WriteFile
+	writeFile           = ioutil.WriteFile
 )
 
 const usage = `fiximports: rewrite import paths to use canonical package names.

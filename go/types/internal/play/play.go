@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build go1.19
-
 // The play program is a playground for go/types: a simple web-based
 // text editor into which the user can enter a Go program, select a
 // region, and see type information about it.
@@ -32,7 +30,6 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/types/typeutil"
-	"golang.org/x/tools/internal/typeparams"
 )
 
 // TODO(adonovan):
@@ -140,56 +137,13 @@ func handleSelectJSON(w http.ResponseWriter, req *http.Request) {
 	// Expression type information
 	if innermostExpr != nil {
 		if tv, ok := pkg.TypesInfo.Types[innermostExpr]; ok {
-			var modes []string
-			for _, mode := range []struct {
-				name      string
-				condition func(types.TypeAndValue) bool
-			}{
-				{"IsVoid", types.TypeAndValue.IsVoid},
-				{"IsType", types.TypeAndValue.IsType},
-				{"IsBuiltin", types.TypeAndValue.IsBuiltin},
-				{"IsValue", types.TypeAndValue.IsValue},
-				{"IsNil", types.TypeAndValue.IsNil},
-				{"Addressable", types.TypeAndValue.Addressable},
-				{"Assignable", types.TypeAndValue.Assignable},
-				{"HasOk", types.TypeAndValue.HasOk},
-			} {
-				if mode.condition(tv) {
-					modes = append(modes, mode.name)
-				}
-			}
-			fmt.Fprintf(out, "%T has type %v, mode %s",
-				innermostExpr, tv.Type, modes)
-			if tu := tv.Type.Underlying(); tu != tv.Type {
-				fmt.Fprintf(out, ", underlying type %v", tu)
-			}
-			if tc := typeparams.CoreType(tv.Type); tc != tv.Type {
-				fmt.Fprintf(out, ", core type %v", tc)
-			}
+			// TODO(adonovan): show tv.mode.
+			// e.g. IsVoid IsType IsBuiltin IsValue IsNil Addressable Assignable HasOk
+			fmt.Fprintf(out, "%T has type %v", innermostExpr, tv.Type)
 			if tv.Value != nil {
-				fmt.Fprintf(out, ", and constant value %v", tv.Value)
+				fmt.Fprintf(out, " and constant value %v", tv.Value)
 			}
 			fmt.Fprintf(out, "\n\n")
-		}
-	}
-
-	// selection x.f information (if cursor is over .f)
-	for _, n := range path[:2] {
-		if sel, ok := n.(*ast.SelectorExpr); ok {
-			seln, ok := pkg.TypesInfo.Selections[sel]
-			if ok {
-				fmt.Fprintf(out, "Selection: %s recv=%v obj=%v type=%v indirect=%t index=%d\n\n",
-					strings.Fields("FieldVal MethodVal MethodExpr")[seln.Kind()],
-					seln.Recv(),
-					seln.Obj(),
-					seln.Type(),
-					seln.Indirect(),
-					seln.Index())
-
-			} else {
-				fmt.Fprintf(out, "Selector is qualified identifier.\n\n")
-			}
-			break
 		}
 	}
 

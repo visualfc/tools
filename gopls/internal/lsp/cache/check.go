@@ -23,8 +23,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/gopls/internal/bug"
-	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
-	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/filecache"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -33,6 +31,7 @@ import (
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/event/tag"
 	"golang.org/x/tools/internal/gcimporter"
+	"golang.org/x/tools/internal/packagesinternal"
 	"golang.org/x/tools/internal/tokeninternal"
 	"golang.org/x/tools/internal/typeparams"
 	"golang.org/x/tools/internal/typesinternal"
@@ -847,7 +846,7 @@ func (s *snapshot) getPackageHandles(ctx context.Context, ids []PackageID) (map[
 				unfinishedSuccs: int32(len(m.DepsByPkgPath)),
 			}
 			if entry, hit := b.s.packages.Get(m.ID); hit {
-				n.ph = entry
+				n.ph = entry.(*packageHandle)
 			}
 			if n.unfinishedSuccs == 0 {
 				leaves = append(leaves, n)
@@ -1116,11 +1115,12 @@ func (b *packageHandleBuilder) buildPackageHandle(ctx context.Context, n *handle
 	}
 
 	// Check the packages map again in case another goroutine got there first.
-	if alt, ok := b.s.packages.Get(n.m.ID); ok && alt.validated {
-		if alt.m != n.m {
+	if alt, ok := b.s.packages.Get(n.m.ID); ok && alt.(*packageHandle).validated {
+		altPH := alt.(*packageHandle)
+		if altPH.m != n.m {
 			bug.Reportf("existing package handle does not match for %s", n.m.ID)
 		}
-		n.ph = alt
+		n.ph = altPH
 	} else {
 		b.s.packages.Set(n.m.ID, n.ph, nil)
 	}
@@ -1302,10 +1302,6 @@ type typeCheckInputs struct {
 	depsByImpPath            map[ImportPath]PackageID
 	goVersion                string // packages.Module.GoVersion, e.g. "1.18"
 
-	// goxls: Go+ files
-	gopFiles         []source.FileHandle
-	compiledGopFiles []source.FileHandle
-
 	// Used for type check diagnostics:
 	relatedInformation bool
 	linkTarget         string
@@ -1327,14 +1323,6 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 	if err != nil {
 		return typeCheckInputs{}, err
 	}
-	gopFiles, err := readFiles(ctx, s, m.GopFiles) // goxls: Go+ files
-	if err != nil {
-		return typeCheckInputs{}, err
-	}
-	compiledGopFiles, err := readFiles(ctx, s, m.CompiledGopFiles) // goxls: Go+ files
-	if err != nil {
-		return typeCheckInputs{}, err
-	}
 	compiledGoFiles, err := readFiles(ctx, s, m.CompiledGoFiles)
 	if err != nil {
 		return typeCheckInputs{}, err
@@ -1346,19 +1334,17 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 	}
 
 	return typeCheckInputs{
-		id:               m.ID,
-		pkgPath:          m.PkgPath,
-		name:             m.Name,
-		goFiles:          goFiles,
-		gopFiles:         gopFiles,         // goxls: Go+ files
-		compiledGopFiles: compiledGopFiles, // goxls: Go+ files
-		compiledGoFiles:  compiledGoFiles,
-		sizes:            m.TypesSizes,
-		depsByImpPath:    m.DepsByImpPath,
-		goVersion:        goVersion,
+		id:              m.ID,
+		pkgPath:         m.PkgPath,
+		name:            m.Name,
+		goFiles:         goFiles,
+		compiledGoFiles: compiledGoFiles,
+		sizes:           m.TypesSizes,
+		depsByImpPath:   m.DepsByImpPath,
+		goVersion:       goVersion,
 
-		relatedInformation: s.options.RelatedInformationSupported,
-		linkTarget:         s.options.LinkTarget,
+		relatedInformation: s.view.Options().RelatedInformationSupported,
+		linkTarget:         s.view.Options().LinkTarget,
 		moduleMode:         s.view.moduleMode(),
 	}, nil
 }
@@ -1412,9 +1398,8 @@ func localPackageKey(inputs typeCheckInputs) source.Hash {
 	}
 
 	// types sizes
-	wordSize := inputs.sizes.Sizeof(types.Typ[types.Int])
-	maxAlign := inputs.sizes.Alignof(types.NewPointer(types.Typ[types.Int64]))
-	fmt.Fprintf(hasher, "sizes: %d %d\n", wordSize, maxAlign)
+	sz := inputs.sizes.(*types.StdSizes)
+	fmt.Fprintf(hasher, "sizes: %d %d\n", sz.WordSize, sz.MaxAlign)
 
 	fmt.Fprintf(hasher, "relatedInformation: %t\n", inputs.relatedInformation)
 	fmt.Fprintf(hasher, "linkTarget: %s\n", inputs.linkTarget)
@@ -1472,10 +1457,8 @@ func typeCheckImpl(ctx context.Context, b *typeCheckBatch, inputs typeCheckInput
 		diags, err := typeErrorDiagnostics(inputs.moduleMode, inputs.linkTarget, pkg, e)
 		if err != nil {
 			// If we fail here and there are no parse errors, it means we are hiding
-			// a valid type-checking error from the user. This must be a bug, with
-			// one exception: relocated primary errors may fail processing, because
-			// they reference locations outside of the package.
-			if len(pkg.parseErrors) == 0 && !e.relocated {
+			// a valid type-checking error from the user. This must be a bug.
+			if len(pkg.parseErrors) == 0 {
 				bug.Reportf("failed to compute position for type error %v: %v", e, err)
 			}
 			continue
@@ -1524,16 +1507,6 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs)
 	// compiled files.
 	var err error
 	pkg.goFiles, err = b.parseCache.parseFiles(ctx, b.fset, source.ParseFull, false, inputs.goFiles...)
-	if err != nil {
-		return nil, err
-	}
-	// goxls: Go+ files
-	pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, parserutil.ParseFull, false, inputs.gopFiles...)
-	if err != nil {
-		return nil, err
-	}
-	// goxls: Go+ files
-	pkg.compiledGopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, parserutil.ParseFull, false, inputs.compiledGopFiles...)
 	if err != nil {
 		return nil, err
 	}
@@ -1815,7 +1788,6 @@ func missingPkgError(from PackageID, pkgPath string, moduleMode bool) error {
 }
 
 type extendedError struct {
-	relocated   bool // if set, this is a relocation of a primary error to a secondary location
 	primary     types.Error
 	secondaries []types.Error
 }
@@ -1868,7 +1840,7 @@ func expandErrors(errs []types.Error, supportsRelatedInformation bool) []extende
 
 			// Copy over the secondary errors, noting the location of the
 			// current error we're cloning.
-			clonedError := extendedError{relocated: true, primary: relocatedSecondary, secondaries: []types.Error{original.primary}}
+			clonedError := extendedError{primary: relocatedSecondary, secondaries: []types.Error{original.primary}}
 			for j, secondary := range original.secondaries {
 				if i == j {
 					secondary.Msg += " (this error)"
@@ -1877,6 +1849,7 @@ func expandErrors(errs []types.Error, supportsRelatedInformation bool) []extende
 			}
 			result = append(result, clonedError)
 		}
+
 	}
 	return result
 }

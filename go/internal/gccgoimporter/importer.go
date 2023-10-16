@@ -210,7 +210,7 @@ func GetImporter(searchpaths []string, initmap map[*types.Package]InitData) Impo
 		// Excluded for now: Standard gccgo doesn't support this import format currently.
 		// case goimporterMagic:
 		// 	var data []byte
-		// 	data, err = io.ReadAll(reader)
+		// 	data, err = ioutil.ReadAll(reader)
 		// 	if err != nil {
 		// 		return
 		// 	}

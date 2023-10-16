@@ -34,6 +34,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -82,7 +83,7 @@ func parseRegexp(text string) (*regexp.Regexp, error) {
 
 // parseQueries parses and returns the queries in the named file.
 func parseQueries(t *testing.T, filename string) []*query {
-	filedata, err := os.ReadFile(filename)
+	filedata, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +266,7 @@ func TestGuru(t *testing.T) {
 			json := strings.Contains(filename, "-json/")
 			queries := parseQueries(t, filename)
 			golden := filename + "lden"
-			gotfh, err := os.CreateTemp("", filepath.Base(filename)+"t")
+			gotfh, err := ioutil.TempFile("", filepath.Base(filename)+"t")
 			if err != nil {
 				t.Fatal(err)
 			}

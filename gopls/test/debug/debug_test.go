@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/jba/templatecheck"
-	"golang.org/x/tools/gopls/internal/goxls/packages"
+	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/gopls/internal/lsp/cache"
 	"golang.org/x/tools/gopls/internal/lsp/debug"
 	"golang.org/x/tools/internal/testenv"

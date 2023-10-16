@@ -12,7 +12,7 @@ import (
 	"os"
 	"testing"
 
-	"golang.org/x/tools/gopls/internal/goxls/packages"
+	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/internal/testenv"
 )

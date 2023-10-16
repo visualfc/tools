@@ -6,6 +6,7 @@ package packages_test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -498,7 +499,7 @@ func TestAdHocOverlays(t *testing.T) {
 
 	// This test doesn't use packagestest because we are testing ad-hoc packages,
 	// which are outside of $GOPATH and outside of a module.
-	tmp, err := os.MkdirTemp("", "testAdHocOverlays")
+	tmp, err := ioutil.TempDir("", "testAdHocOverlays")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,18 +554,18 @@ func TestOverlayModFileChanges(t *testing.T) {
 	testenv.NeedsTool(t, "go")
 
 	// Create two unrelated modules in a temporary directory.
-	tmp, err := os.MkdirTemp("", "tmp")
+	tmp, err := ioutil.TempDir("", "tmp")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
 
 	// mod1 has a dependency on golang.org/x/xerrors.
-	mod1, err := os.MkdirTemp(tmp, "mod1")
+	mod1, err := ioutil.TempDir(tmp, "mod1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(mod1, "go.mod"), []byte(`module mod1
+	if err := ioutil.WriteFile(filepath.Join(mod1, "go.mod"), []byte(`module mod1
 
 	require (
 		golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
@@ -574,7 +575,7 @@ func TestOverlayModFileChanges(t *testing.T) {
 	}
 
 	// mod2 does not have any dependencies.
-	mod2, err := os.MkdirTemp(tmp, "mod2")
+	mod2, err := ioutil.TempDir(tmp, "mod2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -583,7 +584,7 @@ func TestOverlayModFileChanges(t *testing.T) {
 
 go 1.11
 `
-	if err := os.WriteFile(filepath.Join(mod2, "go.mod"), []byte(want), 0775); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(mod2, "go.mod"), []byte(want), 0775); err != nil {
 		t.Fatal(err)
 	}
 
@@ -609,7 +610,7 @@ func main() {}
 	}
 
 	// Check that mod2/go.mod has not been modified.
-	got, err := os.ReadFile(filepath.Join(mod2, "go.mod"))
+	got, err := ioutil.ReadFile(filepath.Join(mod2, "go.mod"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1044,7 +1045,7 @@ func TestOverlaysInReplace(t *testing.T) {
 
 	// Create module b.com in a temporary directory. Do not add any Go files
 	// on disk.
-	tmpPkgs, err := os.MkdirTemp("", "modules")
+	tmpPkgs, err := ioutil.TempDir("", "modules")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1054,7 +1055,7 @@ func TestOverlaysInReplace(t *testing.T) {
 	if err := os.Mkdir(dirB, 0775); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dirB, "go.mod"), []byte(fmt.Sprintf("module %s.com", dirB)), 0775); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(dirB, "go.mod"), []byte(fmt.Sprintf("module %s.com", dirB)), 0775); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dirB, "inner"), 0775); err != nil {
@@ -1062,7 +1063,7 @@ func TestOverlaysInReplace(t *testing.T) {
 	}
 
 	// Create a separate module that requires and replaces b.com.
-	tmpWorkspace, err := os.MkdirTemp("", "workspace")
+	tmpWorkspace, err := ioutil.TempDir("", "workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1077,7 +1078,7 @@ replace (
 	b.com => %s
 )
 `, dirB)
-	if err := os.WriteFile(filepath.Join(tmpWorkspace, "go.mod"), []byte(goModContent), 0775); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(tmpWorkspace, "go.mod"), []byte(goModContent), 0775); err != nil {
 		t.Fatal(err)
 	}
 

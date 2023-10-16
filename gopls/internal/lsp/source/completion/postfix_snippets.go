@@ -194,14 +194,6 @@ for {{.VarName .ElemType "e"}} := range {{.X}} {
 	body: `{{if and (eq .Kind "slice") (eq (.TypeName .ElemType) "string") -}}
 {{.Import "strings"}}.Join({{.X}}, "{{.Cursor}}")
 {{- end}}`,
-}, {
-	label:   "ifnotnil",
-	details: "if expr != nil",
-	body: `{{if and (or (eq .Kind "pointer") (eq .Kind "chan") (eq .Kind "signature") (eq .Kind "interface") (eq .Kind "map") (eq .Kind "slice")) .StmtOK -}}
-if {{.X}} != nil {{"{"}}
-	{{.Cursor}}
-{{"}"}}
-{{- end}}`,
 }}
 
 // Cursor indicates where the client's cursor should end up after the
@@ -219,7 +211,6 @@ func (a *postfixTmplArgs) Import(path string) (string, error) {
 		return "", fmt.Errorf("couldn't import %q: %w", path, err)
 	}
 	a.edits = append(a.edits, edits...)
-
 	return name, nil
 }
 

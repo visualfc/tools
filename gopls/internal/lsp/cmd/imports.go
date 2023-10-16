@@ -8,15 +8,21 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
 
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
+	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
+	"golang.org/x/tools/internal/diff"
 	"golang.org/x/tools/internal/tool"
 )
 
 // imports implements the import verb for gopls.
 type imports struct {
-	EditFlags
+	Diff  bool `flag:"d,diff" help:"display diffs instead of rewriting files"`
+	Write bool `flag:"w,write" help:"write result to (source) file instead of stdout"`
+
 	app *Application
 }
 
@@ -43,7 +49,6 @@ func (t *imports) Run(ctx context.Context, args ...string) error {
 	if len(args) != 1 {
 		return tool.CommandLineErrorf("imports expects 1 argument")
 	}
-	t.app.editFlags = &t.EditFlags
 	conn, err := t.app.connect(ctx, nil)
 	if err != nil {
 		return err
@@ -77,5 +82,24 @@ func (t *imports) Run(ctx context.Context, args ...string) error {
 			}
 		}
 	}
-	return applyTextEdits(file.mapper, edits, t.app.editFlags)
+	newContent, sedits, err := source.ApplyProtocolEdits(file.mapper, edits)
+	if err != nil {
+		return fmt.Errorf("%v: %v", edits, err)
+	}
+	filename := file.uri.Filename()
+	switch {
+	case t.Write:
+		if len(edits) > 0 {
+			ioutil.WriteFile(filename, newContent, 0644)
+		}
+	case t.Diff:
+		unified, err := diff.ToUnified(filename+".orig", filename, string(file.mapper.Content), sedits)
+		if err != nil {
+			return err
+		}
+		fmt.Print(unified)
+	default:
+		os.Stdout.Write(newContent)
+	}
+	return nil
 }

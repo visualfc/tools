@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"go/parser"
 	"go/token"
+	"io/ioutil"
 	"log"
 	"os"
 	"unicode/utf8"
@@ -86,7 +87,7 @@ func (c *semtok) Run(ctx context.Context, args ...string) error {
 		return err
 	}
 
-	buf, err := os.ReadFile(args[0])
+	buf, err := ioutil.ReadFile(args[0])
 	if err != nil {
 		return err
 	}
@@ -161,7 +162,7 @@ func markLine(m mark, lines [][]byte) {
 }
 
 func decorate(file string, result []uint32) error {
-	buf, err := os.ReadFile(file)
+	buf, err := ioutil.ReadFile(file)
 	if err != nil {
 		return err
 	}

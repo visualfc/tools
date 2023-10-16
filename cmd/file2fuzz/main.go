@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -50,7 +51,7 @@ func dirWriter(dir string) func([]byte) error {
 		if err := os.MkdirAll(dir, 0777); err != nil {
 			return err
 		}
-		if err := os.WriteFile(name, b, 0666); err != nil {
+		if err := ioutil.WriteFile(name, b, 0666); err != nil {
 			os.Remove(name)
 			return err
 		}
@@ -97,14 +98,14 @@ func convert(inputArgs []string, outputArg string) error {
 				output = dirWriter(outputArg)
 			} else {
 				output = func(b []byte) error {
-					return os.WriteFile(outputArg, b, 0666)
+					return ioutil.WriteFile(outputArg, b, 0666)
 				}
 			}
 		}
 	}
 
 	for _, f := range input {
-		b, err := io.ReadAll(f)
+		b, err := ioutil.ReadAll(f)
 		if err != nil {
 			return fmt.Errorf("unable to read input: %s", err)
 		}

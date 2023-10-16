@@ -13,6 +13,7 @@ import (
 	"go/ast"
 	"go/token"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,8 +25,9 @@ import (
 	"time"
 
 	"golang.org/x/tools/go/expect"
+	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/packages/packagestest"
-	"golang.org/x/tools/gopls/internal/goxls/packages"
+	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -41,7 +43,6 @@ const (
 	overlayFileSuffix = ".overlay"
 	goldenFileSuffix  = ".golden"
 	inFileSuffix      = ".in"
-	summaryFile       = "summary.txt"
 
 	// The module path containing the testdata packages.
 	//
@@ -50,21 +51,37 @@ const (
 	testModule = "golang.org/lsptests"
 )
 
+var summaryFile = "summary.txt"
+
+func init() {
+	if testenv.Go1Point() >= 21 {
+		summaryFile = "summary_go1.21.txt"
+	} else if testenv.Go1Point() >= 18 {
+		summaryFile = "summary_go1.18.txt"
+	}
+}
+
 var UpdateGolden = flag.Bool("golden", false, "Update golden files")
 
 // These type names apparently avoid the need to repeat the
 // type in the field name and the make() expression.
 type CallHierarchy = map[span.Span]*CallHierarchyResult
+type CodeLens = map[span.URI][]protocol.CodeLens
+type Diagnostics = map[span.URI][]*source.Diagnostic
 type CompletionItems = map[token.Pos]*completion.CompletionItem
 type Completions = map[span.Span][]Completion
 type CompletionSnippets = map[span.Span][]CompletionSnippet
+type UnimportedCompletions = map[span.Span][]Completion
 type DeepCompletions = map[span.Span][]Completion
 type FuzzyCompletions = map[span.Span][]Completion
 type CaseSensitiveCompletions = map[span.Span][]Completion
 type RankCompletions = map[span.Span][]Completion
+type FoldingRanges = []span.Span
 type SemanticTokens = []span.Span
 type SuggestedFixes = map[span.Span][]SuggestedFix
 type MethodExtractions = map[span.Span]span.Span
+type Definitions = map[span.Span]Definition
+type Highlights = map[span.Span][]span.Span
 type Renames = map[span.Span]string
 type PrepareRenames = map[span.Span]*source.PrepareItem
 type InlayHints = []span.Span
@@ -77,16 +94,22 @@ type Data struct {
 	Config                   packages.Config
 	Exported                 *packagestest.Exported
 	CallHierarchy            CallHierarchy
+	CodeLens                 CodeLens
+	Diagnostics              Diagnostics
 	CompletionItems          CompletionItems
 	Completions              Completions
 	CompletionSnippets       CompletionSnippets
+	UnimportedCompletions    UnimportedCompletions
 	DeepCompletions          DeepCompletions
 	FuzzyCompletions         FuzzyCompletions
 	CaseSensitiveCompletions CaseSensitiveCompletions
 	RankCompletions          RankCompletions
+	FoldingRanges            FoldingRanges
 	SemanticTokens           SemanticTokens
 	SuggestedFixes           SuggestedFixes
 	MethodExtractions        MethodExtractions
+	Definitions              Definitions
+	Highlights               Highlights
 	Renames                  Renames
 	InlayHints               InlayHints
 	PrepareRenames           PrepareRenames
@@ -107,22 +130,28 @@ type Data struct {
 }
 
 // The Tests interface abstracts the LSP-based implementation of the marker
-// test operators appearing in files beneath ../testdata/.
+// test operators (such as @codelens) appearing in files beneath ../testdata/.
 //
 // TODO(adonovan): reduce duplication; see https://github.com/golang/go/issues/54845.
 // There is only one implementation (*runner in ../lsp_test.go), so
 // we can abolish the interface now.
 type Tests interface {
 	CallHierarchy(*testing.T, span.Span, *CallHierarchyResult)
+	CodeLens(*testing.T, span.URI, []protocol.CodeLens)
+	Diagnostics(*testing.T, span.URI, []*source.Diagnostic)
 	Completion(*testing.T, span.Span, Completion, CompletionItems)
 	CompletionSnippet(*testing.T, span.Span, CompletionSnippet, bool, CompletionItems)
+	UnimportedCompletion(*testing.T, span.Span, Completion, CompletionItems)
 	DeepCompletion(*testing.T, span.Span, Completion, CompletionItems)
 	FuzzyCompletion(*testing.T, span.Span, Completion, CompletionItems)
 	CaseSensitiveCompletion(*testing.T, span.Span, Completion, CompletionItems)
 	RankCompletion(*testing.T, span.Span, Completion, CompletionItems)
+	FoldingRanges(*testing.T, span.Span)
 	SemanticTokens(*testing.T, span.Span)
 	SuggestedFix(*testing.T, span.Span, []SuggestedFix, int)
 	MethodExtraction(*testing.T, span.Span, span.Span)
+	Definition(*testing.T, span.Span, Definition)
+	Highlight(*testing.T, span.Span, []span.Span)
 	InlayHints(*testing.T, span.Span)
 	Rename(*testing.T, span.Span, string)
 	PrepareRename(*testing.T, span.Span, *source.PrepareItem)
@@ -132,11 +161,21 @@ type Tests interface {
 	SelectionRanges(*testing.T, span.Span)
 }
 
+type Definition struct {
+	Name      string
+	IsType    bool
+	OnlyHover bool
+	Src, Def  span.Span
+}
+
 type CompletionTestType int
 
 const (
 	// Default runs the standard completion tests.
 	CompletionDefault = CompletionTestType(iota)
+
+	// Unimported tests the autocompletion of unimported packages.
+	CompletionUnimported
 
 	// Deep tests deep completion.
 	CompletionDeep
@@ -191,15 +230,6 @@ func DefaultOptions(o *source.Options) {
 			protocol.SourceOrganizeImports: true,
 			protocol.QuickFix:              true,
 			protocol.RefactorRewrite:       true,
-			protocol.RefactorInline:        true,
-			protocol.RefactorExtract:       true,
-			protocol.SourceFixAll:          true,
-		},
-		source.Gop: { // goxls: DefaultOptions is same as Go
-			protocol.SourceOrganizeImports: true,
-			protocol.QuickFix:              true,
-			protocol.RefactorRewrite:       true,
-			protocol.RefactorInline:        true,
 			protocol.RefactorExtract:       true,
 			protocol.SourceFixAll:          true,
 		},
@@ -210,19 +240,13 @@ func DefaultOptions(o *source.Options) {
 		source.Work: {},
 		source.Tmpl: {},
 	}
+	o.UserOptions.Codelenses[string(command.Test)] = true
+	o.HoverKind = source.SynopsisDocumentation
 	o.InsertTextFormat = protocol.SnippetTextFormat
 	o.CompletionBudget = time.Minute
 	o.HierarchicalDocumentSymbolSupport = true
 	o.SemanticTokens = true
-	o.InternalOptions.NewDiff = "new"
-
-	// Enable all inlay hints.
-	if o.Hints == nil {
-		o.Hints = make(map[string]bool)
-	}
-	for name := range source.AllInlayHints {
-		o.Hints[name] = true
-	}
+	o.InternalOptions.NewDiff = "both"
 }
 
 func RunTests(t *testing.T, dataDir string, includeMultiModule bool, f func(*testing.T, *Data)) {
@@ -243,13 +267,18 @@ func RunTests(t *testing.T, dataDir string, includeMultiModule bool, f func(*tes
 func load(t testing.TB, mode string, dir string) *Data {
 	datum := &Data{
 		CallHierarchy:            make(CallHierarchy),
+		CodeLens:                 make(CodeLens),
+		Diagnostics:              make(Diagnostics),
 		CompletionItems:          make(CompletionItems),
 		Completions:              make(Completions),
 		CompletionSnippets:       make(CompletionSnippets),
+		UnimportedCompletions:    make(UnimportedCompletions),
 		DeepCompletions:          make(DeepCompletions),
 		FuzzyCompletions:         make(FuzzyCompletions),
 		RankCompletions:          make(RankCompletions),
 		CaseSensitiveCompletions: make(CaseSensitiveCompletions),
+		Definitions:              make(Definitions),
+		Highlights:               make(Highlights),
 		Renames:                  make(Renames),
 		PrepareRenames:           make(PrepareRenames),
 		SuggestedFixes:           make(SuggestedFixes),
@@ -308,7 +337,7 @@ func load(t testing.TB, mode string, dir string) *Data {
 		} else if index := strings.Index(fragment, overlayFileSuffix); index >= 0 {
 			delete(files, fragment)
 			partial := fragment[:index] + fragment[index+len(overlayFileSuffix):]
-			contents, err := os.ReadFile(filepath.Join(dir, fragment))
+			contents, err := ioutil.ReadFile(filepath.Join(dir, fragment))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -389,14 +418,22 @@ func load(t testing.TB, mode string, dir string) *Data {
 
 	// Collect any data that needs to be used by subsequent tests.
 	if err := datum.Exported.Expect(map[string]interface{}{
+		"codelens":       datum.collectCodeLens,
+		"diag":           datum.collectDiagnostics,
 		"item":           datum.collectCompletionItems,
 		"complete":       datum.collectCompletions(CompletionDefault),
+		"unimported":     datum.collectCompletions(CompletionUnimported),
 		"deep":           datum.collectCompletions(CompletionDeep),
 		"fuzzy":          datum.collectCompletions(CompletionFuzzy),
 		"casesensitive":  datum.collectCompletions(CompletionCaseSensitive),
 		"rank":           datum.collectCompletions(CompletionRank),
 		"snippet":        datum.collectCompletionSnippets,
+		"fold":           datum.collectFoldingRanges,
 		"semantic":       datum.collectSemanticTokens,
+		"godef":          datum.collectDefinitions,
+		"typdef":         datum.collectTypeDefinitions,
+		"hoverdef":       datum.collectHoverDefinitions,
+		"highlight":      datum.collectHighlights,
 		"inlayHint":      datum.collectInlayHints,
 		"rename":         datum.collectRenames,
 		"prepare":        datum.collectPrepareRenames,
@@ -412,6 +449,13 @@ func load(t testing.TB, mode string, dir string) *Data {
 		t.Fatal(err)
 	}
 
+	// Collect names for the entries that require golden files.
+	if err := datum.Exported.Expect(map[string]interface{}{
+		"godef":    datum.collectDefinitionNames,
+		"hoverdef": datum.collectDefinitionNames,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if mode == "MultiModule" {
 		if err := moveFile(filepath.Join(datum.Config.Dir, "go.mod"), filepath.Join(datum.Config.Dir, "testmodule/go.mod")); err != nil {
 			t.Fatal(err)
@@ -513,6 +557,11 @@ func Run(t *testing.T, tests Tests, data *Data) {
 		}
 	})
 
+	t.Run("UnimportedCompletion", func(t *testing.T) {
+		t.Helper()
+		eachCompletion(t, data.UnimportedCompletions, tests.UnimportedCompletion)
+	})
+
 	t.Run("DeepCompletion", func(t *testing.T) {
 		t.Helper()
 		eachCompletion(t, data.DeepCompletions, tests.DeepCompletion)
@@ -531,6 +580,44 @@ func Run(t *testing.T, tests Tests, data *Data) {
 	t.Run("RankCompletions", func(t *testing.T) {
 		t.Helper()
 		eachCompletion(t, data.RankCompletions, tests.RankCompletion)
+	})
+
+	t.Run("CodeLens", func(t *testing.T) {
+		t.Helper()
+		for uri, want := range data.CodeLens {
+			// Check if we should skip this URI if the -modfile flag is not available.
+			if shouldSkip(data, uri) {
+				continue
+			}
+			t.Run(uriName(uri), func(t *testing.T) {
+				t.Helper()
+				tests.CodeLens(t, uri, want)
+			})
+		}
+	})
+
+	t.Run("Diagnostics", func(t *testing.T) {
+		t.Helper()
+		for uri, want := range data.Diagnostics {
+			// Check if we should skip this URI if the -modfile flag is not available.
+			if shouldSkip(data, uri) {
+				continue
+			}
+			t.Run(uriName(uri), func(t *testing.T) {
+				t.Helper()
+				tests.Diagnostics(t, uri, want)
+			})
+		}
+	})
+
+	t.Run("FoldingRange", func(t *testing.T) {
+		t.Helper()
+		for _, spn := range data.FoldingRanges {
+			t.Run(uriName(spn.URI()), func(t *testing.T) {
+				t.Helper()
+				tests.FoldingRanges(t, spn)
+			})
+		}
 	})
 
 	t.Run("SemanticTokens", func(t *testing.T) {
@@ -567,6 +654,29 @@ func Run(t *testing.T, tests Tests, data *Data) {
 			t.Run(SpanName(start), func(t *testing.T) {
 				t.Helper()
 				tests.MethodExtraction(t, start, end)
+			})
+		}
+	})
+
+	t.Run("Definition", func(t *testing.T) {
+		t.Helper()
+		for spn, d := range data.Definitions {
+			t.Run(SpanName(spn), func(t *testing.T) {
+				t.Helper()
+				if strings.Contains(t.Name(), "cgo") {
+					testenv.NeedsTool(t, "cgo")
+				}
+				tests.Definition(t, spn, d)
+			})
+		}
+	})
+
+	t.Run("Highlight", func(t *testing.T) {
+		t.Helper()
+		for pos, locations := range data.Highlights {
+			t.Run(SpanName(pos), func(t *testing.T) {
+				t.Helper()
+				tests.Highlight(t, pos, locations)
 			})
 		}
 	})
@@ -659,7 +769,7 @@ func Run(t *testing.T, tests Tests, data *Data) {
 			sort.Slice(golden.Archive.Files, func(i, j int) bool {
 				return golden.Archive.Files[i].Name < golden.Archive.Files[j].Name
 			})
-			if err := os.WriteFile(golden.Filename, txtar.Format(golden.Archive), 0666); err != nil {
+			if err := ioutil.WriteFile(golden.Filename, txtar.Format(golden.Archive), 0666); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -668,9 +778,22 @@ func Run(t *testing.T, tests Tests, data *Data) {
 
 func checkData(t *testing.T, data *Data) {
 	buf := &bytes.Buffer{}
+	diagnosticsCount := 0
+	for _, want := range data.Diagnostics {
+		diagnosticsCount += len(want)
+	}
 	linksCount := 0
 	for _, want := range data.Links {
 		linksCount += len(want)
+	}
+	definitionCount := 0
+	typeDefinitionCount := 0
+	for _, d := range data.Definitions {
+		if d.IsType {
+			typeDefinitionCount++
+		} else {
+			definitionCount++
+		}
 	}
 
 	snippetCount := 0
@@ -685,16 +808,30 @@ func checkData(t *testing.T, data *Data) {
 		return count
 	}
 
+	countCodeLens := func(c map[span.URI][]protocol.CodeLens) (count int) {
+		for _, want := range c {
+			count += len(want)
+		}
+		return count
+	}
+
 	fmt.Fprintf(buf, "CallHierarchyCount = %v\n", len(data.CallHierarchy))
+	fmt.Fprintf(buf, "CodeLensCount = %v\n", countCodeLens(data.CodeLens))
 	fmt.Fprintf(buf, "CompletionsCount = %v\n", countCompletions(data.Completions))
 	fmt.Fprintf(buf, "CompletionSnippetCount = %v\n", snippetCount)
+	fmt.Fprintf(buf, "UnimportedCompletionsCount = %v\n", countCompletions(data.UnimportedCompletions))
 	fmt.Fprintf(buf, "DeepCompletionsCount = %v\n", countCompletions(data.DeepCompletions))
 	fmt.Fprintf(buf, "FuzzyCompletionsCount = %v\n", countCompletions(data.FuzzyCompletions))
 	fmt.Fprintf(buf, "RankedCompletionsCount = %v\n", countCompletions(data.RankCompletions))
 	fmt.Fprintf(buf, "CaseSensitiveCompletionsCount = %v\n", countCompletions(data.CaseSensitiveCompletions))
+	fmt.Fprintf(buf, "DiagnosticsCount = %v\n", diagnosticsCount)
+	fmt.Fprintf(buf, "FoldingRangesCount = %v\n", len(data.FoldingRanges))
 	fmt.Fprintf(buf, "SemanticTokenCount = %v\n", len(data.SemanticTokens))
 	fmt.Fprintf(buf, "SuggestedFixCount = %v\n", len(data.SuggestedFixes))
 	fmt.Fprintf(buf, "MethodExtractionCount = %v\n", len(data.MethodExtractions))
+	fmt.Fprintf(buf, "DefinitionsCount = %v\n", definitionCount)
+	fmt.Fprintf(buf, "TypeDefinitionsCount = %v\n", typeDefinitionCount)
+	fmt.Fprintf(buf, "HighlightsCount = %v\n", len(data.Highlights))
 	fmt.Fprintf(buf, "InlayHintsCount = %v\n", len(data.InlayHints))
 	fmt.Fprintf(buf, "RenamesCount = %v\n", len(data.Renames))
 	fmt.Fprintf(buf, "PrepareRenamesCount = %v\n", len(data.PrepareRenames))
@@ -781,6 +918,37 @@ func (data *Data) Golden(t *testing.T, tag, target string, update func() ([]byte
 	return file.Data[:len(file.Data)-1] // drop the trailing \n
 }
 
+func (data *Data) collectCodeLens(spn span.Span, title, cmd string) {
+	data.CodeLens[spn.URI()] = append(data.CodeLens[spn.URI()], protocol.CodeLens{
+		Range: data.mustRange(spn),
+		Command: &protocol.Command{
+			Title:   title,
+			Command: cmd,
+		},
+	})
+}
+
+func (data *Data) collectDiagnostics(spn span.Span, msgSource, msgPattern, msgSeverity string) {
+	severity := protocol.SeverityError
+	switch msgSeverity {
+	case "error":
+		severity = protocol.SeverityError
+	case "warning":
+		severity = protocol.SeverityWarning
+	case "hint":
+		severity = protocol.SeverityHint
+	case "information":
+		severity = protocol.SeverityInformation
+	}
+
+	data.Diagnostics[spn.URI()] = append(data.Diagnostics[spn.URI()], &source.Diagnostic{
+		Range:    data.mustRange(spn),
+		Severity: severity,
+		Source:   source.DiagnosticSource(msgSource),
+		Message:  msgPattern,
+	})
+}
+
 func (data *Data) collectCompletions(typ CompletionTestType) func(span.Span, []token.Pos) {
 	result := func(m map[span.Span][]Completion, src span.Span, expected []token.Pos) {
 		m[src] = append(m[src], Completion{
@@ -791,6 +959,10 @@ func (data *Data) collectCompletions(typ CompletionTestType) func(span.Span, []t
 	case CompletionDeep:
 		return func(src span.Span, expected []token.Pos) {
 			result(data.DeepCompletions, src, expected)
+		}
+	case CompletionUnimported:
+		return func(src span.Span, expected []token.Pos) {
+			result(data.UnimportedCompletions, src, expected)
 		}
 	case CompletionFuzzy:
 		return func(src span.Span, expected []token.Pos) {
@@ -824,6 +996,10 @@ func (data *Data) collectCompletionItems(pos token.Pos, label, detail, kind stri
 	}
 }
 
+func (data *Data) collectFoldingRanges(spn span.Span) {
+	data.FoldingRanges = append(data.FoldingRanges, spn)
+}
+
 func (data *Data) collectAddImports(spn span.Span, imp string) {
 	data.AddImport[spn.URI()] = imp
 }
@@ -839,6 +1015,13 @@ func (data *Data) collectSuggestedFixes(spn span.Span, actionKind, fix string) {
 func (data *Data) collectMethodExtractions(start span.Span, end span.Span) {
 	if _, ok := data.MethodExtractions[start]; !ok {
 		data.MethodExtractions[start] = end
+	}
+}
+
+func (data *Data) collectDefinitions(src, target span.Span) {
+	data.Definitions[src] = Definition{
+		Src: src,
+		Def: target,
 	}
 }
 
@@ -878,6 +1061,33 @@ func (data *Data) collectOutgoingCalls(src span.Span, calls []span.Span) {
 				Range: data.mustRange(call),
 			})
 	}
+}
+
+func (data *Data) collectHoverDefinitions(src, target span.Span) {
+	data.Definitions[src] = Definition{
+		Src:       src,
+		Def:       target,
+		OnlyHover: true,
+	}
+}
+
+func (data *Data) collectTypeDefinitions(src, target span.Span) {
+	data.Definitions[src] = Definition{
+		Src:    src,
+		Def:    target,
+		IsType: true,
+	}
+}
+
+func (data *Data) collectDefinitionNames(src span.Span, name string) {
+	d := data.Definitions[src]
+	d.Name = name
+	data.Definitions[src] = d
+}
+
+func (data *Data) collectHighlights(src span.Span, expected []span.Span) {
+	// Declaring a highlight in a test file: @highlight(src, expected1, expected2)
+	data.Highlights[src] = append(data.Highlights[src], expected...)
 }
 
 func (data *Data) collectInlayHints(src span.Span) {
@@ -946,6 +1156,38 @@ func uriName(uri span.URI) string {
 // line:column position formatting.
 func SpanName(spn span.Span) string {
 	return fmt.Sprintf("%v_%v_%v", uriName(spn.URI()), spn.Start().Line(), spn.Start().Column())
+}
+
+func CopyFolderToTempDir(folder string) (string, error) {
+	if _, err := os.Stat(folder); err != nil {
+		return "", err
+	}
+	dst, err := ioutil.TempDir("", "modfile_test")
+	if err != nil {
+		return "", err
+	}
+	fds, err := ioutil.ReadDir(folder)
+	if err != nil {
+		return "", err
+	}
+	for _, fd := range fds {
+		srcfp := filepath.Join(folder, fd.Name())
+		stat, err := os.Stat(srcfp)
+		if err != nil {
+			return "", err
+		}
+		if !stat.Mode().IsRegular() {
+			return "", fmt.Errorf("cannot copy non regular file %s", srcfp)
+		}
+		contents, err := ioutil.ReadFile(srcfp)
+		if err != nil {
+			return "", err
+		}
+		if err := ioutil.WriteFile(filepath.Join(dst, fd.Name()), contents, stat.Mode()); err != nil {
+			return "", err
+		}
+	}
+	return dst, nil
 }
 
 func shouldSkip(data *Data, uri span.URI) bool {

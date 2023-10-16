@@ -147,13 +147,6 @@ var GeneratedAPIJSON = &APIJSON{
 				Hierarchy: "ui.completion",
 			},
 			{
-				Name:      "completeFunctionCalls",
-				Type:      "bool",
-				Doc:       "completeFunctionCalls enables function call completion.\n\nWhen completing a statement, or when a function return type matches the\nexpected of the expression being completed, completion may suggest call\nexpressions (i.e. may include parentheses).\n",
-				Default:   "true",
-				Hierarchy: "ui.completion",
-			},
-			{
 				Name: "importShortcut",
 				Type: "enum",
 				Doc:  "importShortcut specifies whether import statements should link to\ndocumentation or go to definitions.\n",
@@ -226,11 +219,6 @@ var GeneratedAPIJSON = &APIJSON{
 					ValueType: "bool",
 					Keys: []EnumKey{
 						{
-							Name:    "\"appends\"",
-							Doc:     "check for missing values after append\n\nThis checker reports calls to append that pass\nno values to be appended to the slice.\n\n\ts := []string{\"a\", \"b\", \"c\"}\n\t_ = append(s)\n\nSuch calls are always no-ops and often indicate an\nunderlying mistake.",
-							Default: "true",
-						},
-						{
 							Name:    "\"asmdecl\"",
 							Doc:     "report mismatches between assembly files and Go declarations",
 							Default: "true",
@@ -278,11 +266,6 @@ var GeneratedAPIJSON = &APIJSON{
 						{
 							Name:    "\"deepequalerrors\"",
 							Doc:     "check for calls of reflect.DeepEqual on error values\n\nThe deepequalerrors checker looks for calls of the form:\n\n    reflect.DeepEqual(err1, err2)\n\nwhere err1 and err2 are errors. Using reflect.DeepEqual to compare\nerrors is discouraged.",
-							Default: "true",
-						},
-						{
-							Name:    "\"defers\"",
-							Doc:     "report common mistakes in defer statements\n\nThe defers analyzer reports a diagnostic when a defer statement would\nresult in a non-deferred call to time.Since, as experience has shown\nthat this is nearly always a mistake.\n\nFor example:\n\n\tstart := time.Now()\n\t...\n\tdefer recordLatency(time.Since(start)) // error: call to time.Since is not deferred\n\nThe correct code is:\n\n\tdefer func() { recordLatency(time.Since(start)) }()",
 							Default: "true",
 						},
 						{
@@ -371,11 +354,6 @@ var GeneratedAPIJSON = &APIJSON{
 							Default: "true",
 						},
 						{
-							Name:    "\"slog\"",
-							Doc:     "check for invalid structured logging calls\n\nThe slog checker looks for calls to functions from the log/slog\npackage that take alternating key-value pairs. It reports calls\nwhere an argument in a key position is neither a string nor a\nslog.Attr, and where a final key is missing its value.\nFor example,it would report\n\n\tslog.Warn(\"message\", 11, \"k\") // slog.Warn arg \"11\" should be a string or a slog.Attr\n\nand\n\n\tslog.Info(\"message\", \"k1\", v1, \"k2\") // call to slog.Info missing a final value",
-							Default: "true",
-						},
-						{
 							Name:    "\"sortslice\"",
 							Doc:     "check the argument type of sort.Slice\n\nsort.Slice requires an argument of a slice type. Check that\nthe interface{} value passed to sort.Slice is actually a slice.",
 							Default: "true",
@@ -427,7 +405,7 @@ var GeneratedAPIJSON = &APIJSON{
 						},
 						{
 							Name:    "\"unusedparams\"",
-							Doc:     "check for unused parameters of functions\n\nThe unusedparams analyzer checks functions to see if there are\nany parameters that are not being used.\n\nTo reduce false positives it ignores:\n- methods\n- parameters that do not have a name or have the name '_' (the blank identifier)\n- functions in test files\n- functions with empty bodies or those with just a return stmt",
+							Doc:     "check for unused parameters of functions\n\nThe unusedparams analyzer checks functions to see if there are\nany parameters that are not being used.\n\nTo reduce false positives it ignores:\n- methods\n- parameters that do not have a name or are underscored\n- functions in test files\n- functions with empty bodies or those with just a return stmt",
 							Default: "false",
 						},
 						{
@@ -722,12 +700,6 @@ var GeneratedAPIJSON = &APIJSON{
 			ArgDoc:  "{\n\t// ImportPath is the target import path that should\n\t// be added to the URI file\n\t\"ImportPath\": string,\n\t// URI is the file that the ImportPath should be\n\t// added to\n\t\"URI\": string,\n}",
 		},
 		{
-			Command: "gopls.add_telemetry_counters",
-			Title:   "update the given telemetry counters.",
-			Doc:     "Gopls will prepend \"fwd/\" to all the counters updated using this command\nto avoid conflicts with other counters gopls collects.",
-			ArgDoc:  "{\n\t// Names and Values must have the same length.\n\t\"Names\": []string,\n\t\"Values\": []int64,\n}",
-		},
-		{
 			Command: "gopls.apply_fix",
 			Title:   "Apply a fix",
 			Doc:     "Applies a fix to a region of source code.",
@@ -750,7 +722,7 @@ var GeneratedAPIJSON = &APIJSON{
 			Title:     "Get known vulncheck result",
 			Doc:       "Fetch the result of latest vulnerability check (`govulncheck`).",
 			ArgDoc:    "{\n\t// The file URI.\n\t\"URI\": string,\n}",
-			ResultDoc: "map[golang.org/x/tools/gopls/internal/lsp/protocol.DocumentURI]*golang.org/x/tools/gopls/internal/vulncheck.Result",
+			ResultDoc: "map[golang.org/x/tools/gopls/internal/lsp/protocol.DocumentURI]*golang.org/x/tools/gopls/internal/govulncheck.Result",
 		},
 		{
 			Command: "gopls.gc_details",
@@ -785,11 +757,6 @@ var GeneratedAPIJSON = &APIJSON{
 			ResultDoc: "{\n\t// Packages is a list of packages relative\n\t// to the URIArg passed by the command request.\n\t// In other words, it omits paths that are already\n\t// imported or cannot be imported due to compiler\n\t// restrictions.\n\t\"Packages\": []string,\n}",
 		},
 		{
-			Command: "gopls.maybe_prompt_for_telemetry",
-			Title:   "checks for the right conditions, and then prompts",
-			Doc:     "the user to ask if they want to enable Go telemetry uploading. If the user\nresponds 'Yes', the telemetry mode is set to \"on\".",
-		},
-		{
 			Command:   "gopls.mem_stats",
 			Title:     "fetch memory statistics",
 			Doc:       "Call runtime.GC multiple times and return memory statistics as reported by\nruntime.MemStats.\n\nThis command is used for benchmarking, and may change in the future.",
@@ -821,7 +788,7 @@ var GeneratedAPIJSON = &APIJSON{
 		},
 		{
 			Command:   "gopls.run_govulncheck",
-			Title:     "Run vulncheck.",
+			Title:     "Run govulncheck.",
 			Doc:       "Run vulnerability check (`govulncheck`).",
 			ArgDoc:    "{\n\t// Any document in the directory from which govulncheck will run.\n\t\"URI\": string,\n\t// Package pattern. E.g. \"\", \".\", \"./...\".\n\t\"Pattern\": string,\n}",
 			ResultDoc: "{\n\t// Token holds the progress token for LSP workDone reporting of the vulncheck\n\t// invocation.\n\t\"Token\": interface{},\n}",
@@ -914,7 +881,7 @@ var GeneratedAPIJSON = &APIJSON{
 		},
 		{
 			Lens:  "run_govulncheck",
-			Title: "Run vulncheck.",
+			Title: "Run govulncheck.",
 			Doc:   "Run vulnerability check (`govulncheck`).",
 		},
 		{
@@ -939,12 +906,6 @@ var GeneratedAPIJSON = &APIJSON{
 		},
 	},
 	Analyzers: []*AnalyzerJSON{
-		{
-			Name:    "appends",
-			Doc:     "check for missing values after append\n\nThis checker reports calls to append that pass\nno values to be appended to the slice.\n\n\ts := []string{\"a\", \"b\", \"c\"}\n\t_ = append(s)\n\nSuch calls are always no-ops and often indicate an\nunderlying mistake.",
-			URL:     "https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/appends",
-			Default: true,
-		},
 		{
 			Name:    "asmdecl",
 			Doc:     "report mismatches between assembly files and Go declarations",
@@ -1003,12 +964,6 @@ var GeneratedAPIJSON = &APIJSON{
 			Name:    "deepequalerrors",
 			Doc:     "check for calls of reflect.DeepEqual on error values\n\nThe deepequalerrors checker looks for calls of the form:\n\n    reflect.DeepEqual(err1, err2)\n\nwhere err1 and err2 are errors. Using reflect.DeepEqual to compare\nerrors is discouraged.",
 			URL:     "https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/deepequalerrors",
-			Default: true,
-		},
-		{
-			Name:    "defers",
-			Doc:     "report common mistakes in defer statements\n\nThe defers analyzer reports a diagnostic when a defer statement would\nresult in a non-deferred call to time.Since, as experience has shown\nthat this is nearly always a mistake.\n\nFor example:\n\n\tstart := time.Now()\n\t...\n\tdefer recordLatency(time.Since(start)) // error: call to time.Since is not deferred\n\nThe correct code is:\n\n\tdefer func() { recordLatency(time.Since(start)) }()",
-			URL:     "https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/defers",
 			Default: true,
 		},
 		{
@@ -1106,12 +1061,6 @@ var GeneratedAPIJSON = &APIJSON{
 			Default: true,
 		},
 		{
-			Name:    "slog",
-			Doc:     "check for invalid structured logging calls\n\nThe slog checker looks for calls to functions from the log/slog\npackage that take alternating key-value pairs. It reports calls\nwhere an argument in a key position is neither a string nor a\nslog.Attr, and where a final key is missing its value.\nFor example,it would report\n\n\tslog.Warn(\"message\", 11, \"k\") // slog.Warn arg \"11\" should be a string or a slog.Attr\n\nand\n\n\tslog.Info(\"message\", \"k1\", v1, \"k2\") // call to slog.Info missing a final value",
-			URL:     "https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/slog",
-			Default: true,
-		},
-		{
 			Name:    "sortslice",
 			Doc:     "check the argument type of sort.Slice\n\nsort.Slice requires an argument of a slice type. Check that\nthe interface{} value passed to sort.Slice is actually a slice.",
 			URL:     "https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/sortslice",
@@ -1173,7 +1122,7 @@ var GeneratedAPIJSON = &APIJSON{
 		},
 		{
 			Name: "unusedparams",
-			Doc:  "check for unused parameters of functions\n\nThe unusedparams analyzer checks functions to see if there are\nany parameters that are not being used.\n\nTo reduce false positives it ignores:\n- methods\n- parameters that do not have a name or have the name '_' (the blank identifier)\n- functions in test files\n- functions with empty bodies or those with just a return stmt",
+			Doc:  "check for unused parameters of functions\n\nThe unusedparams analyzer checks functions to see if there are\nany parameters that are not being used.\n\nTo reduce false positives it ignores:\n- methods\n- parameters that do not have a name or are underscored\n- functions in test files\n- functions with empty bodies or those with just a return stmt",
 		},
 		{
 			Name:    "unusedresult",

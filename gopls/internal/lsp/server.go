@@ -26,7 +26,7 @@ const concurrentAnalyses = 1
 
 // NewServer creates an LSP server and binds it to handle incoming client
 // messages on the supplied stream.
-func NewServer(session *cache.Session, client protocol.ClientCloser, options *source.Options) *Server {
+func NewServer(session *cache.Session, client protocol.ClientCloser) *Server {
 	return &Server{
 		diagnostics:           map[span.URI]*fileReports{},
 		gcOptimizationDetails: make(map[source.PackageID]struct{}),
@@ -36,7 +36,6 @@ func NewServer(session *cache.Session, client protocol.ClientCloser, options *so
 		client:                client,
 		diagnosticsSema:       make(chan struct{}, concurrentAnalyses),
 		progress:              progress.NewTracker(client),
-		options:               options,
 	}
 }
 
@@ -116,10 +115,6 @@ type Server struct {
 	// terminated with the StopProfile command.
 	ongoingProfileMu sync.Mutex
 	ongoingProfile   *os.File // if non-nil, an ongoing profile is writing to this file
-
-	// Track most recently requested options.
-	optionsMu sync.Mutex
-	options   *source.Options
 }
 
 func (s *Server) workDoneProgressCancel(ctx context.Context, params *protocol.WorkDoneProgressCancelParams) error {

@@ -5,7 +5,7 @@
 package mapfs
 
 import (
-	"io"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -36,7 +36,7 @@ func TestOpenRoot(t *testing.T) {
 			t.Errorf("Open(%q) = %v", tt.path, err)
 			continue
 		}
-		slurp, err := io.ReadAll(rsc)
+		slurp, err := ioutil.ReadAll(rsc)
 		if err != nil {
 			t.Error(err)
 		}

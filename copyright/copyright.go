@@ -13,7 +13,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
-	"os"
+	"io/ioutil"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -67,7 +67,7 @@ func checkFile(toolsDir, filename string) (bool, error) {
 	if strings.HasSuffix(normalized, "cmd/goyacc/yacc.go") {
 		return false, nil
 	}
-	content, err := os.ReadFile(filename)
+	content, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return false, err
 	}

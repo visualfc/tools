@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"golang.org/x/mod/modfile"
@@ -58,6 +60,38 @@ func computeWorkspaceModFiles(ctx context.Context, gomod, gowork span.URI, go111
 	return nil, nil
 }
 
+// dirs returns the workspace directories for the loaded modules.
+//
+// A workspace directory is, roughly speaking, a directory for which we care
+// about file changes. This is used for the purpose of registering file
+// watching patterns, and expanding directory modifications to their adjacent
+// files.
+//
+// TODO(rfindley): move this to snapshot.go.
+// TODO(rfindley): can we make this abstraction simpler and/or more accurate?
+func (s *snapshot) dirs(ctx context.Context) []span.URI {
+	dirSet := make(map[span.URI]struct{})
+
+	// Dirs should, at the very least, contain the working directory and folder.
+	dirSet[s.view.workingDir()] = struct{}{}
+	dirSet[s.view.folder] = struct{}{}
+
+	// Additionally, if e.g. go.work indicates other workspace modules, we should
+	// include their directories too.
+	if s.workspaceModFilesErr == nil {
+		for modFile := range s.workspaceModFiles {
+			dir := filepath.Dir(modFile.Filename())
+			dirSet[span.URIFromPath(dir)] = struct{}{}
+		}
+	}
+	var dirs []span.URI
+	for d := range dirSet {
+		dirs = append(dirs, d)
+	}
+	sort.Slice(dirs, func(i, j int) bool { return dirs[i] < dirs[j] })
+	return dirs
+}
+
 // isGoMod reports if uri is a go.mod file.
 func isGoMod(uri span.URI) bool {
 	return filepath.Base(uri.Filename()) == "go.mod"
@@ -68,11 +102,25 @@ func isGoWork(uri span.URI) bool {
 	return filepath.Base(uri.Filename()) == "go.work"
 }
 
-// fileExists reports whether the file has a Content (which may be empty).
-// An overlay exists even if it is not reflected in the file system.
-func fileExists(fh source.FileHandle) bool {
+// fileExists reports if the file uri exists within source.
+func fileExists(ctx context.Context, uri span.URI, source source.FileSource) (bool, error) {
+	fh, err := source.ReadFile(ctx, uri)
+	if err != nil {
+		return false, err
+	}
+	return fileHandleExists(fh)
+}
+
+// fileHandleExists reports if the file underlying fh actually exists.
+func fileHandleExists(fh source.FileHandle) (bool, error) {
 	_, err := fh.Content()
-	return err == nil
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
 
 // errExhausted is returned by findModules if the file scan limit is reached.

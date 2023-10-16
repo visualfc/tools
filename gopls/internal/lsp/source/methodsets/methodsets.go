@@ -455,7 +455,8 @@ func fingerprint(method *types.Func) (string, bool) {
 // -- serial format of index --
 
 // (The name says gob but in fact we use frob.)
-var packageCodec = frob.CodecFor[gobPackage]()
+// var packageCodec = frob.For[gobPackage]()
+var packageCodec = frob.CodecFor117(new(gobPackage))
 
 // A gobPackage records the method set of each package-level type for a single package.
 type gobPackage struct {

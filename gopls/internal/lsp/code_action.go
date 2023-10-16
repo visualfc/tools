@@ -38,8 +38,8 @@ func (s *Server) codeAction(ctx context.Context, params *protocol.CodeActionPara
 	uri := fh.URI()
 
 	// Determine the supported actions for this file kind.
-	kind := snapshot.FileKind(fh)
-	supportedCodeActions, ok := snapshot.Options().SupportedCodeActions[kind]
+	kind := snapshot.View().FileKind(fh)
+	supportedCodeActions, ok := snapshot.View().Options().SupportedCodeActions[kind]
 	if !ok {
 		return nil, fmt.Errorf("no supported code actions for %v file kind", kind)
 	}
@@ -109,7 +109,7 @@ func (s *Server) codeAction(ctx context.Context, params *protocol.CodeActionPara
 
 		return actions, nil
 
-	case source.Go, source.Gop: // goxls: Go+
+	case source.Go:
 		diagnostics := params.Context.Diagnostics
 
 		// Don't suggest fixes for generated files, since they are generally
@@ -185,7 +185,7 @@ func (s *Server) codeAction(ctx context.Context, params *protocol.CodeActionPara
 		}
 
 		var stubMethodsDiagnostics []protocol.Diagnostic
-		if wantQuickFixes && snapshot.Options().IsAnalyzerEnabled(stubmethods.Analyzer.Name) {
+		if wantQuickFixes && snapshot.View().Options().IsAnalyzerEnabled(stubmethods.Analyzer.Name) {
 			for _, pd := range diagnostics {
 				if stubmethods.MatchesMessage(pd.Message) {
 					stubMethodsDiagnostics = append(stubMethodsDiagnostics, pd)
@@ -194,10 +194,7 @@ func (s *Server) codeAction(ctx context.Context, params *protocol.CodeActionPara
 		}
 
 		// Code actions requiring type information.
-		if len(stubMethodsDiagnostics) > 0 ||
-			want[protocol.RefactorRewrite] ||
-			want[protocol.RefactorInline] ||
-			want[protocol.GoTest] {
+		if len(stubMethodsDiagnostics) > 0 || want[protocol.RefactorRewrite] || want[protocol.GoTest] {
 			pkg, pgf, err := source.NarrowestPackageForFile(ctx, snapshot, fh.URI())
 			if err != nil {
 				return nil, err
@@ -253,14 +250,6 @@ func (s *Server) codeAction(ctx context.Context, params *protocol.CodeActionPara
 				actions = append(actions, rewrites...)
 			}
 
-			if want[protocol.RefactorInline] {
-				rewrites, err := refactorInline(ctx, snapshot, pkg, pgf, fh, params.Range)
-				if err != nil {
-					return nil, err
-				}
-				actions = append(actions, rewrites...)
-			}
-
 			if want[protocol.GoTest] {
 				fixes, err := goTest(ctx, snapshot, pkg, pgf, params.Range)
 				if err != nil {
@@ -299,7 +288,7 @@ func (s *Server) findMatchingDiagnostics(uri span.URI, pd protocol.Diagnostic) [
 
 func (s *Server) getSupportedCodeActions() []protocol.CodeActionKind {
 	allCodeActionKinds := make(map[protocol.CodeActionKind]struct{})
-	for _, kinds := range s.Options().SupportedCodeActions {
+	for _, kinds := range s.session.Options().SupportedCodeActions {
 		for kind := range kinds {
 			allCodeActionKinds[kind] = struct{}{}
 		}
@@ -453,7 +442,7 @@ func refactorRewrite(ctx context.Context, snapshot source.Snapshot, pkg source.P
 	//
 	// TODO: Consider removing the inspection after convenienceAnalyzers are removed.
 	inspect := inspector.New([]*ast.File{pgf.File})
-	if snapshot.Options().IsAnalyzerEnabled(fillstruct.Analyzer.Name) {
+	if snapshot.View().Options().IsAnalyzerEnabled(fillstruct.Analyzer.Name) {
 		for _, d := range fillstruct.DiagnoseFillableStructs(inspect, start, end, pkg.GetTypes(), pkg.GetTypesInfo()) {
 			rng, err := pgf.Mapper.PosRange(pgf.Tok, d.Pos, d.End)
 			if err != nil {
@@ -480,7 +469,7 @@ func refactorRewrite(ctx context.Context, snapshot source.Snapshot, pkg source.P
 		})
 	}
 
-	if snapshot.Options().IsAnalyzerEnabled(infertypeargs.Analyzer.Name) {
+	if snapshot.View().Options().IsAnalyzerEnabled(infertypeargs.Analyzer.Name) {
 		for _, d := range infertypeargs.DiagnoseInferableTypeArgs(pkg.FileSet(), inspect, start, end, pkg.GetTypes(), pkg.GetTypesInfo()) {
 			if len(d.SuggestedFixes) != 1 {
 				panic(fmt.Sprintf("unexpected number of suggested fixes from infertypeargs: %v", len(d.SuggestedFixes)))
@@ -507,35 +496,6 @@ func refactorRewrite(ctx context.Context, snapshot source.Snapshot, pkg source.P
 		}
 	}
 
-	return actions, nil
-}
-
-// refactorInline returns inline actions available at the specified range.
-func refactorInline(ctx context.Context, snapshot source.Snapshot, pkg source.Package, pgf *source.ParsedGoFile, fh source.FileHandle, rng protocol.Range) ([]protocol.CodeAction, error) {
-	var commands []protocol.Command
-
-	// If range is within call expression, offer inline action.
-	if _, fn, err := source.EnclosingStaticCall(pkg, pgf, rng); err == nil {
-		cmd, err := command.NewApplyFixCommand(fmt.Sprintf("Inline call to %s", fn.Name()), command.ApplyFixArgs{
-			URI:   protocol.URIFromSpanURI(pgf.URI),
-			Fix:   source.InlineCall,
-			Range: rng,
-		})
-		if err != nil {
-			return nil, err
-		}
-		commands = append(commands, cmd)
-	}
-
-	// Convert commands to actions.
-	var actions []protocol.CodeAction
-	for i := range commands {
-		actions = append(actions, protocol.CodeAction{
-			Title:   commands[i].Title,
-			Kind:    protocol.RefactorInline,
-			Command: &commands[i],
-		})
-	}
 	return actions, nil
 }
 

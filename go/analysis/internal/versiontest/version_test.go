@@ -20,7 +20,6 @@ import (
 	"golang.org/x/tools/go/analysis/analysistest"
 	"golang.org/x/tools/go/analysis/multichecker"
 	"golang.org/x/tools/go/analysis/singlechecker"
-	"golang.org/x/tools/internal/testenv"
 )
 
 var analyzer = &analysis.Analyzer{
@@ -61,8 +60,6 @@ func TestAnalysistest(t *testing.T) {
 }
 
 func TestMultichecker(t *testing.T) {
-	testenv.NeedsGoPackages(t)
-
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -77,8 +74,6 @@ func TestMultichecker(t *testing.T) {
 }
 
 func TestSinglechecker(t *testing.T) {
-	testenv.NeedsGoPackages(t)
-
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -93,8 +88,6 @@ func TestSinglechecker(t *testing.T) {
 }
 
 func TestVettool(t *testing.T) {
-	testenv.NeedsGoPackages(t)
-
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)

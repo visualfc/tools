@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -85,7 +86,7 @@ func (s *snapshot) ModTidy(ctx context.Context, pm *source.ParsedModule) (*sourc
 	}
 
 	// Await result.
-	v, err := s.awaitPromise(ctx, entry)
+	v, err := s.awaitPromise(ctx, entry.(*memoize.Promise))
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +118,7 @@ func modTidyImpl(ctx context.Context, snapshot *snapshot, filename string, pm *s
 
 	// Go directly to disk to get the temporary mod file,
 	// since it is always on disk.
-	tempContents, err := os.ReadFile(tmpURI.Filename())
+	tempContents, err := ioutil.ReadFile(tmpURI.Filename())
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +169,7 @@ func modTidyDiagnostics(ctx context.Context, snapshot *snapshot, pm *source.Pars
 	for _, req := range wrongDirectness {
 		// Handle dependencies that are incorrectly labeled indirect and
 		// vice versa.
-		srcDiag, err := directnessDiagnostic(pm.Mapper, req, snapshot.Options().ComputeEdits)
+		srcDiag, err := directnessDiagnostic(pm.Mapper, req, snapshot.View().Options().ComputeEdits)
 		if err != nil {
 			// We're probably in a bad state if we can't compute a
 			// directnessDiagnostic, but try to keep going so as to not suppress
@@ -260,7 +261,7 @@ func missingModuleDiagnostics(ctx context.Context, snapshot *snapshot, pm *sourc
 			//
 			// import (
 			//   "golang.org/x/tools/go/expect"
-			//   "golang.org/x/tools/gopls/internal/goxls/packages"
+			//   "golang.org/x/tools/go/packages"
 			// )
 			// They both are related to the same module: "golang.org/x/tools".
 			var match string

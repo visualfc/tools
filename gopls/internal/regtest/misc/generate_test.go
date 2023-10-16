@@ -27,11 +27,12 @@ go 1.14
 package main
 
 import (
+	"io/ioutil"
 	"os"
 )
 
 func main() {
-	os.WriteFile("generated.go", []byte("package " + os.Args[1] + "\n\nconst Answer = 21"), 0644)
+	ioutil.WriteFile("generated.go", []byte("package " + os.Args[1] + "\n\nconst Answer = 21"), 0644)
 }
 
 -- lib1/lib.go --

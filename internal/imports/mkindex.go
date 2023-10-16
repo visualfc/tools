@@ -19,6 +19,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -87,7 +88,7 @@ func main() {
 	}
 
 	// Write out source file.
-	err = os.WriteFile("pkgindex.go", src, 0644)
+	err = ioutil.WriteFile("pkgindex.go", src, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}

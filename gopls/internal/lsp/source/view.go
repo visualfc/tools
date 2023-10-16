@@ -18,24 +18,21 @@ import (
 	"go/types"
 	"io"
 
-	goxparser "github.com/goplus/gop/parser"
-
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/types/objectpath"
-	"golang.org/x/tools/gopls/internal/goxls/packages"
-	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
+	"golang.org/x/tools/gopls/internal/govulncheck"
 	"golang.org/x/tools/gopls/internal/lsp/progress"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/source/methodsets"
 	"golang.org/x/tools/gopls/internal/span"
-	"golang.org/x/tools/gopls/internal/vulncheck"
 	"golang.org/x/tools/internal/event/label"
 	"golang.org/x/tools/internal/event/tag"
 	"golang.org/x/tools/internal/gocommand"
 	"golang.org/x/tools/internal/imports"
+	"golang.org/x/tools/internal/packagesinternal"
 )
 
 // A GlobalSnapshotID uniquely identifies a snapshot within this process and
@@ -60,18 +57,6 @@ type Snapshot interface {
 	// monotonic: subsequent snapshots will have higher global ID, though
 	// subsequent snapshots in a view may not have adjacent global IDs.
 	GlobalID() GlobalSnapshotID
-
-	// FileKind returns the type of a file.
-	//
-	// We can't reliably deduce the kind from the file name alone,
-	// as some editors can be told to interpret a buffer as
-	// language different from the file name heuristic, e.g. that
-	// an .html file actually contains Go "html/template" syntax,
-	// or even that a .go file contains Python.
-	FileKind(FileHandle) FileKind
-
-	// Options returns the options associated with this snapshot.
-	Options() *Options
 
 	// View returns the View associated with this snapshot.
 	View() View
@@ -107,12 +92,6 @@ type Snapshot interface {
 	// If the file is not available, returns nil and an error.
 	// Position information is added to FileSet().
 	ParseGo(ctx context.Context, fh FileHandle, mode parser.Mode) (*ParsedGoFile, error)
-
-	// ParseGop returns the parsed AST for the file.
-	// If the file is not available, returns nil and an error.
-	// Position information is added to FileSet().
-	// goxls: parse Go+ files
-	ParseGop(ctx context.Context, fh FileHandle, mode goxparser.Mode) (*ParsedGopFile, error)
 
 	// Analyze runs the specified analyzers on the given packages at this snapshot.
 	//
@@ -157,7 +136,7 @@ type Snapshot interface {
 
 	// ModVuln returns import vulnerability analysis for the given go.mod URI.
 	// Concurrent requests are combined into a single command.
-	ModVuln(ctx context.Context, modURI span.URI) (*vulncheck.Result, error)
+	ModVuln(ctx context.Context, modURI span.URI) (*govulncheck.Result, error)
 
 	// GoModForFile returns the URI of the go.mod file for the given URI.
 	GoModForFile(uri span.URI) span.URI
@@ -374,6 +353,9 @@ type View interface {
 	// Folder returns the folder with which this view was created.
 	Folder() span.URI
 
+	// Options returns a copy of the Options for this view.
+	Options() *Options
+
 	// Snapshot returns the current snapshot for the view, and a
 	// release function that must be called when the Snapshot is
 	// no longer needed.
@@ -400,11 +382,20 @@ type View interface {
 	// Vulnerabilities returns known vulnerabilities for the given modfile.
 	// TODO(suzmue): replace command.Vuln with a different type, maybe
 	// https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck/govulnchecklib#Summary?
-	Vulnerabilities(modfile ...span.URI) map[span.URI]*vulncheck.Result
+	Vulnerabilities(modfile ...span.URI) map[span.URI]*govulncheck.Result
 
 	// SetVulnerabilities resets the list of vulnerabilities that exists for the given modules
 	// required by modfile.
-	SetVulnerabilities(modfile span.URI, vulncheckResult *vulncheck.Result)
+	SetVulnerabilities(modfile span.URI, vulncheckResult *govulncheck.Result)
+
+	// FileKind returns the type of a file.
+	//
+	// We can't reliably deduce the kind from the file name alone,
+	// as some editors can be told to interpret a buffer as
+	// language different from the file name heuristic, e.g. that
+	// an .html file actually contains Go "html/template" syntax,
+	// or even that a .go file contains Python.
+	FileKind(FileHandle) FileKind
 
 	// GoVersion returns the configured Go version for this view.
 	GoVersion() int
@@ -418,9 +409,6 @@ type View interface {
 type FileSource interface {
 	// ReadFile returns the FileHandle for a given URI, either by
 	// reading the content of the file or by obtaining it from a cache.
-	//
-	// Invariant: ReadFile must only return an error in the case of context
-	// cancellation. If ctx.Err() is nil, the resulting error must also be nil.
 	ReadFile(ctx context.Context, uri span.URI) (FileHandle, error)
 }
 
@@ -560,10 +548,6 @@ type Metadata struct {
 	GoFiles         []span.URI
 	CompiledGoFiles []span.URI
 	IgnoredFiles    []span.URI
-
-	// goxls: Go+ files
-	GopFiles         []span.URI
-	CompiledGopFiles []span.URI
 
 	ForTest       PackagePath // q in a "p [q.test]" package, else ""
 	TypesSizes    types.Sizes
@@ -784,9 +768,9 @@ type FileHandle interface {
 	// FileIdentity returns a FileIdentity for the file, even if there was an
 	// error reading it.
 	FileIdentity() FileIdentity
-	// SameContentsOnDisk reports whether the file has the same content on disk:
+	// Saved reports whether the file has the same content on disk:
 	// it is false for files open on an editor with unsaved edits.
-	SameContentsOnDisk() bool
+	Saved() bool
 	// Version returns the file version, as defined by the LSP client.
 	// For on-disk file handles, Version returns 0.
 	Version() int32
@@ -858,8 +842,6 @@ const (
 	Tmpl
 	// Work is a go.work file.
 	Work
-	// goxls: Gop is a Go+ file.
-	Gop
 )
 
 func (k FileKind) String() string {
@@ -874,8 +856,6 @@ func (k FileKind) String() string {
 		return "tmpl"
 	case Work:
 		return "go.work"
-	case Gop: // goxls: Gop is a Go+ file
-		return "gop"
 	default:
 		return fmt.Sprintf("internal error: unknown file kind %d", k)
 	}
@@ -970,10 +950,6 @@ type Package interface {
 	File(uri span.URI) (*ParsedGoFile, error)
 	GetSyntax() []*ast.File // (borrowed)
 	GetParseErrors() []scanner.ErrorList
-
-	// goxls: Go+ files
-	GopFile(uri span.URI) (*ParsedGopFile, error)
-	GopTypesInfo() *typesutil.Info // use GopTypesInfo() in a Go+ file
 
 	// Results of type checking:
 	GetTypes() *types.Package

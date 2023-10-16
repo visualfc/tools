@@ -7,7 +7,7 @@ package expect_test
 import (
 	"bytes"
 	"go/token"
-	"os"
+	"io/ioutil"
 	"testing"
 
 	"golang.org/x/tools/go/expect"
@@ -52,7 +52,7 @@ func TestMarker(t *testing.T) {
 		},
 	} {
 		t.Run(tt.filename, func(t *testing.T) {
-			content, err := os.ReadFile(tt.filename)
+			content, err := ioutil.ReadFile(tt.filename)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -342,9 +342,9 @@ func (ctx *Context) Parse(r io.Reader, name string, mode ParseMode) (*Doc, error
 }
 
 // Parse parses a document from r. Parse reads assets used by the presentation
-// from the file system using os.ReadFile.
+// from the file system using ioutil.ReadFile.
 func Parse(r io.Reader, name string, mode ParseMode) (*Doc, error) {
-	ctx := Context{ReadFile: os.ReadFile}
+	ctx := Context{ReadFile: ioutil.ReadFile}
 	return ctx.Parse(r, name, mode)
 }
 

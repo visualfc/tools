@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/build"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -41,7 +42,7 @@ func packageMainIsDevel() bool {
 	return info.Main.Version == "(devel)"
 }
 
-var checkGoBuild struct {
+var checkGoGoroot struct {
 	once sync.Once
 	err  error
 }
@@ -66,7 +67,7 @@ func hasTool(tool string) error {
 	switch tool {
 	case "patch":
 		// check that the patch tools supports the -o argument
-		temp, err := os.CreateTemp("", "patch-test")
+		temp, err := ioutil.TempFile("", "patch-test")
 		if err != nil {
 			return err
 		}
@@ -78,48 +79,40 @@ func hasTool(tool string) error {
 		}
 
 	case "go":
-		checkGoBuild.once.Do(func() {
-			if runtime.GOROOT() != "" {
-				// Ensure that the 'go' command found by exec.LookPath is from the correct
-				// GOROOT. Otherwise, 'some/path/go test ./...' will test against some
-				// version of the 'go' binary other than 'some/path/go', which is almost
-				// certainly not what the user intended.
-				out, err := exec.Command(tool, "env", "GOROOT").CombinedOutput()
-				if err != nil {
-					checkGoBuild.err = err
-					return
-				}
-				GOROOT := strings.TrimSpace(string(out))
-				if GOROOT != runtime.GOROOT() {
-					checkGoBuild.err = fmt.Errorf("'go env GOROOT' does not match runtime.GOROOT:\n\tgo env: %s\n\tGOROOT: %s", GOROOT, runtime.GOROOT())
-					return
-				}
-			}
-
-			dir, err := os.MkdirTemp("", "testenv-*")
+		checkGoGoroot.once.Do(func() {
+			// Ensure that the 'go' command found by exec.LookPath is from the correct
+			// GOROOT. Otherwise, 'some/path/go test ./...' will test against some
+			// version of the 'go' binary other than 'some/path/go', which is almost
+			// certainly not what the user intended.
+			out, err := exec.Command(tool, "env", "GOROOT").CombinedOutput()
 			if err != nil {
-				checkGoBuild.err = err
+				checkGoGoroot.err = err
 				return
 			}
-			defer os.RemoveAll(dir)
+			GOROOT := strings.TrimSpace(string(out))
+			if GOROOT != runtime.GOROOT() {
+				checkGoGoroot.err = fmt.Errorf("'go env GOROOT' does not match runtime.GOROOT:\n\tgo env: %s\n\tGOROOT: %s", GOROOT, runtime.GOROOT())
+				return
+			}
 
-			mainGo := filepath.Join(dir, "main.go")
-			if err := os.WriteFile(mainGo, []byte("package main\nfunc main() {}\n"), 0644); err != nil {
-				checkGoBuild.err = err
+			// Also ensure that that GOROOT includes a compiler: 'go' commands
+			// don't in general work without it, and some builders
+			// (such as android-amd64-emu) seem to lack it in the test environment.
+			cmd := exec.Command(tool, "tool", "-n", "compile")
+			stderr := new(bytes.Buffer)
+			stderr.Write([]byte("\n"))
+			cmd.Stderr = stderr
+			out, err = cmd.Output()
+			if err != nil {
+				checkGoGoroot.err = fmt.Errorf("%v: %v%s", cmd, err, stderr)
 				return
 			}
-			cmd := exec.Command("go", "build", "-o", os.DevNull, mainGo)
-			cmd.Dir = dir
-			if out, err := cmd.CombinedOutput(); err != nil {
-				if len(out) > 0 {
-					checkGoBuild.err = fmt.Errorf("%v: %v\n%s", cmd, err, out)
-				} else {
-					checkGoBuild.err = fmt.Errorf("%v: %v", cmd, err)
-				}
+			if _, err := exec.LookPath(string(bytes.TrimSpace(out))); err != nil {
+				checkGoGoroot.err = err
 			}
 		})
-		if checkGoBuild.err != nil {
-			return checkGoBuild.err
+		if checkGoGoroot.err != nil {
+			return checkGoGoroot.err
 		}
 
 	case "diff":
@@ -359,7 +352,7 @@ func WriteImportcfg(t testing.TB, dstPath string, additionalPackageFiles map[str
 	if err != nil {
 		t.Fatalf("preparing the importcfg failed: %s", err)
 	}
-	os.WriteFile(dstPath, []byte(importcfg), 0655)
+	ioutil.WriteFile(dstPath, []byte(importcfg), 0655)
 	if err != nil {
 		t.Fatalf("writing the importcfg failed: %s", err)
 	}

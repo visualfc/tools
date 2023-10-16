@@ -16,6 +16,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -136,7 +137,7 @@ func Test(t *testing.T) {
 			continue
 		}
 
-		gotf, err := os.CreateTemp("", filepath.Base(filename)+"t")
+		gotf, err := ioutil.TempFile("", filepath.Base(filename)+"t")
 		if err != nil {
 			t.Fatal(err)
 		}

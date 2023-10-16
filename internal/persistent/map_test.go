@@ -18,7 +18,7 @@ type mapEntry struct {
 }
 
 type validatedMap struct {
-	impl     *Map[int, int]
+	impl     *Map
 	expected map[int]int      // current key-value mapping.
 	deleted  map[mapEntry]int // maps deleted entries to their clock time of last deletion
 	seen     map[mapEntry]int // maps seen entries to their clock time of last insertion
@@ -30,7 +30,9 @@ func TestSimpleMap(t *testing.T) {
 	seenEntries := make(map[mapEntry]int)
 
 	m1 := &validatedMap{
-		impl:     new(Map[int, int]),
+		impl: NewMap(func(a, b interface{}) bool {
+			return a.(int) < b.(int)
+		}),
 		expected: make(map[int]int),
 		deleted:  deletedEntries,
 		seen:     seenEntries,
@@ -121,7 +123,9 @@ func TestRandomMap(t *testing.T) {
 	seenEntries := make(map[mapEntry]int)
 
 	m := &validatedMap{
-		impl:     new(Map[int, int]),
+		impl: NewMap(func(a, b interface{}) bool {
+			return a.(int) < b.(int)
+		}),
 		expected: make(map[int]int),
 		deleted:  deletedEntries,
 		seen:     seenEntries,
@@ -161,7 +165,9 @@ func TestUpdate(t *testing.T) {
 	seenEntries := make(map[mapEntry]int)
 
 	m1 := &validatedMap{
-		impl:     new(Map[int, int]),
+		impl: NewMap(func(a, b interface{}) bool {
+			return a.(int) < b.(int)
+		}),
 		expected: make(map[int]int),
 		deleted:  deletedEntries,
 		seen:     seenEntries,
@@ -227,7 +233,7 @@ func dumpMap(t *testing.T, prefix string, n *mapNode) {
 func (vm *validatedMap) validate(t *testing.T) {
 	t.Helper()
 
-	validateNode(t, vm.impl.root)
+	validateNode(t, vm.impl.root, vm.impl.less)
 
 	// Note: this validation may not make sense if maps were constructed using
 	// SetAll operations. If this proves to be problematic, remove the clock,
@@ -240,23 +246,23 @@ func (vm *validatedMap) validate(t *testing.T) {
 	}
 
 	actualMap := make(map[int]int, len(vm.expected))
-	vm.impl.Range(func(key, value int) {
-		if other, ok := actualMap[key]; ok {
+	vm.impl.Range(func(key, value interface{}) {
+		if other, ok := actualMap[key.(int)]; ok {
 			t.Fatalf("key is present twice, key: %d, first value: %d, second value: %d", key, value, other)
 		}
-		actualMap[key] = value
+		actualMap[key.(int)] = value.(int)
 	})
 
 	assertSameMap(t, actualMap, vm.expected)
 }
 
-func validateNode(t *testing.T, node *mapNode) {
+func validateNode(t *testing.T, node *mapNode, less func(a, b interface{}) bool) {
 	if node == nil {
 		return
 	}
 
 	if node.left != nil {
-		if node.key.(int) < node.left.key.(int) {
+		if less(node.key, node.left.key) {
 			t.Fatalf("left child has larger key: %v vs %v", node.left.key, node.key)
 		}
 		if node.left.weight > node.weight {
@@ -265,7 +271,7 @@ func validateNode(t *testing.T, node *mapNode) {
 	}
 
 	if node.right != nil {
-		if node.right.key.(int) < node.key.(int) {
+		if less(node.right.key, node.key) {
 			t.Fatalf("right child has smaller key: %v vs %v", node.right.key, node.key)
 		}
 		if node.right.weight > node.weight {
@@ -273,8 +279,8 @@ func validateNode(t *testing.T, node *mapNode) {
 		}
 	}
 
-	validateNode(t, node.left)
-	validateNode(t, node.right)
+	validateNode(t, node.left, less)
+	validateNode(t, node.right, less)
 }
 
 func (vm *validatedMap) setAll(t *testing.T, other *validatedMap) {
@@ -294,7 +300,7 @@ func (vm *validatedMap) set(t *testing.T, key, value int) {
 	vm.clock++
 	vm.seen[entry] = vm.clock
 
-	vm.impl.Set(key, value, func(deletedKey, deletedValue any) {
+	vm.impl.Set(key, value, func(deletedKey, deletedValue interface{}) {
 		if deletedKey != key || deletedValue != value {
 			t.Fatalf("unexpected passed in deleted entry: %v/%v, expected: %v/%v", deletedKey, deletedValue, key, value)
 		}
@@ -340,7 +346,7 @@ func (vm *validatedMap) destroy() {
 	vm.impl.Destroy()
 }
 
-func assertSameMap(t *testing.T, map1, map2 any) {
+func assertSameMap(t *testing.T, map1, map2 interface{}) {
 	t.Helper()
 
 	if !reflect.DeepEqual(map1, map2) {

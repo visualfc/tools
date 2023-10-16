@@ -63,12 +63,13 @@ func (s *Server) computeSemanticTokens(ctx context.Context, td protocol.TextDocu
 	if !ok {
 		return nil, err
 	}
-	if !snapshot.Options().SemanticTokens {
+	vv := snapshot.View()
+	if !vv.Options().SemanticTokens {
 		// return an error, so if the option changes
 		// the client won't remember the wrong answer
 		return nil, fmt.Errorf("semantictokens are disabled")
 	}
-	kind := snapshot.FileKind(fh)
+	kind := snapshot.View().FileKind(fh)
 	if kind == source.Tmpl {
 		// this is a little cumbersome to avoid both exporting 'encoded' and its methods
 		// and to avoid import cycles
@@ -76,8 +77,8 @@ func (s *Server) computeSemanticTokens(ctx context.Context, td protocol.TextDocu
 			ctx:            ctx,
 			metadataSource: snapshot,
 			rng:            rng,
-			tokTypes:       snapshot.Options().SemanticTypes,
-			tokMods:        snapshot.Options().SemanticMods,
+			tokTypes:       s.session.Options().SemanticTypes,
+			tokMods:        s.session.Options().SemanticMods,
 		}
 		add := func(line, start uint32, len uint32) {
 			e.add(line, start, len, tokMacro, nil)
@@ -108,10 +109,10 @@ func (s *Server) computeSemanticTokens(ctx context.Context, td protocol.TextDocu
 		ti:             pkg.GetTypesInfo(),
 		pkg:            pkg,
 		fset:           pkg.FileSet(),
-		tokTypes:       snapshot.Options().SemanticTypes,
-		tokMods:        snapshot.Options().SemanticMods,
-		noStrings:      snapshot.Options().NoSemanticString,
-		noNumbers:      snapshot.Options().NoSemanticNumber,
+		tokTypes:       s.session.Options().SemanticTypes,
+		tokMods:        s.session.Options().SemanticMods,
+		noStrings:      vv.Options().NoSemanticString,
+		noNumbers:      vv.Options().NoSemanticNumber,
 	}
 	if err := e.init(); err != nil {
 		// e.init should never return an error, unless there's some

@@ -24,7 +24,7 @@ func (s *Server) documentHighlight(ctx context.Context, params *protocol.Documen
 		return nil, err
 	}
 
-	if snapshot.FileKind(fh) == source.Tmpl {
+	if snapshot.View().FileKind(fh) == source.Tmpl {
 		return template.Highlight(ctx, snapshot, fh, params.Position)
 	}
 

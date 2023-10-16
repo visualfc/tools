@@ -22,6 +22,7 @@ import (
 	"go/token"
 	exec "golang.org/x/sys/execabs"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -355,7 +356,7 @@ func (p *process) start(body string, opt *Options) error {
 	// (rather than the go tool process).
 	// This makes Kill work.
 
-	path, err := os.MkdirTemp("", "present-")
+	path, err := ioutil.TempDir("", "present-")
 	if err != nil {
 		return err
 	}
@@ -375,7 +376,7 @@ func (p *process) start(body string, opt *Options) error {
 	}
 	hasModfile := false
 	for _, f := range a.Files {
-		err = os.WriteFile(filepath.Join(path, f.Name), f.Data, 0666)
+		err = ioutil.WriteFile(filepath.Join(path, f.Name), f.Data, 0666)
 		if err != nil {
 			return err
 		}

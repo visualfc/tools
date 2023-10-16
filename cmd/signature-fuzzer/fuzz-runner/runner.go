@@ -12,6 +12,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -195,7 +196,7 @@ func (c *config) gen(singlepk int, singlefn int) {
 func (c *config) action(cmd []string, outfile string, emitout bool) int {
 	st := docmdout(cmd, c.gendir, outfile)
 	if emitout {
-		content, err := os.ReadFile(outfile)
+		content, err := ioutil.ReadFile(outfile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -404,7 +405,7 @@ func main() {
 	}
 	verb(1, "in main, verblevel=%d", *verbflag)
 
-	tmpdir, err := os.MkdirTemp("", "fuzzrun")
+	tmpdir, err := ioutil.TempDir("", "fuzzrun")
 	if err != nil {
 		fatal("creation of tempdir failed: %v", err)
 	}

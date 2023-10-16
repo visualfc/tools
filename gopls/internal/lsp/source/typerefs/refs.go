@@ -738,7 +738,8 @@ func assert(cond bool, msg string) {
 // -- serialization --
 
 // (The name says gob but in fact we use frob.)
-var classesCodec = frob.CodecFor[gobClasses]()
+// var classesCodec = frob.For[gobClasses]()
+var classesCodec = frob.CodecFor117(new(gobClasses))
 
 type gobClasses struct {
 	Strings []string // table of strings (PackageIDs and names)

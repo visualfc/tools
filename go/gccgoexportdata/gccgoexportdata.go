@@ -20,6 +20,7 @@ import (
 	"go/token"
 	"go/types"
 	"io"
+	"io/ioutil"
 	"strconv"
 	"strings"
 
@@ -45,7 +46,7 @@ func CompilerInfo(gccgo string, args ...string) (version, triple string, dirs []
 // NewReader returns a reader for the export data section of an object
 // (.o) or archive (.a) file read from r.
 func NewReader(r io.Reader) (io.Reader, error) {
-	data, err := io.ReadAll(r)
+	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}

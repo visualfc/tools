@@ -22,7 +22,6 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
-	"golang.org/x/tools/gopls/internal/telemetry"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/jsonrpc2"
 )
@@ -30,8 +29,6 @@ import (
 func (s *Server) initialize(ctx context.Context, params *protocol.ParamInitialize) (*protocol.InitializeResult, error) {
 	ctx, done := event.Start(ctx, "lsp.Server.initialize")
 	defer done()
-
-	telemetry.RecordClientInfo(params)
 
 	s.stateMu.Lock()
 	if s.state >= serverInitializing {
@@ -57,10 +54,8 @@ func (s *Server) initialize(ctx context.Context, params *protocol.ParamInitializ
 	}
 	s.progress.SetSupportsWorkDoneProgress(params.Capabilities.Window.WorkDoneProgress)
 
-	options := s.Options().Clone()
-	// TODO(rfindley): remove the error return from handleOptionResults, and
-	// eliminate this defer.
-	defer func() { s.SetOptions(options) }()
+	options := s.session.Options()
+	defer func() { s.session.SetOptions(options) }()
 
 	if err := s.handleOptionResults(ctx, source.SetOptions(options, params.InitializationOptions)); err != nil {
 		return nil, err
@@ -172,8 +167,8 @@ See https://github.com/golang/go/issues/45732 for more information.`,
 				Range: &protocol.Or_SemanticTokensOptions_range{Value: true},
 				Full:  &protocol.Or_SemanticTokensOptions_full{Value: true},
 				Legend: protocol.SemanticTokensLegend{
-					TokenTypes:     nonNilSliceString(s.Options().SemanticTypes),
-					TokenModifiers: nonNilSliceString(s.Options().SemanticMods),
+					TokenTypes:     nonNilSliceString(s.session.Options().SemanticTypes),
+					TokenModifiers: nonNilSliceString(s.session.Options().SemanticMods),
 				},
 			},
 			SignatureHelpProvider: &protocol.SignatureHelpOptions{
@@ -217,7 +212,9 @@ func (s *Server) initialized(ctx context.Context, params *protocol.InitializedPa
 	}
 	s.notifications = nil
 
-	options := s.Options()
+	options := s.session.Options()
+	defer func() { s.session.SetOptions(options) }()
+
 	if err := s.addFolders(ctx, s.pendingFolders); err != nil {
 		return err
 	}
@@ -238,11 +235,6 @@ func (s *Server) initialized(ctx context.Context, params *protocol.InitializedPa
 			return err
 		}
 	}
-
-	// Ask (maybe) about enabling telemetry. Do this asynchronously, as it's OK
-	// for users to ignore or dismiss the question.
-	go s.maybePromptForTelemetry(ctx, options.TelemetryPrompt)
-
 	return nil
 }
 
@@ -322,7 +314,6 @@ func (s *Server) checkViewGoVersions() {
 		if oldestVersion == -1 || viewVersion < oldestVersion {
 			oldestVersion, fromBuild = viewVersion, false
 		}
-		telemetry.RecordViewGoVersion(viewVersion)
 	}
 
 	if msg, mType := versionMessage(oldestVersion, fromBuild); msg != "" {
@@ -353,7 +344,7 @@ func (s *Server) addFolders(ctx context.Context, folders []protocol.WorkspaceFol
 	viewErrors := make(map[span.URI]error)
 
 	var ndiagnose sync.WaitGroup // number of unfinished diagnose calls
-	if s.Options().VerboseWorkDoneProgress {
+	if s.session.Options().VerboseWorkDoneProgress {
 		work := s.progress.Start(ctx, DiagnosticWorkTitle(FromInitialWorkspaceLoad), "Calculating diagnostics for initial workspace load...", nil, nil)
 		defer func() {
 			go func() {
@@ -480,7 +471,7 @@ func equalURISet(m1, m2 map[string]struct{}) bool {
 // registrations to the client and updates s.watchedDirectories.
 // The caller must not subsequently mutate patterns.
 func (s *Server) registerWatchedDirectoriesLocked(ctx context.Context, patterns map[string]struct{}) error {
-	if !s.Options().DynamicWatchedFilesSupported {
+	if !s.session.Options().DynamicWatchedFilesSupported {
 		return nil
 	}
 	s.watchedGlobPatterns = patterns
@@ -508,27 +499,9 @@ func (s *Server) registerWatchedDirectoriesLocked(ctx context.Context, patterns 
 	return nil
 }
 
-// Options returns the current server options.
-//
-// The caller must not modify the result.
-func (s *Server) Options() *source.Options {
-	s.optionsMu.Lock()
-	defer s.optionsMu.Unlock()
-	return s.options
-}
-
-// SetOptions sets the current server options.
-//
-// The caller must not subsequently modify the options.
-func (s *Server) SetOptions(opts *source.Options) {
-	s.optionsMu.Lock()
-	defer s.optionsMu.Unlock()
-	s.options = opts
-}
-
-func (s *Server) fetchFolderOptions(ctx context.Context, folder span.URI) (*source.Options, error) {
-	if opts := s.Options(); !opts.ConfigurationSupported {
-		return opts, nil
+func (s *Server) fetchConfig(ctx context.Context, name string, folder span.URI, o *source.Options) error {
+	if !s.session.Options().ConfigurationSupported {
+		return nil
 	}
 	configs, err := s.client.Configuration(ctx, &protocol.ParamConfiguration{
 		Items: []protocol.ConfigurationItem{{
@@ -538,16 +511,14 @@ func (s *Server) fetchFolderOptions(ctx context.Context, folder span.URI) (*sour
 	},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get workspace configuration from client (%s): %v", folder, err)
+		return fmt.Errorf("failed to get workspace configuration from client (%s): %v", folder, err)
 	}
-
-	folderOpts := s.Options().Clone()
 	for _, config := range configs {
-		if err := s.handleOptionResults(ctx, source.SetOptions(folderOpts, config)); err != nil {
-			return nil, err
+		if err := s.handleOptionResults(ctx, source.SetOptions(o, config)); err != nil {
+			return err
 		}
 	}
-	return folderOpts, nil
+	return nil
 }
 
 func (s *Server) eventuallyShowMessage(ctx context.Context, msg *protocol.ShowMessageParams) error {
@@ -628,7 +599,7 @@ func (s *Server) beginFileRequest(ctx context.Context, pURI protocol.DocumentURI
 		release()
 		return nil, nil, false, func() {}, err
 	}
-	if expectKind != source.UnknownKind && snapshot.FileKind(fh) != expectKind {
+	if expectKind != source.UnknownKind && view.FileKind(fh) != expectKind {
 		// Wrong kind of file. Nothing to do.
 		release()
 		return nil, nil, false, func() {}, nil

@@ -7,7 +7,6 @@ package fake
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -56,7 +55,7 @@ type Editor struct {
 
 // CallCounts tracks the number of protocol notifications of different types.
 type CallCounts struct {
-	DidOpen, DidChange, DidSave, DidChangeWatchedFiles, DidClose, DidChangeConfiguration uint64
+	DidOpen, DidChange, DidSave, DidChangeWatchedFiles, DidClose uint64
 }
 
 // buffer holds information about an open buffer in the editor.
@@ -110,17 +109,6 @@ type EditorConfig struct {
 
 	// Settings holds user-provided configuration for the LSP server.
 	Settings map[string]interface{}
-
-	// CapabilitiesJSON holds JSON client capabilities to overlay over the
-	// editor's default client capabilities.
-	//
-	// Specifically, this JSON string will be unmarshalled into the editor's
-	// client capabilities struct, before sending to the server.
-	CapabilitiesJSON []byte
-
-	// If non-nil, MessageResponder is used to respond to ShowMessageRequest
-	// messages.
-	MessageResponder func(params *protocol.ShowMessageRequestParams) (*protocol.MessageActionItem, error)
 }
 
 // NewEditor creates a new Editor.
@@ -235,9 +223,9 @@ func makeSettings(sandbox *Sandbox, config EditorConfig) map[string]interface{} 
 		// asynchronous operations being completed (such as diagnosing a snapshot).
 		"verboseWorkDoneProgress": true,
 
-		// Set an unlimited completion budget, so that tests don't flake because
+		// Set a generous completion budget, so that tests don't flake because
 		// completions are too slow.
-		"completionBudget": "0s",
+		"completionBudget": "10s",
 	}
 
 	for k, v := range config.Settings {
@@ -261,13 +249,15 @@ func (e *Editor) initialize(ctx context.Context) error {
 	}
 	params.InitializationOptions = makeSettings(e.sandbox, config)
 	params.WorkspaceFolders = makeWorkspaceFolders(e.sandbox, config.WorkspaceFolders)
-
-	// Set various client capabilities that are sought by gopls.
 	params.Capabilities.Workspace.Configuration = true // support workspace/configuration
 	params.Capabilities.Window.WorkDoneProgress = true // support window/workDoneProgress
+
+	// TODO(rfindley): set client capabilities (note from the future: why?)
+
 	params.Capabilities.TextDocument.Completion.CompletionItem.TagSupport.ValueSet = []protocol.CompletionItemTag{protocol.ComplDeprecated}
 	params.Capabilities.TextDocument.Completion.CompletionItem.SnippetSupport = true
 	params.Capabilities.TextDocument.SemanticTokens.Requests.Full.Value = true
+	// copied from lsp/semantic.go to avoid import cycle in tests
 	params.Capabilities.TextDocument.SemanticTokens.TokenTypes = []string{
 		"namespace", "type", "class", "enum", "interface",
 		"struct", "typeParameter", "parameter", "variable", "property", "enumMember",
@@ -278,11 +268,14 @@ func (e *Editor) initialize(ctx context.Context) error {
 		"declaration", "definition", "readonly", "static",
 		"deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary",
 	}
+
 	// The LSP tests have historically enabled this flag,
 	// but really we should test both ways for older editors.
 	params.Capabilities.TextDocument.DocumentSymbol.HierarchicalDocumentSymbolSupport = true
+
 	// Glob pattern watching is enabled.
 	params.Capabilities.Workspace.DidChangeWatchedFiles.DynamicRegistration = true
+
 	// "rename" operations are used for package renaming.
 	//
 	// TODO(rfindley): add support for other resource operations (create, delete, ...)
@@ -290,12 +283,6 @@ func (e *Editor) initialize(ctx context.Context) error {
 		ResourceOperations: []protocol.ResourceOperationKind{
 			"rename",
 		},
-	}
-	// Apply capabilities overlay.
-	if config.CapabilitiesJSON != nil {
-		if err := json.Unmarshal(config.CapabilitiesJSON, &params.Capabilities); err != nil {
-			return fmt.Errorf("unmarshalling EditorConfig.CapabilitiesJSON: %v", err)
-		}
 	}
 
 	trace := protocol.TraceValues("messages")
@@ -798,7 +785,10 @@ func (e *Editor) setBufferContentLocked(ctx context.Context, path string, dirty 
 
 // GoToDefinition jumps to the definition of the symbol at the given position
 // in an open buffer. It returns the location of the resulting jump.
-func (e *Editor) Definition(ctx context.Context, loc protocol.Location) (protocol.Location, error) {
+//
+// TODO(rfindley): rename to "Definition", to be consistent with LSP
+// terminology.
+func (e *Editor) GoToDefinition(ctx context.Context, loc protocol.Location) (protocol.Location, error) {
 	if err := e.checkBufferLocation(loc); err != nil {
 		return protocol.Location{}, err
 	}
@@ -813,9 +803,9 @@ func (e *Editor) Definition(ctx context.Context, loc protocol.Location) (protoco
 	return e.extractFirstLocation(ctx, resp)
 }
 
-// TypeDefinition jumps to the type definition of the symbol at the given
-// location in an open buffer.
-func (e *Editor) TypeDefinition(ctx context.Context, loc protocol.Location) (protocol.Location, error) {
+// GoToTypeDefinition jumps to the type definition of the symbol at the given location
+// in an open buffer.
+func (e *Editor) GoToTypeDefinition(ctx context.Context, loc protocol.Location) (protocol.Location, error) {
 	if err := e.checkBufferLocation(loc); err != nil {
 		return protocol.Location{}, err
 	}
@@ -1368,9 +1358,6 @@ func (e *Editor) ChangeConfiguration(ctx context.Context, newConfig EditorConfig
 		if err := e.Server.DidChangeConfiguration(ctx, &params); err != nil {
 			return err
 		}
-		e.callsMu.Lock()
-		e.calls.DidChangeConfiguration++
-		e.callsMu.Unlock()
 	}
 	return nil
 }

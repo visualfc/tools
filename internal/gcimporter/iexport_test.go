@@ -19,7 +19,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
-	"io"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"reflect"
@@ -55,13 +55,13 @@ func readExportFile(filename string) ([]byte, error) {
 		return nil, fmt.Errorf("unexpected byte: %v", ch)
 	}
 
-	return io.ReadAll(buf)
+	return ioutil.ReadAll(buf)
 }
 
 func iexport(fset *token.FileSet, version int, pkg *types.Package) ([]byte, error) {
 	var buf bytes.Buffer
 	const bundle, shallow = false, false
-	if err := gcimporter.IExportCommon(&buf, fset, bundle, shallow, version, []*types.Package{pkg}); err != nil {
+	if err := gcimporter.IExportCommon(&buf, fset, bundle, shallow, version, []*types.Package{pkg}, nil); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

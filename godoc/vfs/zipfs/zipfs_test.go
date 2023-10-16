@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -173,7 +174,7 @@ func TestZipFSOpenSeek(t *testing.T) {
 
 			// test Seek() multiple times
 			for i := 0; i < 3; i++ {
-				all, err := io.ReadAll(f)
+				all, err := ioutil.ReadAll(f)
 				if err != nil {
 					t.Error(err)
 					return

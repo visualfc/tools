@@ -5,11 +5,11 @@
 // Package defers defines an Analyzer that checks for common mistakes in defer
 // statements.
 //
-// # Analyzer defers
+// # Analyzer defer
 //
-// defers: report common mistakes in defer statements
+// defer: report common mistakes in defer statements
 //
-// The defers analyzer reports a diagnostic when a defer statement would
+// The defer analyzer reports a diagnostic when a defer statement would
 // result in a non-deferred call to time.Since, as experience has shown
 // that this is nearly always a mistake.
 //
@@ -21,5 +21,5 @@
 //
 // The correct code is:
 //
-//	defer func() { recordLatency(time.Since(start)) }()
+//	defer func() { recordLatency(time.Since(start)) }()`
 package defers

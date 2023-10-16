@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -76,7 +77,7 @@ func TestMain(m *testing.M) {
 func getTempDir() string {
 	makeTempDirOnce.Do(func() {
 		var err error
-		tempDir, err = os.MkdirTemp("", "gopls-bench")
+		tempDir, err = ioutil.TempDir("", "gopls-bench")
 		if err != nil {
 			log.Fatal(err)
 		}

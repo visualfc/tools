@@ -701,10 +701,9 @@ Unknown page
 		}
 		return s
 	},
-	// TODO(rfindley): re-enable option inspection.
-	// "options": func(s *cache.Session) []sessionOption {
-	// 	return showOptions(s.Options())
-	// },
+	"options": func(s *cache.Session) []sessionOption {
+		return showOptions(s.Options())
+	},
 })
 
 var MainTmpl = template.Must(template.Must(BaseTemplate.Clone()).Parse(`
@@ -838,6 +837,12 @@ From: <b>{{template "cachelink" .Cache.ID}}</b><br>
 <li>
 <a href="/file/{{$session.ID}}/{{.FileIdentity.Hash}}">{{.FileIdentity.URI}}</a>
 </li>{{end}}</ul>
+<h2>Options</h2>
+{{range options .}}
+<p><b>{{.Name}}</b> {{.Type}}</p>
+<p><i>default:</i> {{.Default}}</p>
+{{if ne .Default .Current}}<p><i>current:</i> {{.Current}}</p>{{end}}
+{{end}}
 {{end}}
 `))
 
@@ -846,6 +851,8 @@ var ViewTmpl = template.Must(template.Must(BaseTemplate.Clone()).Parse(`
 {{define "body"}}
 Name: <b>{{.Name}}</b><br>
 Folder: <b>{{.Folder}}</b><br>
+<h2>Environment</h2>
+<ul>{{range .Options.Env}}<li>{{.}}</li>{{end}}</ul>
 {{end}}
 `))
 

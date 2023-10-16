@@ -5,6 +5,7 @@
 package misc
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -174,7 +175,7 @@ import "example.com/x"
 
 var _, _ = x.X, y.Y
 `
-	modcache, err := os.MkdirTemp("", "TestGOMODCACHE-modcache")
+	modcache, err := ioutil.TempDir("", "TestGOMODCACHE-modcache")
 	if err != nil {
 		t.Fatal(err)
 	}
