@@ -19,6 +19,8 @@ import (
 	"io"
 
 	goxparser "github.com/goplus/gop/parser"
+	goximports "golang.org/x/tools/gopls/internal/goxls/imports"
+	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/analysis"
@@ -100,6 +102,7 @@ type Snapshot interface {
 	// Position information is added to FileSet().
 	// goxls: parse Go+ files
 	ParseGop(ctx context.Context, fh FileHandle, mode goxparser.Mode) (*ParsedGopFile, error)
+	GopRunProcessEnvFunc(ctx context.Context, fn func(context.Context, *goximports.Options) error) error
 
 	// Analyze runs the specified analyzers on the given packages at this snapshot.
 	//
@@ -557,6 +560,10 @@ type Metadata struct {
 	CompiledGoFiles []span.URI
 	IgnoredFiles    []span.URI
 
+	// goxls: Go+ files
+	GopFiles         []span.URI
+	CompiledGopFiles []span.URI
+
 	ForTest       PackagePath // q in a "p [q.test]" package, else ""
 	TypesSizes    types.Sizes
 	Errors        []packages.Error          // must be set for packages in import cycles
@@ -962,6 +969,11 @@ type Package interface {
 	File(uri span.URI) (*ParsedGoFile, error)
 	GetSyntax() []*ast.File // (borrowed)
 	GetParseErrors() []scanner.ErrorList
+
+	// goxls: Go+ files
+	CompiledGopFiles() []*ParsedGopFile // (borrowed)
+	GopFile(uri span.URI) (*ParsedGopFile, error)
+	GopTypesInfo() *typesutil.Info
 
 	// Results of type checking:
 	GetTypes() *types.Package

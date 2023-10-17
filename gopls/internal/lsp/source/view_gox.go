@@ -5,6 +5,9 @@
 package source
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/scanner"
@@ -58,7 +61,15 @@ func (pgf *ParsedGopFile) NodeRange(node ast.Node) (protocol.Range, error) {
 	return pgf.Mapper.NodeRange(pgf.Tok, node)
 }
 
-/*
+// RangePos parses a protocol Range back into the go/token domain.
+func (pgf *ParsedGopFile) RangePos(r protocol.Range) (token.Pos, token.Pos, error) {
+	start, end, err := pgf.Mapper.RangeOffsets(r)
+	if err != nil {
+		return token.NoPos, token.NoPos, err
+	}
+	return pgf.Tok.Pos(start), pgf.Tok.Pos(end), nil
+}
+
 // NarrowestPackageForGopFile is a convenience function that selects the
 // narrowest non-ITV package to which this file belongs, type-checks
 // it in the requested mode (full or workspace), and returns it, along
@@ -97,4 +108,3 @@ func NarrowestPackageForGopFile(ctx context.Context, snapshot Snapshot, uri span
 	}
 	return pkg, pgf, err
 }
-*/

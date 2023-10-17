@@ -3,3 +3,31 @@
 // license that can be found in the LICENSE file.
 
 package cache
+
+import (
+	goast "go/ast"
+	"go/types"
+
+	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/gopls/internal/goxls/typesutil"
+	"golang.org/x/tools/gopls/internal/lsp/source"
+)
+
+func newGopTypeInfo() *typesutil.Info {
+	return &typesutil.Info{
+		Types:      make(map[ast.Expr]types.TypeAndValue),
+		Defs:       make(map[*ast.Ident]types.Object),
+		Uses:       make(map[*ast.Ident]types.Object),
+		Implicits:  make(map[ast.Node]types.Object),
+		Selections: make(map[*ast.SelectorExpr]*types.Selection),
+		Scopes:     make(map[ast.Node]*types.Scope),
+	}
+}
+
+func checkFiles(check *typesutil.Checker, goFiles []*goast.File, compiledGopFiles []*source.ParsedGopFile) error {
+	files := make([]*ast.File, 0, len(compiledGopFiles))
+	for _, cgf := range compiledGopFiles {
+		files = append(files, cgf.File)
+	}
+	return check.Files(goFiles, files)
+}

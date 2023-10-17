@@ -109,6 +109,9 @@ func (s *Server) codeAction(ctx context.Context, params *protocol.CodeActionPara
 
 		return actions, nil
 
+	case source.Gop: // goxls: Go+
+		return s.gopCodeAction(ctx, params, uri, snapshot, fh, want)
+
 	case source.Go:
 		diagnostics := params.Context.Diagnostics
 

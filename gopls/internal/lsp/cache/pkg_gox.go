@@ -4,7 +4,6 @@
 
 package cache
 
-/*
 import (
 	"fmt"
 
@@ -14,8 +13,11 @@ import (
 )
 
 func (p *Package) GopTypesInfo() *typesutil.Info {
-	panic("todo")
-	// return p.pkg.gopTypesInfo
+	return p.pkg.gopTypesInfo
+}
+
+func (p *Package) CompiledGopFiles() []*source.ParsedGopFile {
+	return p.pkg.compiledGopFiles
 }
 
 func (p *Package) GopFile(uri span.URI) (*source.ParsedGopFile, error) {
@@ -23,6 +25,11 @@ func (p *Package) GopFile(uri span.URI) (*source.ParsedGopFile, error) {
 }
 
 func (pkg *syntaxPackage) GopFile(uri span.URI) (*source.ParsedGopFile, error) {
+	for _, cgf := range pkg.compiledGopFiles {
+		if cgf.URI == uri {
+			return cgf, nil
+		}
+	}
 	for _, gf := range pkg.gopFiles {
 		if gf.URI == uri {
 			return gf, nil
@@ -30,4 +37,3 @@ func (pkg *syntaxPackage) GopFile(uri span.URI) (*source.ParsedGopFile, error) {
 	}
 	return nil, fmt.Errorf("no parsed file for %s in %v", uri, pkg.id)
 }
-*/

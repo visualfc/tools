@@ -23,6 +23,8 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
+	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/filecache"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -1302,6 +1304,9 @@ type typeCheckInputs struct {
 	depsByImpPath            map[ImportPath]PackageID
 	goVersion                string // packages.Module.GoVersion, e.g. "1.18"
 
+	// goxls: Go+ files
+	gopFiles, compiledGopFiles []source.FileHandle
+
 	// Used for type check diagnostics:
 	relatedInformation bool
 	linkTarget         string
@@ -1328,6 +1333,16 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 		return typeCheckInputs{}, err
 	}
 
+	// goxls: Go+ files
+	gopFiles, err := readFiles(ctx, s, m.GopFiles)
+	if err != nil {
+		return typeCheckInputs{}, err
+	}
+	compiledGopFiles, err := readFiles(ctx, s, m.CompiledGopFiles)
+	if err != nil {
+		return typeCheckInputs{}, err
+	}
+
 	goVersion := ""
 	if m.Module != nil && m.Module.GoVersion != "" {
 		goVersion = m.Module.GoVersion
@@ -1342,6 +1357,10 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 		sizes:           m.TypesSizes,
 		depsByImpPath:   m.DepsByImpPath,
 		goVersion:       goVersion,
+
+		// goxls: Go+ files
+		gopFiles:         gopFiles,
+		compiledGopFiles: compiledGopFiles,
 
 		relatedInformation: s.view.Options().RelatedInformationSupported,
 		linkTarget:         s.view.Options().LinkTarget,
@@ -1520,6 +1539,22 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs)
 		}
 	}
 
+	// goxls: Go+ files
+	pkg.gopTypesInfo = newGopTypeInfo()
+	pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, parserutil.ParseFull, false, inputs.gopFiles...)
+	if err != nil {
+		return nil, err
+	}
+	pkg.compiledGopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, parserutil.ParseFull, false, inputs.compiledGopFiles...)
+	if err != nil {
+		return nil, err
+	}
+	for _, pgf := range pkg.compiledGopFiles {
+		if pgf.ParseErr != nil {
+			pkg.parseErrors = append(pkg.parseErrors, pgf.ParseErr)
+		}
+	}
+
 	// Use the default type information for the unsafe package.
 	if inputs.pkgPath == "unsafe" {
 		// Don't type check Unsafe: it's unnecessary, and doing so exposes a data
@@ -1528,7 +1563,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs)
 		return pkg, nil
 	}
 
-	if len(pkg.compiledGoFiles) == 0 {
+	if len(pkg.compiledGoFiles) == 0 && len(pkg.compiledGopFiles) == 0 { // goxls: Go+
 		// No files most likely means go/packages failed.
 		//
 		// TODO(rfindley): in the past, we would capture go list errors in this
@@ -1542,7 +1577,9 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs)
 	}
 	cfg := b.typesConfig(ctx, inputs, onError)
 
-	check := types.NewChecker(cfg, pkg.fset, pkg.types, pkg.typesInfo)
+	// goxls: use Go+
+	// check := types.NewChecker(cfg, pkg.fset, pkg.types, pkg.typesInfo)
+	check := typesutil.NewChecker(cfg, pkg.fset, pkg.types, pkg.typesInfo, pkg.gopTypesInfo)
 
 	var files []*ast.File
 	for _, cgf := range pkg.compiledGoFiles {
@@ -1556,7 +1593,9 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs)
 	}
 
 	// Type checking errors are handled via the config, so ignore them here.
-	_ = check.Files(files) // 50us-15ms, depending on size of package
+	// goxls: use Go+
+	// _ = check.Files(files) // 50us-15ms, depending on size of package
+	_ = checkFiles(check, files, pkg.compiledGopFiles)
 
 	// If the context was cancelled, we may have returned a ton of transient
 	// errors to the type checker. Swallow them.

@@ -4,6 +4,12 @@
 
 package source
 
+import (
+	"context"
+
+	"golang.org/x/tools/gopls/internal/span"
+)
+
 /*
 import (
 	"go/types"
@@ -170,3 +176,13 @@ func UnquoteGopImportPath(s *ast.ImportSpec) ImportPath {
 	return ImportPath(path)
 }
 */
+
+// IsGopGenerated gets and reads the file denoted by uri and reports
+// whether it contains a "generated file" comment as described at
+// https://golang.org/s/generatedcode.
+//
+// TODO(adonovan): opt: this function does too much.
+// Move snapshot.ReadFile into the caller (most of which have already done it).
+func IsGopGenerated(ctx context.Context, snapshot Snapshot, uri span.URI) bool {
+	return false
+}

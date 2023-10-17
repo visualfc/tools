@@ -56,7 +56,8 @@ type View struct {
 	folder               span.URI // user-specified workspace folder
 	workspaceInformation          // Go environment information
 
-	importsState *importsState
+	importsState    *importsState
+	gopImportsState *gopImportsState // goxls: Go+
 
 	// moduleUpgrades tracks known upgrades for module paths in each modfile.
 	// Each modfile has a map of module name to upgrade version.
