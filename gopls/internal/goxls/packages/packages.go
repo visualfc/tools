@@ -11,7 +11,6 @@ import (
 	internal "golang.org/x/tools/internal/packagesinternal"
 
 	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 )
 
 // An Error describes a problem with a package's metadata, syntax, or types.
@@ -109,7 +108,7 @@ type Package struct {
 
 	// TypesInfo provides type information about the package's syntax trees.
 	// It is set only when Syntax is set.
-	GopTypesInfo *typesutil.Info
+	// GopTypesInfo *typesutil.Info
 }
 
 // Module provides module information for a package.
