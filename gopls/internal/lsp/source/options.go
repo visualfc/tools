@@ -105,6 +105,13 @@ func DefaultOptions() *Options {
 						protocol.RefactorRewrite:       true,
 						protocol.RefactorExtract:       true,
 					},
+					Gop: { // goxls: Go+
+						protocol.SourceFixAll:          true,
+						protocol.SourceOrganizeImports: true,
+						protocol.QuickFix:              true,
+						protocol.RefactorRewrite:       true,
+						protocol.RefactorExtract:       true,
+					},
 					Mod: {
 						protocol.SourceOrganizeImports: true,
 						protocol.QuickFix:              true,

@@ -5,11 +5,13 @@
 package packages
 
 import (
+	"path/filepath"
 	"sort"
 
 	"golang.org/x/tools/go/packages"
 	internal "golang.org/x/tools/internal/packagesinternal"
 
+	"golang.org/x/tools/gopls/internal/goxls/goputil"
 	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
 )
 
@@ -158,6 +160,13 @@ func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package) *Packag
 		return ret
 	}
 	ret := &Package{Package: *pkg, Imports: importPkgs(pkgMap, pkg.Imports)}
+	for _, file := range pkg.OtherFiles {
+		fext := filepath.Ext(file)
+		if goputil.FileKind(fext) != 0 {
+			ret.GopFiles = append(ret.GopFiles, file)
+			ret.CompiledGopFiles = append(ret.CompiledGopFiles, file) // goxls: todo (condition)
+		}
+	}
 	pkgMap[pkg] = ret
 	return ret
 }

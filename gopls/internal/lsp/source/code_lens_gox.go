@@ -11,7 +11,72 @@ import (
 	"strings"
 
 	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
+	"golang.org/x/tools/gopls/internal/lsp/command"
+	"golang.org/x/tools/gopls/internal/lsp/protocol"
 )
+
+// GopLensFuncs returns the supported lensFuncs for Go+ files.
+func GopLensFuncs() map[command.Command]LensFunc {
+	return map[command.Command]LensFunc{
+		command.Generate:  gopGenerateCodeLens,
+		command.Test:      gopRunTestCodeLens,
+		command.GCDetails: gopToggleDetailsCodeLens,
+	}
+}
+
+func gopRunTestCodeLens(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protocol.CodeLens, error) {
+	var codeLens []protocol.CodeLens
+
+	pkg, pgf, err := NarrowestPackageForGopFile(ctx, snapshot, fh.URI())
+	if err != nil {
+		return nil, err
+	}
+	fns, err := GopTestsAndBenchmarks(ctx, snapshot, pkg, pgf)
+	if err != nil {
+		return nil, err
+	}
+	puri := protocol.URIFromSpanURI(fh.URI())
+	for _, fn := range fns.Tests {
+		cmd, err := command.NewTestCommand("run test", puri, []string{fn.Name}, nil)
+		if err != nil {
+			return nil, err
+		}
+		rng := protocol.Range{Start: fn.Rng.Start, End: fn.Rng.Start}
+		codeLens = append(codeLens, protocol.CodeLens{Range: rng, Command: &cmd})
+	}
+
+	for _, fn := range fns.Benchmarks {
+		cmd, err := command.NewTestCommand("run benchmark", puri, nil, []string{fn.Name})
+		if err != nil {
+			return nil, err
+		}
+		rng := protocol.Range{Start: fn.Rng.Start, End: fn.Rng.Start}
+		codeLens = append(codeLens, protocol.CodeLens{Range: rng, Command: &cmd})
+	}
+
+	if len(fns.Benchmarks) > 0 {
+		pgf, err := snapshot.ParseGop(ctx, fh, parserutil.ParseFull)
+		if err != nil {
+			return nil, err
+		}
+		// add a code lens to the top of the file which runs all benchmarks in the file
+		rng, err := pgf.PosRange(pgf.File.Package, pgf.File.Package)
+		if err != nil {
+			return nil, err
+		}
+		var benches []string
+		for _, fn := range fns.Benchmarks {
+			benches = append(benches, fn.Name)
+		}
+		cmd, err := command.NewTestCommand("run file benchmarks", puri, nil, benches)
+		if err != nil {
+			return nil, err
+		}
+		codeLens = append(codeLens, protocol.CodeLens{Range: rng, Command: &cmd})
+	}
+	return codeLens, nil
+}
 
 func GopTestsAndBenchmarks(ctx context.Context, snapshot Snapshot, pkg Package, pgf *ParsedGopFile) (testFns, error) {
 	var out testFns
@@ -79,4 +144,29 @@ func gopMatchTestFunc(fn *ast.FuncDecl, pkg Package, nameRe *regexp.Regexp, para
 		return false
 	}
 	return namedObj.Id() == paramID
+}
+
+func gopGenerateCodeLens(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protocol.CodeLens, error) {
+	return nil, nil // goxls: todo
+}
+
+func gopToggleDetailsCodeLens(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protocol.CodeLens, error) {
+	pgf, err := snapshot.ParseGop(ctx, fh, parserutil.ParseFull)
+	if err != nil {
+		return nil, err
+	}
+	if !pgf.File.Package.IsValid() {
+		// Without a package name we have nowhere to put the codelens, so give up.
+		return nil, nil
+	}
+	rng, err := pgf.PosRange(pgf.File.Package, pgf.File.Package)
+	if err != nil {
+		return nil, err
+	}
+	puri := protocol.URIFromSpanURI(fh.URI())
+	cmd, err := command.NewGCDetailsCommand("Toggle gc annotation details", puri)
+	if err != nil {
+		return nil, err
+	}
+	return []protocol.CodeLens{{Range: rng, Command: &cmd}}, nil
 }

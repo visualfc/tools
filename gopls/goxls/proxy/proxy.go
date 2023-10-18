@@ -41,6 +41,10 @@ func Main(gopls, goxls string, args ...string) {
 		return os.Create(normal)
 	}
 
+	stderrf, err := createFile("gopls.log")
+	check(err)
+	defer stderrf.Close()
+
 	stdinf, err := createFile("gopls.in")
 	check(err)
 	defer stdinf.Close()
@@ -86,7 +90,7 @@ func Main(gopls, goxls string, args ...string) {
 	cmd := exec.CommandContext(ctx, gopls, args...)
 	cmd.Stdin = pr
 	cmd.Stdout = io.MultiWriter(os.Stdout, stdoutf)
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = stderrf
 	err = cmd.Run()
 	check(err)
 }

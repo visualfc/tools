@@ -22,7 +22,7 @@ import (
 //  - using modules and/or GOWORK inside of GOPATH?
 
 // Test for golang/go#53933
-func TestBrokenWorkspace_DuplicateModules(t *testing.T) { // goxls: todo
+func TestBrokenWorkspace_DuplicateModules(t *testing.T) {
 	// The go command error message was improved in Go 1.20 to mention multiple
 	// modules.
 	testenv.NeedsGo1Point(t, 20)

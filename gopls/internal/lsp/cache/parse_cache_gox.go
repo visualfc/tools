@@ -140,7 +140,7 @@ func (c *parseCache) startParseGop(mode parser.Mode, purgeFuncBodies bool, fhs .
 // requested parse mode.
 //
 // For parsed files that already exists in the cache, access time will be
-// updated. For others, parseFiles will parse and store as many results in the
+// updated. For others, parseGopFiles will parse and store as many results in the
 // cache as space allows.
 //
 // The token.File for each resulting parsed file will be added to the provided
