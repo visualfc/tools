@@ -10,6 +10,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"log"
 
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -169,6 +170,7 @@ func referencedObject(pkg Package, pgf *ParsedGoFile, pos token.Pos) (*ast.Ident
 				obj = typeName
 			}
 		}
+		log.Println("referencedObject:", n, obj)
 		return n, obj, nil
 	}
 	return nil, nil, nil

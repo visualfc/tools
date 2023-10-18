@@ -4,7 +4,6 @@
 
 package source
 
-/*
 import (
 	"go/types"
 
@@ -24,4 +23,3 @@ func GopImportedPkgName(info *typesutil.Info, imp *ast.ImportSpec) (*types.PkgNa
 	pkgname, ok := obj.(*types.PkgName)
 	return pkgname, ok
 }
-*/
