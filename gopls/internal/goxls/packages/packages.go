@@ -5,13 +5,20 @@
 package packages
 
 import (
+	"os"
+	"path"
+	"path/filepath"
 	"sort"
+	"strings"
+
+	"github.com/goplus/gop/parser"
+	"github.com/goplus/gop/token"
 
 	"golang.org/x/tools/go/packages"
 	internal "golang.org/x/tools/internal/packagesinternal"
 
+	"golang.org/x/tools/gopls/internal/goxls/goputil"
 	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 )
 
 // An Error describes a problem with a package's metadata, syntax, or types.
@@ -109,7 +116,7 @@ type Package struct {
 
 	// TypesInfo provides type information about the package's syntax trees.
 	// It is set only when Syntax is set.
-	GopTypesInfo *typesutil.Info
+	// GopTypesInfo *typesutil.Info
 }
 
 // Module provides module information for a package.
@@ -130,7 +137,7 @@ type Module = packages.Module
 // proceeding with further analysis. The PrintErrors function is
 // provided for convenient display of all errors.
 func Load(cfg *Config, patterns ...string) ([]*Package, error) {
-	GenGo(patterns...)
+	patterns, _ = GenGo(patterns...)
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
 		return nil, err
@@ -159,8 +166,38 @@ func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package) *Packag
 		return ret
 	}
 	ret := &Package{Package: *pkg, Imports: importPkgs(pkgMap, pkg.Imports)}
+	for _, file := range pkg.CompiledGoFiles {
+		dir, fname := filepath.Split(file)
+		if strings.HasPrefix(fname, "gop_autogen") { // has Go+ files
+			addGopFiles(ret, dir)
+			break
+		}
+	}
 	pkgMap[pkg] = ret
 	return ret
+}
+
+func addGopFiles(ret *Package, dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	fset := token.NewFileSet()
+	pkgName := ret.Name
+	for _, e := range entries {
+		fname := e.Name()
+		fext := path.Ext(fname)
+		if goputil.FileKind(fext) == 0 {
+			continue
+		}
+		file := dir + fname
+		f, err := parser.ParseFile(fset, file, nil, parser.PackageClauseOnly)
+		if err == nil && pkgName == f.Name.Name {
+			ret.GopFiles = append(ret.GopFiles, file)
+			ret.CompiledGopFiles = append(ret.CompiledGopFiles, file)
+			// goxls: todo - condition
+		}
+	}
 }
 
 // Visit visits all the packages in the import graph whose roots are

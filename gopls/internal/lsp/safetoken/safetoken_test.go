@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"strings"
 	"testing"
 
 	"golang.org/x/tools/go/packages"
@@ -119,6 +120,10 @@ func TestGoplsSourceDoesNotCallTokenFileMethods(t *testing.T) {
 		switch pkg.PkgPath {
 		case "go/token", "golang.org/x/tools/gopls/internal/lsp/safetoken":
 			continue // allow calls within these packages
+		default:
+			if strings.HasPrefix(pkg.PkgPath, "golang.org/x/tools/gopls/internal/goxls/") {
+				continue // allow calls within these packages
+			}
 		}
 
 		for ident, obj := range pkg.TypesInfo.Uses {

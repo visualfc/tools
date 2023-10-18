@@ -56,7 +56,8 @@ type View struct {
 	folder               span.URI // user-specified workspace folder
 	workspaceInformation          // Go environment information
 
-	importsState *importsState
+	importsState    *importsState
+	gopImportsState *gopImportsState // goxls: Go+
 
 	// moduleUpgrades tracks known upgrades for module paths in each modfile.
 	// Each modfile has a map of module name to upgrade version.
@@ -430,6 +431,10 @@ func (v *View) FileKind(fh source.FileHandle) source.FileKind {
 		return source.Sum
 	case ".work":
 		return source.Work
+	default:
+		if checkGopFile(fh, fext) { // goxls: check Go+ file
+			return source.Gop
+		}
 	}
 	exts := v.Options().TemplateExtensions
 	for _, ext := range exts {

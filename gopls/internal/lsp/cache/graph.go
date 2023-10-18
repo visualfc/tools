@@ -82,6 +82,10 @@ func newMetadataGraph(metadata map[PackageID]*source.Metadata) *metadataGraph {
 		for _, uri := range m.GoFiles {
 			uris[uri] = struct{}{}
 		}
+		// goxls: Go+ files
+		for _, uri := range m.GopFiles {
+			uris[uri] = struct{}{}
+		}
 		for uri := range uris {
 			uriIDs[uri] = append(uriIDs[uri], id)
 		}

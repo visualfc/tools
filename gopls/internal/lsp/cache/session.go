@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	goximports "golang.org/x/tools/gopls/internal/goxls/imports"
+
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/govulncheck"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -148,6 +150,23 @@ func (s *Session) createView(ctx context.Context, name string, folder span.URI, 
 	v.importsState = &importsState{
 		ctx: backgroundCtx,
 		processEnv: &imports.ProcessEnv{
+			GocmdRunner: s.gocmdRunner,
+			SkipPathInScan: func(dir string) bool {
+				prefix := strings.TrimSuffix(string(v.folder), "/") + "/"
+				uri := strings.TrimSuffix(string(span.URIFromPath(dir)), "/")
+				if !strings.HasPrefix(uri+"/", prefix) {
+					return false
+				}
+				filterer := source.NewFilterer(options.DirectoryFilters)
+				rel := strings.TrimPrefix(uri, prefix)
+				disallow := filterer.Disallow(rel)
+				return disallow
+			},
+		},
+	}
+	v.gopImportsState = &gopImportsState{ // goxls: Go+
+		ctx: backgroundCtx,
+		processEnv: &goximports.ProcessEnv{
 			GocmdRunner: s.gocmdRunner,
 			SkipPathInScan: func(dir string) bool {
 				prefix := strings.TrimSuffix(string(v.folder), "/") + "/"

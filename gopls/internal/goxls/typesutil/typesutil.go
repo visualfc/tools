@@ -120,7 +120,7 @@ type Info struct {
 	// initialization dependency appear in topological order, the others appear
 	// in source order. Variables without an initialization expression do not
 	// appear in this list.
-	InitOrder []*Initializer
+	// InitOrder []*Initializer
 }
 
 // ObjectOf returns the object denoted by the specified id,
