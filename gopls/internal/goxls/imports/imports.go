@@ -65,7 +65,7 @@ func Process(filename string, src []byte, opt *Options) (formatted []byte, err e
 // Note that filename's directory influences which imports can be chosen,
 // so it is important that filename be accurate.
 func FixImports(ctx context.Context, filename string, src []byte, opt *Options) (fixes []*ImportFix, err error) {
-	ctx, done := event.Start(ctx, "imports.FixImports")
+	ctx, done := event.Start(ctx, "goximports.FixImports")
 	defer done()
 
 	fileSet := token.NewFileSet()

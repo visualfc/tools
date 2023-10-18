@@ -32,5 +32,6 @@ func (p *Checker) Files(goFiles []*goast.File, gopFiles []*ast.File) error {
 	if len(gopFiles) == 0 {
 		return p.c.Files(goFiles)
 	}
-	panic("todo")
+	// goxls: todo
+	return nil
 }

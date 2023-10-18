@@ -7,6 +7,7 @@ package lsp
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/goplus/gop/ast"
 	"golang.org/x/tools/gopls/internal/bug"
@@ -28,6 +29,11 @@ func (s *Server) gopCodeAction(
 	uri span.URI, snapshot source.Snapshot, fh source.FileHandle,
 	want map[protocol.CodeActionKind]bool) ([]protocol.CodeAction, error) {
 	diagnostics := params.Context.Diagnostics
+
+	log.Println(
+		"gopCodeAction:", uri.Filename(), "diagnostics:", len(diagnostics),
+		"refactorRewrite:", want[protocol.RefactorRewrite], "orgImports:", want[protocol.SourceOrganizeImports], "goTest:", want[protocol.GoTest])
+	defer log.Println("gopCodeAction end:", uri.Filename())
 
 	// Don't suggest fixes for generated files, since they are generally
 	// not useful and some editors may apply them automatically on save.

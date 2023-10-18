@@ -8,8 +8,13 @@ import (
 	"context"
 
 	"golang.org/x/tools/gopls/internal/goxls/imports"
+	"golang.org/x/tools/gopls/internal/span"
 )
 
 func (s *snapshot) GopRunProcessEnvFunc(ctx context.Context, fn func(context.Context, *imports.Options) error) error {
 	return s.view.gopImportsState.runProcessEnvFunc(ctx, s, fn)
+}
+
+func gopAllFilesExcluded(goFiles, gopFiles []string, filterFunc func(span.URI) bool) bool {
+	return allFilesExcluded(goFiles, filterFunc) && allFilesExcluded(gopFiles, filterFunc)
 }

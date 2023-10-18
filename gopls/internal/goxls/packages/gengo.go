@@ -5,45 +5,25 @@
 package packages
 
 import (
-	"bytes"
 	"log"
-	"os"
-	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/goplus/gop"
+	"github.com/goplus/gop/env"
 	"github.com/goplus/gop/x/gopprojs"
 )
 
 var (
-	gopInstalled bool
+	gopInstalled = env.Installed()
 )
 
-const (
-	debugGop = false
-)
-
-func init() {
-	go initGop()
-}
-
-func initGop() {
-	var b bytes.Buffer
-	cmd := exec.Command("gop", "env", "GOPROOT")
-	cmd.Stdout = &b
-	err := cmd.Run()
-	if gopRoot := b.String(); err == nil && gopRoot != "" {
-		os.Setenv("GOPROOT", strings.TrimRight(gopRoot, "\n\r"))
-		gopInstalled = true
-	} else if debugGop {
-		log.Panicln("FATAL: gop not installed")
-	}
-}
-
-func GenGo(pattern ...string) (err error) {
+func GenGo(patternIn ...string) (patternOut []string, err error) {
 	if !gopInstalled {
-		return nil
+		return patternIn, nil
 	}
+	pattern, patternOut := buildPattern(patternIn)
+	log.Println("GenGo:", pattern, "in:", patternIn, "out:", patternOut)
 	projs, err := gopprojs.ParseAll(pattern...)
 	if err != nil {
 		return
@@ -58,6 +38,42 @@ func GenGo(pattern ...string) (err error) {
 			}
 			_, _, err = gop.GenGoPkgPathEx("", v.Path, nil, true, 0)
 		}
+	}
+	return
+}
+
+type none = struct{}
+
+func buildPattern(pattern []string) (gopPattern []string, allPattern []string) {
+	const filePrefix = "file="
+	gopPattern = make([]string, 0, len(pattern))
+	allPattern = make([]string, 0, len(pattern))
+	dirs := make(map[string]none)
+	for _, v := range pattern {
+		if strings.HasPrefix(v, filePrefix) {
+			file := v[len(filePrefix):]
+			dir := filepath.Dir(file)
+			if strings.HasSuffix(file, ".go") { // skip go file
+				allPattern = append(allPattern, v)
+			} else {
+				dirs[dir] = none{}
+			}
+			continue
+		}
+		allPattern = append(allPattern, v)
+		if pos := strings.Index(v, "/"); pos >= 0 {
+			if pos > 0 {
+				domain := v[:pos]
+				if !strings.Contains(domain, ".") || domain == "golang.org" { // std or golang.org
+					continue
+				}
+			}
+			gopPattern = append(gopPattern, v)
+		}
+	}
+	for dir := range dirs {
+		gopPattern = append(gopPattern, dir)
+		allPattern = append(allPattern, dir)
 	}
 	return
 }

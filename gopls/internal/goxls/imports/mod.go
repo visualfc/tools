@@ -429,7 +429,7 @@ func (r *ModuleResolver) loadPackageNames(importPaths []string, srcDir string) (
 }
 
 func (r *ModuleResolver) scan(ctx context.Context, callback *scanCallback) error {
-	ctx, done := event.Start(ctx, "imports.ModuleResolver.scan")
+	ctx, done := event.Start(ctx, "goximports.ModuleResolver.scan")
 	defer done()
 
 	if err := r.init(); err != nil {

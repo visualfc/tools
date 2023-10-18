@@ -67,15 +67,16 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 				panic(fmt.Sprintf("internal error: load called with multiple scopes when a file scope is present (file: %s)", uri))
 			}
 			fh := s.FindFile(uri)
-			if fh == nil || s.View().FileKind(fh) != source.Go {
-				// Don't try to load a file that doesn't exist, or isn't a go file.
+			kind := s.View().FileKind(fh)
+			if fh == nil || fileNotSource(kind) { // goxls: Go+
+				// Don't try to load a file that doesn't exist, or isn't a go/gop file.
 				continue
 			}
 			contents, err := fh.Content()
 			if err != nil {
 				continue
 			}
-			if isStandaloneFile(contents, s.view.Options().StandaloneTags) {
+			if isStandaloneFileEx(kind, contents, s.view.Options().StandaloneTags) { // goxls: Go+
 				standalone = true
 				query = append(query, uri.Filename())
 			} else {
@@ -182,12 +183,15 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 			event.Log(ctx, eventName, append(
 				source.SnapshotLabels(s),
 				tag.Package.Of(pkg.ID),
-				tag.Files.Of(pkg.CompiledGoFiles))...)
+				tag.Files.Of(pkg.CompiledGoFiles),
+				tag.Files.Of(pkg.CompiledGopFiles))...) // goxls: Go+
 		}
 
 		// Ignore packages with no sources, since we will never be able to
 		// correctly invalidate that metadata.
-		if len(pkg.GoFiles) == 0 && len(pkg.CompiledGoFiles) == 0 {
+		// goxls: Go+ files
+		// if len(pkg.GoFiles) == 0 && len(pkg.CompiledGoFiles) == 0 {
+		if len(pkg.GoFiles) == 0 && len(pkg.GopFiles) == 0 {
 			continue
 		}
 		// Special case for the builtin package, as it has no dependencies.
@@ -208,7 +212,9 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 		// TODO(rfindley): why exclude metadata arbitrarily here? It should be safe
 		// to capture all metadata.
 		// TODO(rfindley): what about compiled go files?
-		if allFilesExcluded(pkg.GoFiles, filterFunc) {
+		// goxls: Go+ files
+		// if allFilesExcluded(pkg.GoFiles, filterFunc) {
+		if gopAllFilesExcluded(pkg.GoFiles, pkg.GopFiles, filterFunc) {
 			continue
 		}
 		buildMetadata(newMetadata, pkg, cfg.Dir, standalone)
@@ -233,6 +239,13 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 		if existing := s.meta.metadata[m.ID]; existing == nil {
 			// Record any new files we should pre-load.
 			for _, uri := range m.CompiledGoFiles {
+				if !seenFiles[uri] {
+					seenFiles[uri] = true
+					files = append(files, uri)
+				}
+			}
+			// goxls: Go+
+			for _, uri := range m.CompiledGopFiles {
 				if !seenFiles[uri] {
 					seenFiles[uri] = true
 					files = append(files, uri)
@@ -395,11 +408,15 @@ func buildMetadata(updates map[PackageID]*source.Metadata, pkg *packages.Package
 	id := PackageID(pkg.ID)
 
 	if source.IsCommandLineArguments(id) {
-		if len(pkg.CompiledGoFiles) != 1 {
-			bug.Reportf("unexpected files in command-line-arguments package: %v", pkg.CompiledGoFiles)
+		// goxls: Go+
+		// if len(pkg.CompiledGoFiles) != 1 {
+		if len(pkg.CompiledGoFiles)+len(pkg.CompiledGopFiles) != 1 {
+			bug.Reportf("unexpected files in command-line-arguments package: %v, %v", pkg.CompiledGoFiles, pkg.CompiledGopFiles)
 			return
 		}
-		suffix := pkg.CompiledGoFiles[0]
+		// goxls: Go+ packageIDSuffix
+		// suffix := pkg.CompiledGoFiles[0]
+		suffix := packageIDSuffix(pkg)
 		id = PackageID(pkg.ID + suffix)
 		pkgPath = PackagePath(pkg.PkgPath + suffix)
 	}

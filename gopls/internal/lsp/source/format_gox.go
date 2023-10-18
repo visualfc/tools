@@ -120,14 +120,14 @@ func isClass(fh FileHandle) bool {
 // it returns a list of fixes that could be applied to the file, with the
 // corresponding TextEdits that would be needed to apply that fix.
 func GopAllImportsFixes(ctx context.Context, snapshot Snapshot, pgf *ParsedGopFile) (allFixEdits []protocol.TextEdit, editsPerFix []*ImportFix, err error) {
-	ctx, done := event.Start(ctx, "source.AllImportsFixes")
+	ctx, done := event.Start(ctx, "source.GopAllImportsFixes")
 	defer done()
 
 	if err := snapshot.GopRunProcessEnvFunc(ctx, func(ctx context.Context, opts *imports.Options) error {
 		allFixEdits, editsPerFix, err = gopComputeImportEdits(ctx, snapshot, pgf, opts)
 		return err
 	}); err != nil {
-		return nil, nil, fmt.Errorf("AllImportsFixes: %v", err)
+		return nil, nil, fmt.Errorf("GopAllImportsFixes: %v", err)
 	}
 	return allFixEdits, editsPerFix, nil
 }

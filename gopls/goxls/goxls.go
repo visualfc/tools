@@ -7,6 +7,7 @@ package goxls
 import (
 	"context"
 	"os"
+	"sync"
 
 	"golang.org/x/tools/gopls/internal/hooks"
 	"golang.org/x/tools/gopls/internal/lsp/cmd"
@@ -20,7 +21,10 @@ import (
 func Main() {
 	ctx := context.Background()
 	var printer export.Printer
+	var mutex sync.Mutex
 	event.SetExporter(func(ctx context.Context, e core.Event, m label.Map) context.Context {
+		mutex.Lock()
+		defer mutex.Unlock()
 		printer.WriteEvent(os.Stderr, e, m)
 		return ctx
 	})
