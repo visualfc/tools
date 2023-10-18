@@ -184,7 +184,9 @@ func gopComputeFixEdits(snapshot Snapshot, pgf *ParsedGopFile, options *imports.
 	if err != nil {
 		return nil, err
 	}
-	extra := !strings.Contains(left, "\n") // one line may have more than imports
+	// goxls: left maybe empty in Go+
+	// extra := !strings.Contains(left, "\n") // one line may have more than imports
+	extra := (left != "") && !strings.Contains(left, "\n")
 	if extra {
 		left = string(pgf.Src)
 	}
@@ -264,8 +266,10 @@ func gopImportPrefix(src []byte) (string, error) {
 		return offset
 	}
 	if importEnd == 0 {
-		pkgEnd := f.Name.End()
-		importEnd = maybeAdjustToLineEnd(pkgEnd, false)
+		if f.Package != token.NoPos { // goxls: Go+ may no `package xxx`
+			pkgEnd := f.Name.End()
+			importEnd = maybeAdjustToLineEnd(pkgEnd, false)
+		}
 	}
 	for _, cgroup := range f.Comments {
 		for _, c := range cgroup.List {

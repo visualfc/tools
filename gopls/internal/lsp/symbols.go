@@ -29,6 +29,8 @@ func (s *Server) documentSymbol(ctx context.Context, params *protocol.DocumentSy
 		docSymbols, err = template.DocumentSymbols(snapshot, fh)
 	case source.Go:
 		docSymbols, err = source.DocumentSymbols(ctx, snapshot, fh)
+	case source.Gop:
+		docSymbols, err = source.GopDocumentSymbols(ctx, snapshot, fh)
 	default:
 		return []interface{}{}, nil
 	}

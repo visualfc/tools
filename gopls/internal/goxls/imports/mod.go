@@ -296,10 +296,6 @@ func (r *ModuleResolver) cacheStore(info directoryPackageInfo) {
 	}
 }
 
-func (r *ModuleResolver) cacheKeys() []string {
-	return append(r.moduleCacheCache.Keys(), r.otherCache.Keys()...)
-}
-
 // cachePackageName caches the package name for a dir already in the cache.
 func (r *ModuleResolver) cachePackageName(info directoryPackageInfo) (string, error) {
 	if info.rootType == gopathwalk.RootModuleCache {

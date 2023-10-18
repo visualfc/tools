@@ -7,6 +7,8 @@ package source
 import (
 	"context"
 
+	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/gopls/internal/goxls/typeparams"
 	"golang.org/x/tools/gopls/internal/span"
 )
 
@@ -185,4 +187,30 @@ func UnquoteGopImportPath(s *ast.ImportSpec) ImportPath {
 // Move snapshot.ReadFile into the caller (most of which have already done it).
 func IsGopGenerated(ctx context.Context, snapshot Snapshot, uri span.URI) bool {
 	return false
+}
+
+// gopEmbeddedIdent returns the type name identifier for an embedding x, if x in a
+// valid embedding. Otherwise, it returns nil.
+//
+// Spec: An embedded field must be specified as a type name T or as a pointer
+// to a non-interface type name *T
+func gopEmbeddedIdent(x ast.Expr) *ast.Ident {
+	if star, ok := x.(*ast.StarExpr); ok {
+		x = star.X
+	}
+	switch ix := x.(type) { // check for instantiated receivers
+	case *ast.IndexExpr:
+		x = ix.X
+	case *typeparams.IndexListExpr:
+		x = ix.X
+	}
+	switch x := x.(type) {
+	case *ast.Ident:
+		return x
+	case *ast.SelectorExpr:
+		if _, ok := x.X.(*ast.Ident); ok {
+			return x.Sel
+		}
+	}
+	return nil
 }
