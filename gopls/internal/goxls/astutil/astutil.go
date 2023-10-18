@@ -295,9 +295,11 @@ func childrenOf(n ast.Node) []ast.Node {
 			tok(n.Closing, len(")"))) // or len("]")
 
 	case *ast.File:
-		// TODO test: Doc
-		children = append(children,
-			tok(n.Package, len("package")))
+		if n.Package != token.NoPos { // goxls: Go+ maybe no `package xxx`
+			// TODO test: Doc
+			children = append(children,
+				tok(n.Package, len("package")))
+		}
 
 	case *ast.ForStmt:
 		children = append(children,

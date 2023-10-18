@@ -6,23 +6,16 @@ package source
 
 import (
 	"context"
+	"go/types"
+	"strconv"
 
 	"github.com/goplus/gop/ast"
 	"golang.org/x/tools/gopls/internal/goxls/typeparams"
+	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/span"
 )
 
 /*
-import (
-	"go/types"
-	"strconv"
-	"strings"
-
-	"github.com/goplus/gop/ast"
-	"github.com/goplus/gop/token"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
-)
-
 // GopCollectScopes returns all scopes in an ast path, ordered as innermost scope
 // first.
 func GopCollectScopes(info *typesutil.Info, path []ast.Node, pos token.Pos) []*types.Scope {
@@ -43,31 +36,6 @@ func GopCollectScopes(info *typesutil.Info, path []ast.Node, pos token.Pos) []*t
 		scopes = append(scopes, info.Scopes[n])
 	}
 	return scopes
-}
-
-// GopQualifier returns a function that appropriately formats a types.PkgName
-// appearing in a *ast.File.
-func GopQualifier(f *ast.File, pkg *types.Package, info *typesutil.Info) types.Qualifier {
-	// Construct mapping of import paths to their defined or implicit names.
-	imports := make(map[*types.Package]string)
-	for _, imp := range f.Imports {
-		if pkgname, ok := GopImportedPkgName(info, imp); ok {
-			imports[pkgname.Imported()] = pkgname.Name()
-		}
-	}
-	// Define qualifier to replace full package paths with names of the imports.
-	return func(p *types.Package) string {
-		if p == pkg {
-			return ""
-		}
-		if name, ok := imports[p]; ok {
-			if name == "." {
-				return ""
-			}
-			return name
-		}
-		return p.Name()
-	}
 }
 
 // MetadataQualifierForGopFile returns a metadata qualifier that chooses the best
@@ -167,16 +135,6 @@ func gopImportInfo(s MetadataSource, imp *ast.ImportSpec, m *Metadata) (string, 
 	}
 	return name, pkgName, impPath, pkgPath
 }
-
-// UnquoteImportPath returns the unquoted import path of s,
-// or "" if the path is not properly quoted.
-func UnquoteGopImportPath(s *ast.ImportSpec) ImportPath {
-	path, err := strconv.Unquote(s.Path.Value)
-	if err != nil {
-		return ""
-	}
-	return ImportPath(path)
-}
 */
 
 // IsGopGenerated gets and reads the file denoted by uri and reports
@@ -187,6 +145,41 @@ func UnquoteGopImportPath(s *ast.ImportSpec) ImportPath {
 // Move snapshot.ReadFile into the caller (most of which have already done it).
 func IsGopGenerated(ctx context.Context, snapshot Snapshot, uri span.URI) bool {
 	return false
+}
+
+// GopUnquoteImportPath returns the unquoted import path of s,
+// or "" if the path is not properly quoted.
+func GopUnquoteImportPath(s *ast.ImportSpec) ImportPath {
+	path, err := strconv.Unquote(s.Path.Value)
+	if err != nil {
+		return ""
+	}
+	return ImportPath(path)
+}
+
+// GopQualifier returns a function that appropriately formats a types.PkgName
+// appearing in a *ast.File.
+func GopQualifier(f *ast.File, pkg *types.Package, info *typesutil.Info) types.Qualifier {
+	// Construct mapping of import paths to their defined or implicit names.
+	imports := make(map[*types.Package]string)
+	for _, imp := range f.Imports {
+		if pkgname, ok := GopImportedPkgName(info, imp); ok {
+			imports[pkgname.Imported()] = pkgname.Name()
+		}
+	}
+	// Define qualifier to replace full package paths with names of the imports.
+	return func(p *types.Package) string {
+		if p == pkg {
+			return ""
+		}
+		if name, ok := imports[p]; ok {
+			if name == "." {
+				return ""
+			}
+			return name
+		}
+		return p.Name()
+	}
 }
 
 // gopEmbeddedIdent returns the type name identifier for an embedding x, if x in a
