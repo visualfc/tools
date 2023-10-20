@@ -31,6 +31,8 @@ func (s *Server) formatting(ctx context.Context, params *protocol.DocumentFormat
 		return source.Format(ctx, snapshot, fh)
 	case source.Work:
 		return work.Format(ctx, snapshot, fh)
+	case source.Gop: // goxls: format Go+ files
+		return source.FormatGop(ctx, snapshot, fh)
 	}
 	return nil, nil
 }
