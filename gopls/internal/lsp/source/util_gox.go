@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/goxls/typeparams"
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/span"
@@ -145,6 +146,38 @@ func gopImportInfo(s MetadataSource, imp *ast.ImportSpec, m *Metadata) (string, 
 // Move snapshot.ReadFile into the caller (most of which have already done it).
 func IsGopGenerated(ctx context.Context, snapshot Snapshot, uri span.URI) bool {
 	return false
+}
+
+// gopFindFileInDeps finds package metadata containing URI in the transitive
+// dependencies of m. When using the Gop command, the answer is unique.
+//
+// TODO(rfindley): refactor to share logic with findPackageInDeps?
+func gopFindFileInDeps(s MetadataSource, m *Metadata, uri span.URI) *Metadata {
+	seen := make(map[PackageID]bool)
+	var search func(*Metadata) *Metadata
+	search = func(m *Metadata) *Metadata {
+		if seen[m.ID] {
+			return nil
+		}
+		seen[m.ID] = true
+		for _, cgf := range m.CompiledGopFiles {
+			if cgf == uri {
+				return m
+			}
+		}
+		for _, dep := range m.DepsByPkgPath {
+			m := s.Metadata(dep)
+			if m == nil {
+				bug.Reportf("nil metadata for %q", dep)
+				continue
+			}
+			if found := search(m); found != nil {
+				return found
+			}
+		}
+		return nil
+	}
+	return search(m)
 }
 
 // GopUnquoteImportPath returns the unquoted import path of s,

@@ -39,6 +39,8 @@ func gopReferencedObject(pkg Package, pgf *ParsedGopFile, pos token.Pos) (*ast.I
 	switch n := path[0].(type) {
 	case *ast.Ident:
 		obj = info.ObjectOf(n)
+		log.Println("gop info.ObjectOf:", n, obj)
+
 		// If n is the var's declaring ident in a type switch
 		// [i.e. the x in x := foo.(type)], it will not have an object. In this
 		// case, set obj to the first implicit object (if any), and return the type

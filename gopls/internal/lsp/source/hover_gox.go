@@ -218,7 +218,7 @@ func gopHover(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol
 		linkMeta *Metadata // metadata for the linked package
 	)
 	{
-		linkMeta = findFileInDeps(snapshot, pkg.Metadata(), declPGF.URI)
+		linkMeta = gopFindFileInDeps(snapshot, pkg.Metadata(), declPGF.URI)
 		if linkMeta == nil {
 			return protocol.Range{}, nil, bug.Errorf("no metadata for %s", declPGF.URI)
 		}

@@ -6,6 +6,7 @@ package source
 
 import (
 	"go/types"
+	"log"
 
 	"github.com/goplus/gop/ast"
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
@@ -52,6 +53,8 @@ func gopSearchForEnclosing(info *typesutil.Info, path []ast.Node) *types.TypeNam
 // correspond to the leaf *ast.Ident. It also returns the original type
 // associated with the identifier (outside of a case clause).
 func gopTypeSwitchImplicits(info *typesutil.Info, path []ast.Node) ([]types.Object, types.Type) {
+	log.Println("gopTypeSwitchImplicits: len(path) =", len(path))
+
 	ident, _ := path[0].(*ast.Ident)
 	if ident == nil {
 		return nil, nil
