@@ -166,10 +166,10 @@ func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package) *Packag
 		return ret
 	}
 	ret := &Package{Package: *pkg, Imports: importPkgs(pkgMap, pkg.Imports)}
-	for _, file := range pkg.CompiledGoFiles {
+	for i, file := range pkg.CompiledGoFiles {
 		dir, fname := filepath.Split(file)
 		if strings.HasPrefix(fname, "gop_autogen") { // has Go+ files
-			addGopFiles(ret, dir)
+			addGopFiles(ret, dir, isGoTestFile(fname) || hasGoTestFile(pkg.CompiledGoFiles[i+1:]))
 			break
 		}
 	}
@@ -177,7 +177,21 @@ func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package) *Packag
 	return ret
 }
 
-func addGopFiles(ret *Package, dir string) {
+func hasGoTestFile(goFiles []string) bool {
+	for _, file := range goFiles {
+		fname := filepath.Base(file)
+		if isGoTestFile(fname) {
+			return true
+		}
+	}
+	return false
+}
+
+func isGoTestFile(fname string) bool {
+	return strings.HasSuffix(fname, "_test.go")
+}
+
+func addGopFiles(ret *Package, dir string, test bool) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -186,8 +200,14 @@ func addGopFiles(ret *Package, dir string) {
 	pkgName := ret.Name
 	for _, e := range entries {
 		fname := e.Name()
+		if strings.HasPrefix(fname, "_") {
+			continue
+		}
 		fext := path.Ext(fname)
 		if goputil.FileKind(fext) == 0 {
+			continue
+		}
+		if !test && strings.HasSuffix(fname[:len(fname)-len(fext)], "_test") {
 			continue
 		}
 		file := dir + fname
