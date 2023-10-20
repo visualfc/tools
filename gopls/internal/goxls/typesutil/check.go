@@ -44,3 +44,7 @@ func NewChecker(conf *types.Config, opts *Config, goInfo *types.Info, gopInfo *I
 	}
 	return typesutil.NewChecker(conf, chkOpts, goInfo, gopInfo)
 }
+
+func init() {
+	typesutil.SetDebug(typesutil.DbgFlagDefault)
+}
