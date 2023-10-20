@@ -7,11 +7,14 @@ package source
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
+	"github.com/goplus/mod/gopmod"
+	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/span"
@@ -73,6 +76,31 @@ func (pgf *ParsedGopFile) RangePos(r protocol.Range) (token.Pos, token.Pos, erro
 // PosRange returns a protocol Range for the token.Pos interval in this file.
 func (pgf *ParsedGopFile) PosRange(start, end token.Pos) (protocol.Range, error) {
 	return pgf.Mapper.PosRange(pgf.Tok, start, end)
+}
+
+func (m *Metadata) GopMod_() *gopmod.Module {
+	mod := m.gopMod_
+	if mod == nil {
+		mod = loadGopMod(m.Module)
+	}
+	return mod
+}
+
+func loadGopMod(mod *packages.Module) *gopmod.Module {
+	if mod != nil {
+		if r := mod.Replace; r != nil {
+			mod = r
+		}
+		if gomod := mod.GoMod; gomod != "" {
+			if dir, file := filepath.Split(gomod); file == "go.mod" {
+				if ret, err := gopmod.Load(dir, 0); err == nil {
+					ret.ImportClasses()
+					return ret
+				}
+			}
+		}
+	}
+	return gopmod.Default
 }
 
 // NarrowestPackageForGopFile is a convenience function that selects the

@@ -673,7 +673,9 @@ func (b *typeCheckBatch) checkPackage(ctx context.Context, ph *packageHandle) (*
 	// TODO(rfindley): refactor to inline typeCheckImpl here. There is no need
 	// for so many layers to build up the package
 	// (checkPackage->typeCheckImpl->doTypeCheck).
-	pkg, err := typeCheckImpl(ctx, b, ph.localInputs)
+	// goxls: pass metadata to Go+ checker
+	// pkg, err := typeCheckImpl(ctx, b, ph.localInputs)
+	pkg, err := typeCheckImpl(ctx, b, ph)
 
 	if err == nil {
 		// Write package data to disk asynchronously.
@@ -1432,11 +1434,14 @@ func localPackageKey(inputs typeCheckInputs) source.Hash {
 // typeCheckImpl type checks the parsed source files in compiledGoFiles.
 // (The resulting pkg also holds the parsed but not type-checked goFiles.)
 // deps holds the future results of type-checking the direct dependencies.
-func typeCheckImpl(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs) (*syntaxPackage, error) {
+// goxls: pass metadata to Go+ checker
+// func typeCheckImpl(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs) (*syntaxPackage, error) {
+func typeCheckImpl(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*syntaxPackage, error) {
+	inputs := ph.localInputs
 	ctx, done := event.Start(ctx, "cache.typeCheck", tag.Package.Of(string(inputs.id)))
 	defer done()
 
-	pkg, err := doTypeCheck(ctx, b, inputs)
+	pkg, err := doTypeCheck(ctx, b, ph)
 	if err != nil {
 		return nil, err
 	}
@@ -1506,7 +1511,10 @@ func typeCheckImpl(ctx context.Context, b *typeCheckBatch, inputs typeCheckInput
 
 var goVersionRx = regexp.MustCompile(`^go([1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
-func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs) (*syntaxPackage, error) {
+// goxls: pass metadata to Go+ checker
+// func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs) (*syntaxPackage, error) {
+func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*syntaxPackage, error) {
+	inputs := ph.localInputs
 	pkg := &syntaxPackage{
 		id:    inputs.id,
 		fset:  b.fset, // must match parse call below
@@ -1579,7 +1587,8 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, inputs typeCheckInputs)
 
 	// goxls: use Go+
 	// check := types.NewChecker(cfg, pkg.fset, pkg.types, pkg.typesInfo)
-	check := typesutil.NewChecker(cfg, pkg.fset, pkg.types, pkg.typesInfo, pkg.gopTypesInfo)
+	opts := &typesutil.Config{Types: pkg.types, Fset: pkg.fset, Mod: ph.m.GopMod_()}
+	check := typesutil.NewChecker(cfg, opts, pkg.typesInfo, pkg.gopTypesInfo)
 
 	var files []*ast.File
 	for _, cgf := range pkg.compiledGoFiles {

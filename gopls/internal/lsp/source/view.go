@@ -19,6 +19,7 @@ import (
 	"io"
 
 	goxparser "github.com/goplus/gop/parser"
+	"github.com/goplus/mod/gopmod"
 	goximports "golang.org/x/tools/gopls/internal/goxls/imports"
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 
@@ -563,6 +564,7 @@ type Metadata struct {
 	// goxls: Go+ files
 	GopFiles         []span.URI
 	CompiledGopFiles []span.URI
+	gopMod_          *gopmod.Module // see GopMod_()
 
 	ForTest       PackagePath // q in a "p [q.test]" package, else ""
 	TypesSizes    types.Sizes
