@@ -110,6 +110,10 @@ func parseOtherFiles(fset *token.FileSet, srcDir, filename string) []*ast.File {
 		if !considerTests && strings.HasSuffix(fi.Name(), "_test.go") {
 			continue
 		}
+		// goxls: skip gop_autogen.go
+		if fi.Name() == "gop_autogen.go" {
+			continue
+		}
 
 		f, err := parser.ParseFile(fset, filepath.Join(srcDir, fi.Name()), nil, 0)
 		if err != nil {
