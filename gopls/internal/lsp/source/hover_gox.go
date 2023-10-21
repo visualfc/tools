@@ -20,6 +20,7 @@ import (
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/format"
 	"github.com/goplus/gop/token"
+	"github.com/goplus/gox"
 	"golang.org/x/text/unicode/runenames"
 	"golang.org/x/tools/go/types/typeutil"
 	"golang.org/x/tools/gopls/internal/bug"
@@ -530,6 +531,10 @@ func gopHoverLit(pgf *ParsedGopFile, lit *ast.BasicLit, pos token.Pos) (protocol
 // If spec is non-nil, it may be used to format additional declaration
 // syntax, and file must be the token.File describing its positions.
 func gopObjectString(obj types.Object, qf types.Qualifier, declPos token.Pos, file *token.File, spec ast.Spec) string {
+	switch o := obj.(type) {
+	case *gox.Func:
+		obj = &o.Func
+	}
 	str := types.ObjectString(obj, qf)
 
 	switch obj := obj.(type) {
