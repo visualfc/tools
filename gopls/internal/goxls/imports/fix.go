@@ -160,10 +160,11 @@ func collectReferences(f *ast.File) references {
 				// If the parser can resolve it, it's not a package ref.
 				break
 			}
-			if !ast.IsExported(v.Sel.Name) {
-				// Whatever this is, it's not exported from a package.
-				break
-			}
+			// goxls: Go+ style enable startLower func
+			// if !ast.IsExported(v.Sel.Name) {
+			// 	// Whatever this is, it's not exported from a package.
+			// 	break
+			// }
 			pkgName := xident.Name
 			r := refs[pkgName]
 			if r == nil {
@@ -1483,6 +1484,7 @@ func loadExportsFromFiles(ctx context.Context, env *ProcessEnv, dir string, incl
 	var pkgName string
 	var exports []string
 	fset := token.NewFileSet()
+	var scopes []*ast.Scope
 	for _, fi := range files {
 		select {
 		case <-ctx.Done():
@@ -1507,20 +1509,50 @@ func loadExportsFromFiles(ctx context.Context, env *ProcessEnv, dir string, incl
 			// x_test package. We want internal test files only.
 			continue
 		}
+		scopes = append(scopes, f.Scope)
 		pkgName = f.Name.Name
-		for name := range f.Scope.Objects {
+	}
+	// goxls: export Go+ style func, startLower and overload (GopPackage)
+	var gopPackage bool
+	for _, scope := range scopes {
+		if obj := scope.Lookup("GopPackage"); obj != nil && obj.Kind == ast.Con {
+			gopPackage = true
+			break
+		}
+	}
+	for _, scope := range scopes {
+		for name, obj := range scope.Objects {
 			if ast.IsExported(name) {
 				exports = append(exports, name)
+				switch obj.Kind {
+				case ast.Fun:
+					if v, ok := toStartWithLowerCase(name); ok {
+						exports = append(exports, v)
+					}
+					if gopPackage && strings.HasSuffix(name, "__0") {
+						name = name[:len(name)-3]
+						exports = append(exports, name)
+						if v, ok := toStartWithLowerCase(name); ok {
+							exports = append(exports, v)
+						}
+					}
+				}
 			}
 		}
 	}
-
 	if env.Logf != nil {
 		sortedExports := append([]string(nil), exports...)
 		sort.Strings(sortedExports)
 		env.Logf("loaded exports in dir %v (package %v): %v", dir, pkgName, strings.Join(sortedExports, ", "))
 	}
 	return pkgName, exports, nil
+}
+
+func toStartWithLowerCase(name string) (string, bool) {
+	if c := name[0]; c >= 'A' && c <= 'Z' {
+		return string(c+('a'-'A')) + name[1:], true
+	}
+	return name, false
 }
 
 // findImport searches for a package with the given symbols.
