@@ -10,13 +10,19 @@ import (
 	"fmt"
 	"strings"
 
+	"path/filepath"
+
 	"github.com/goplus/gop/ast"
+	"github.com/goplus/gop/format"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/token"
+	"golang.org/x/tools/gopls/internal/goxls/goputil"
 	"golang.org/x/tools/gopls/internal/goxls/imports"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/internal/event"
+	"golang.org/x/tools/internal/tokeninternal"
 )
 
 /*
@@ -24,16 +30,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"path/filepath"
-
-	"github.com/goplus/gop/format"
-	"golang.org/x/tools/gopls/internal/goxls/goputil"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/internal/event"
-	"golang.org/x/tools/internal/tokeninternal"
 )
-
+*/
 // FormatGop formats a file with a given range.
 func FormatGop(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protocol.TextEdit, error) {
 	ctx, done := event.Start(ctx, "gop.Format")
@@ -56,7 +57,7 @@ func FormatGop(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protoco
 		if err != nil {
 			return nil, err
 		}
-		return computeGopTextEdits(ctx, snapshot, pgf, string(formatted))
+		return gopComputeTextEdits(ctx, snapshot, pgf, string(formatted))
 	}
 
 	// format.Node changes slightly from one release to another, so the version
@@ -72,7 +73,7 @@ func FormatGop(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protoco
 
 	// Apply additional formatting, if any is supported. Currently, the only
 	// supported additional formatter is gofumpt.
-	if format := snapshot.Options().GofumptFormat; snapshot.Options().Gofumpt && format != nil {
+	if format := snapshot.View().Options().GofumptFormat; snapshot.View().Options().Gofumpt && format != nil {
 		// gofumpt can customize formatting based on language version and module
 		// path, if available.
 		//
@@ -113,7 +114,6 @@ func isClass(fh FileHandle) bool {
 	fext := filepath.Ext(fh.URI().Filename())
 	return goputil.FileKind(fext) == goputil.FileGopClass
 }
-*/
 
 // GopAllImportsFixes formats f for each possible fix to the imports.
 // In addition to returning the result of applying all edits,
@@ -299,4 +299,12 @@ func gopImportPrefix(src []byte) (string, error) {
 		importEnd = len(src)
 	}
 	return string(src[:importEnd]), nil
+}
+
+func gopComputeTextEdits(ctx context.Context, snapshot Snapshot, pgf *ParsedGopFile, formatted string) ([]protocol.TextEdit, error) {
+	_, done := event.Start(ctx, "source.computeTextEdits")
+	defer done()
+
+	edits := snapshot.View().Options().ComputeEdits(string(pgf.Src), formatted)
+	return ToProtocolEdits(pgf.Mapper, edits)
 }
