@@ -5,12 +5,132 @@
 package source
 
 import (
+	"context"
+	"fmt"
 	"go/types"
 	"log"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
+	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
+	"golang.org/x/tools/gopls/internal/lsp/protocol"
+	"golang.org/x/tools/internal/event"
 )
+
+// GopDefinition handles the textDocument/definition request for Go files.
+func GopDefinition(ctx context.Context, snapshot Snapshot, fh FileHandle, position protocol.Position) ([]protocol.Location, error) {
+	ctx, done := event.Start(ctx, "source.GopDefinition")
+	defer done()
+
+	pkg, pgf, err := NarrowestPackageForGopFile(ctx, snapshot, fh.URI())
+	if err != nil {
+		return nil, err
+	}
+	pos, err := pgf.PositionPos(position)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle the case where the cursor is in an import.
+	importLocations, err := gopImportDefinition(ctx, snapshot, pkg, pgf, pos)
+	if err != nil {
+		return nil, err
+	}
+	if len(importLocations) > 0 {
+		return importLocations, nil
+	}
+
+	// Handle the case where the cursor is in the package name.
+	// We use "<= End" to accept a query immediately after the package name.
+	// goxls: a Go+ file maybe no `package xxx`
+	// if pgf.File != nil && pgf.File.Name.Pos() <= pos && pos <= pgf.File.Name.End() {
+	if pgf.File != nil && pgf.HasPkgDecl() && pgf.File.Name.Pos() <= pos && pos <= pgf.File.Name.End() {
+		for _, pgf := range pkg.CompiledGoFiles() {
+			if pgf.File.Name != nil && pgf.File.Doc != nil {
+				loc, err := pgf.NodeLocation(pgf.File.Name)
+				if err != nil {
+					return nil, err
+				}
+				return []protocol.Location{loc}, nil
+			}
+		}
+		// If there's no package documentation, just use current file.
+		declFile := pgf
+		for _, pgf := range pkg.CompiledGopFiles() {
+			if pgf.HasPkgDecl() && pgf.File.Doc != nil {
+				declFile = pgf
+				break
+			}
+		}
+		loc, err := declFile.NodeLocation(declFile.File.Name)
+		if err != nil {
+			return nil, err
+		}
+		return []protocol.Location{loc}, nil
+	}
+
+	// The general case: the cursor is on an identifier.
+	_, obj, _ := gopReferencedObject(pkg, pgf, pos)
+	if obj == nil {
+		return nil, nil
+	}
+
+	// Handle objects with no position: builtin, unsafe.
+	if !obj.Pos().IsValid() {
+		var pgf *ParsedGoFile
+		if obj.Parent() == types.Universe {
+			// pseudo-package "builtin"
+			builtinPGF, err := snapshot.BuiltinFile(ctx)
+			if err != nil {
+				return nil, err
+			}
+			pgf = builtinPGF
+
+		} else if obj.Pkg() == types.Unsafe {
+			// package "unsafe"
+			unsafe := snapshot.Metadata("unsafe")
+			if unsafe == nil {
+				return nil, fmt.Errorf("no metadata for package 'unsafe'")
+			}
+			uri := unsafe.GoFiles[0]
+			fh, err := snapshot.ReadFile(ctx, uri)
+			if err != nil {
+				return nil, err
+			}
+			pgf, err = snapshot.ParseGo(ctx, fh, ParseFull&^SkipObjectResolution)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, bug.Errorf("internal error: no position for %v", obj.Name())
+		}
+		// Inv: pgf ∈ {builtin,unsafe}.go
+
+		// Use legacy (go/ast) object resolution.
+		astObj := pgf.File.Scope.Lookup(obj.Name())
+		if astObj == nil {
+			// Every built-in should have documentation syntax.
+			return nil, bug.Errorf("internal error: no object for %s", obj.Name())
+		}
+		decl, ok := astObj.Decl.(ast.Node)
+		if !ok {
+			return nil, bug.Errorf("internal error: no declaration for %s", obj.Name())
+		}
+		loc, err := pgf.PosLocation(decl.Pos(), decl.Pos()+token.Pos(len(obj.Name())))
+		if err != nil {
+			return nil, err
+		}
+		return []protocol.Location{loc}, nil
+	}
+
+	// Finally, map the object position.
+	loc, err := mapPosition(ctx, pkg.FileSet(), snapshot, obj.Pos(), adjustedObjEnd(obj))
+	if err != nil {
+		return nil, err
+	}
+	return []protocol.Location{loc}, nil
+}
 
 // gopReferencedObject returns the identifier and object referenced at the
 // specified position, which must be within the file pgf, for the purposes of
@@ -67,4 +187,81 @@ func gopReferencedObject(pkg Package, pgf *ParsedGopFile, pos token.Pos) (*ast.I
 		return n, obj, nil
 	}
 	return nil, nil, nil
+}
+
+// gopImportDefinition returns locations defining a package referenced by the
+// import spec containing pos.
+//
+// If pos is not inside an import spec, it returns nil, nil.
+func gopImportDefinition(ctx context.Context, s Snapshot, pkg Package, pgf *ParsedGopFile, pos token.Pos) ([]protocol.Location, error) {
+	var imp *ast.ImportSpec
+	for _, spec := range pgf.File.Imports {
+		// We use "<= End" to accept a query immediately after an ImportSpec.
+		if spec.Path.Pos() <= pos && pos <= spec.Path.End() {
+			imp = spec
+		}
+	}
+	if imp == nil {
+		return nil, nil
+	}
+
+	importPath := GopUnquoteImportPath(imp)
+	impID := pkg.Metadata().DepsByImpPath[importPath]
+	if impID == "" {
+		return nil, fmt.Errorf("failed to resolve import %q", importPath)
+	}
+	impMetadata := s.Metadata(impID)
+	if impMetadata == nil {
+		return nil, fmt.Errorf("missing information for package %q", impID)
+	}
+
+	var locs []protocol.Location
+	for _, f := range impMetadata.CompiledGoFiles {
+		fh, err := s.ReadFile(ctx, f)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			continue
+		}
+		pgf, err := s.ParseGo(ctx, fh, ParseHeader)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			continue
+		}
+		loc, err := pgf.NodeLocation(pgf.File)
+		if err != nil {
+			return nil, err
+		}
+		locs = append(locs, loc)
+	}
+	for _, f := range impMetadata.CompiledGopFiles {
+		fh, err := s.ReadFile(ctx, f)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			continue
+		}
+		pgf, err := s.ParseGop(ctx, fh, parserutil.ParseHeader)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			continue
+		}
+		loc, err := pgf.NodeLocation(pgf.File)
+		if err != nil {
+			return nil, err
+		}
+		locs = append(locs, loc)
+	}
+
+	if len(locs) == 0 {
+		return nil, fmt.Errorf("package %q has no readable files", impID) // incl. unsafe
+	}
+
+	return locs, nil
 }

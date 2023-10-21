@@ -29,6 +29,8 @@ func (s *Server) definition(ctx context.Context, params *protocol.DefinitionPara
 	switch kind := snapshot.View().FileKind(fh); kind {
 	case source.Tmpl:
 		return template.Definition(snapshot, fh, params.Position)
+	case source.Gop: // goxls: Go+
+		return source.GopDefinition(ctx, snapshot, fh, params.Position)
 	case source.Go:
 		// Partial support for jumping from linkname directive (position at 2nd argument).
 		locations, err := source.LinknameDefinition(ctx, snapshot, fh, params.Position)
