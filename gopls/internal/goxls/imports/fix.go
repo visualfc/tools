@@ -160,10 +160,11 @@ func collectReferences(f *ast.File) references {
 				// If the parser can resolve it, it's not a package ref.
 				break
 			}
-			if !ast.IsExported(v.Sel.Name) {
-				// Whatever this is, it's not exported from a package.
-				break
-			}
+			// goxls: Go+ style enable startLower func
+			// if !ast.IsExported(v.Sel.Name) {
+			// 	// Whatever this is, it's not exported from a package.
+			// 	break
+			// }
 			pkgName := xident.Name
 			r := refs[pkgName]
 			if r == nil {
@@ -1483,6 +1484,8 @@ func loadExportsFromFiles(ctx context.Context, env *ProcessEnv, dir string, incl
 	var pkgName string
 	var exports []string
 	fset := token.NewFileSet()
+	// goxls: scope list for check GopPackage
+	var scopes []*ast.Scope
 	for _, fi := range files {
 		select {
 		case <-ctx.Done():
@@ -1507,14 +1510,12 @@ func loadExportsFromFiles(ctx context.Context, env *ProcessEnv, dir string, incl
 			// x_test package. We want internal test files only.
 			continue
 		}
+		// goxls: save scope
+		scopes = append(scopes, f.Scope)
 		pkgName = f.Name.Name
-		for name := range f.Scope.Objects {
-			if ast.IsExported(name) {
-				exports = append(exports, name)
-			}
-		}
 	}
-
+	// goxls: export Go+ style func, startLower and overload (GopPackage)
+	exports = gopExports(scopes)
 	if env.Logf != nil {
 		sortedExports := append([]string(nil), exports...)
 		sort.Strings(sortedExports)
