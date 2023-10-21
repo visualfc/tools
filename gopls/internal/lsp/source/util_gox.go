@@ -165,6 +165,11 @@ func gopFindFileInDeps(s MetadataSource, m *Metadata, uri span.URI) *Metadata {
 				return m
 			}
 		}
+		for _, cgf := range m.CompiledGoFiles {
+			if cgf == uri {
+				return m
+			}
+		}
 		for _, dep := range m.DepsByPkgPath {
 			m := s.Metadata(dep)
 			if m == nil {
