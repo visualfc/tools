@@ -50,6 +50,11 @@ type ParsedGopFile struct {
 	ParseErr scanner.ErrorList
 }
 
+// HasPkgDecl checks if `package xxx` exists or not.
+func (pgf *ParsedGopFile) HasPkgDecl() bool {
+	return pgf.File.Package != token.NoPos
+}
+
 // PositionPos returns the token.Pos of protocol position p within the file.
 func (pgf *ParsedGopFile) PositionPos(p protocol.Position) (token.Pos, error) {
 	offset, err := pgf.Mapper.PositionOffset(p)
@@ -62,6 +67,11 @@ func (pgf *ParsedGopFile) PositionPos(p protocol.Position) (token.Pos, error) {
 // NodeRange returns a protocol Range for the ast.Node interval in this file.
 func (pgf *ParsedGopFile) NodeRange(node ast.Node) (protocol.Range, error) {
 	return pgf.Mapper.NodeRange(pgf.Tok, node)
+}
+
+// NodeLocation returns a protocol Location for the ast.Node interval in this file.
+func (pgf *ParsedGopFile) NodeLocation(node ast.Node) (protocol.Location, error) {
+	return pgf.Mapper.PosLocation(pgf.Tok, node.Pos(), node.End())
 }
 
 // RangePos parses a protocol Range back into the go/token domain.
