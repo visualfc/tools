@@ -23,7 +23,11 @@ func (s *Server) references(ctx context.Context, params *protocol.ReferenceParam
 	if !ok {
 		return nil, err
 	}
-	if snapshot.View().FileKind(fh) == source.Tmpl {
+	// goxls: Go+
+	// if snapshot.View().FileKind(fh) == source.Tmpl {
+	if kind := snapshot.View().FileKind(fh); kind == source.Gop {
+		return source.GopReferences(ctx, snapshot, fh, params.Position, params.Context.IncludeDeclaration)
+	} else if kind == source.Tmpl {
 		return template.References(ctx, snapshot, fh, params)
 	}
 	return source.References(ctx, snapshot, fh, params.Position, params.Context.IncludeDeclaration)

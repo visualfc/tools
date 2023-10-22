@@ -364,6 +364,28 @@ func gopHoverImport(ctx context.Context, snapshot Snapshot, pkg Package, pgf *Pa
 			break
 		}
 	}
+	if comment == nil {
+		for _, f := range impMetadata.CompiledGoFiles {
+			fh, err := snapshot.ReadFile(ctx, f)
+			if err != nil {
+				if ctx.Err() != nil {
+					return protocol.Range{}, nil, ctx.Err()
+				}
+				continue
+			}
+			pgf, err := snapshot.ParseGo(ctx, fh, ParseHeader)
+			if err != nil {
+				if ctx.Err() != nil {
+					return protocol.Range{}, nil, ctx.Err()
+				}
+				continue
+			}
+			if pgf.File.Doc != nil {
+				comment = pgf.File.Doc
+				break
+			}
+		}
+	}
 
 	docText := comment.Text()
 	return rng, &HoverJSON{
