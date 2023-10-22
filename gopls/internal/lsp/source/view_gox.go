@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
@@ -19,6 +20,19 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/span"
 )
+
+// CompiledNongenGoFiles returns all Go files excluding "gop_autogen*.go".
+func (m *Metadata) CompiledNongenGoFiles() []span.URI {
+	ret := make([]span.URI, 0, len(m.CompiledGoFiles))
+	for _, f := range m.CompiledGoFiles {
+		fname := filepath.Base(f.Filename())
+		if strings.HasPrefix(fname, "gop_autogen") {
+			continue
+		}
+		ret = append(ret, f)
+	}
+	return ret
+}
 
 // A ParsedGopFile contains the results of parsing a Go+ file.
 type ParsedGopFile struct {

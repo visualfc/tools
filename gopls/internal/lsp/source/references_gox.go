@@ -121,7 +121,7 @@ func gopPackageReferences(ctx context.Context, snapshot Snapshot, uri span.URI) 
 				return gopPackageReferences(ctx, snapshot, f)
 			}
 		}
-		for _, f := range narrowest.CompiledGoFiles {
+		for _, f := range narrowest.CompiledNongenGoFiles() {
 			if !strings.HasSuffix(string(f), "_test.go") {
 				return packageReferences(ctx, snapshot, f)
 			}
@@ -168,7 +168,7 @@ func gopPackageReferences(ctx context.Context, snapshot Snapshot, uri span.URI) 
 					}
 				}
 			}
-			for _, uri := range rdep.CompiledGoFiles {
+			for _, uri := range rdep.CompiledNongenGoFiles() {
 				fh, err := snapshot.ReadFile(ctx, uri)
 				if err != nil {
 					return nil, err
@@ -206,13 +206,19 @@ func gopPackageReferences(ctx context.Context, snapshot Snapshot, uri span.URI) 
 		if err != nil {
 			return nil, err
 		}
+		fileName := f.File.Name
+		if !f.HasPkgDecl() {
+			name := *fileName
+			name.Name = "" // goxls: change name from `main` to empty string
+			fileName = &name
+		}
 		refs = append(refs, reference{
 			isDeclaration: true, // (one of many)
-			location:      gopMustLocation(f, f.File.Name),
+			location:      gopMustLocation(f, fileName),
 			pkgPath:       widest.PkgPath,
 		})
 	}
-	for _, uri := range widest.CompiledGoFiles {
+	for _, uri := range widest.CompiledNongenGoFiles() {
 		fh, err := snapshot.ReadFile(ctx, uri)
 		if err != nil {
 			return nil, err
