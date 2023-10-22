@@ -7,6 +7,7 @@ package completion
 import (
 	"context"
 	"go/types"
+	"log"
 	"time"
 )
 
@@ -20,6 +21,7 @@ func (c *gopCompleter) deepSearch(ctx context.Context, start time.Time, deadline
 		c.deepState.thisQueue = c.deepState.thisQueue[:0]
 		c.deepState.nextQueue = c.deepState.nextQueue[:0]
 	}()
+	log.Println("gopCompleter.deepSearch: n =", len(c.deepState.nextQueue))
 
 	first := true // always fully process the first set of candidates
 	for len(c.deepState.nextQueue) > 0 && (first || deadline == nil || time.Now().Before(*deadline)) {

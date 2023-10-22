@@ -1132,7 +1132,9 @@ func (c *completer) selector(ctx context.Context, sel *ast.SelectorExpr) error {
 	c.inference.objChain = objChain(c.pkg.GetTypesInfo(), sel.X)
 
 	// True selector?
-	if tv, ok := c.pkg.GetTypesInfo().Types[sel.X]; ok {
+	tv, ok := c.pkg.GetTypesInfo().Types[sel.X]
+	log.Println("completer.selector:", ok, "type:", tv.Type)
+	if ok {
 		c.methodsAndFields(tv.Type, tv.Addressable(), nil, c.deepState.enqueue)
 		c.addPostfixSnippetCandidates(ctx, sel)
 		return nil
