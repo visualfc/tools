@@ -4,7 +4,6 @@
 
 package completion
 
-/*
 import (
 	"context"
 	"go/types"
@@ -147,4 +146,3 @@ func (c *gopCompleter) builtinArgType(obj types.Object, call *ast.CallExpr, pare
 
 	return inf
 }
-*/

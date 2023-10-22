@@ -4,7 +4,6 @@
 
 package completion
 
-/*
 import (
 	"context"
 	"go/types"
@@ -106,4 +105,3 @@ func (c *gopCompleter) objChainMatches(cand *candidate, chain []types.Object) bo
 
 	return true
 }
-*/

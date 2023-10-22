@@ -4,7 +4,6 @@
 
 package completion
 
-/*
 import (
 	"fmt"
 	"go/types"
@@ -360,4 +359,3 @@ func gopGetTestVar(enclosingFunc *gopFuncInfo, pkg source.Package) string {
 
 	return ""
 }
-*/

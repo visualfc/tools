@@ -4,7 +4,6 @@
 
 package completion
 
-/*
 import (
 	"context"
 	"fmt"
@@ -112,7 +111,7 @@ type gopCompleter struct {
 	// subsequently determined that it was better to keep setting it *before*
 	// type checking, so that the completion budget best approximates the user
 	// experience. See golang/go#62665 for more details.
-	startTime time.Time
+	// startTime time.Time
 
 	// scopes contains all scopes defined by nodes in our path,
 	// including nil values for nodes that don't defined a scope. It
@@ -278,10 +277,8 @@ func gopEnclosingFunction(path []ast.Node, info *typesutil.Info) *gopFuncInfo {
 // the client to score the quality of the completion. For instance, some clients
 // may tolerate imperfect matches as valid completion results, since users may make typos.
 func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.FileHandle, protoPos protocol.Position, protoContext protocol.CompletionContext) ([]CompletionItem, *Selection, error) {
-	ctx, done := event.Start(ctx, "gop.Completion")
+	ctx, done := event.Start(ctx, "completion.GopCompletion")
 	defer done()
-
-	startTime := time.Now()
 
 	pkg, pgf, err := source.NarrowestPackageForGopFile(ctx, snapshot, fh.URI())
 	if err != nil || pgf.File.Package == token.NoPos {
@@ -290,14 +287,13 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 		// suggestions for the package declaration.
 		// Note that this would be the case even if the keyword 'package' is
 		// present but no package name exists.
-		items, surrounding, innerErr := packageClauseCompletions(ctx, snapshot, fh, protoPos)
+		items, surrounding, innerErr := gopPackageClauseCompletions(ctx, snapshot, fh, protoPos)
 		if innerErr != nil {
 			// return the error for GetParsedFile since it's more relevant in this situation.
 			return nil, nil, fmt.Errorf("getting file %s for Completion: %w (package completions: %v)", fh.URI(), err, innerErr)
 		}
 		return items, surrounding, nil
 	}
-
 	pos, err := pgf.PositionPos(protoPos)
 	if err != nil {
 		return nil, nil, err
@@ -355,7 +351,7 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 	scopes := source.GopCollectScopes(pkg.GopTypesInfo(), path, pos)
 	scopes = append(scopes, pkg.GetTypes().Scope(), types.Universe)
 
-	opts := snapshot.Options()
+	opts := snapshot.View().Options()
 	c := &gopCompleter{
 		pkg:      pkg,
 		snapshot: snapshot,
@@ -378,27 +374,24 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 			enabled: opts.DeepCompletion,
 		},
 		opts: &completionOptions{
-			matcher:               opts.Matcher,
-			unimported:            opts.CompleteUnimported,
-			documentation:         opts.CompletionDocumentation && opts.HoverKind != source.NoDocumentation,
-			fullDocumentation:     opts.HoverKind == source.FullDocumentation,
-			placeholders:          opts.UsePlaceholders,
-			literal:               opts.LiteralCompletions && opts.InsertTextFormat == protocol.SnippetTextFormat,
-			budget:                opts.CompletionBudget,
-			snippets:              opts.InsertTextFormat == protocol.SnippetTextFormat,
-			postfix:               opts.ExperimentalPostfixCompletions,
-			completeFunctionCalls: opts.CompleteFunctionCalls,
+			matcher:           opts.Matcher,
+			unimported:        opts.CompleteUnimported,
+			documentation:     opts.CompletionDocumentation && opts.HoverKind != source.NoDocumentation,
+			fullDocumentation: opts.HoverKind == source.FullDocumentation,
+			placeholders:      opts.UsePlaceholders,
+			literal:           opts.LiteralCompletions && opts.InsertTextFormat == protocol.SnippetTextFormat,
+			budget:            opts.CompletionBudget,
+			snippets:          opts.InsertTextFormat == protocol.SnippetTextFormat,
+			postfix:           opts.ExperimentalPostfixCompletions,
 		},
 		// default to a matcher that always matches
 		matcher:        prefixMatcher(""),
 		methodSetCache: make(map[methodSetKey]*types.MethodSet),
 		mapper:         pgf.Mapper,
-		startTime:      startTime,
 		scopes:         scopes,
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	// Compute the deadline for this operation. Deadline is relative to the
 	// search operation, not the entire completion RPC, as the work up until this
@@ -412,11 +405,14 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 	// Don't overload the context with this deadline, as we don't want to
 	// conflate user cancellation (=fail the operation) with our time limit
 	// (=stop searching and succeed with partial results).
+	start := time.Now()
 	var deadline *time.Time
 	if c.opts.budget > 0 {
-		d := startTime.Add(c.opts.budget)
+		d := start.Add(c.opts.budget)
 		deadline = &d
 	}
+
+	defer cancel()
 
 	if surrounding := c.containingIdent(pgf.Src); surrounding != nil {
 		c.setSurrounding(surrounding)
@@ -430,30 +426,17 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 	}
 
 	// Deep search collected candidates and their members for more candidates.
-	c.deepSearch(ctx, 1, deadline)
-
-	// At this point we have a sufficiently complete set of results, and want to
-	// return as close to the completion budget as possible. Previously, we
-	// avoided cancelling the context because it could result in partial results
-	// for e.g. struct fields. At this point, we have a minimal valid set of
-	// candidates, and so truncating due to context cancellation is acceptable.
-	if c.opts.budget > 0 {
-		timeoutDuration := time.Until(c.startTime.Add(c.opts.budget))
-		ctx, cancel = context.WithTimeout(ctx, timeoutDuration)
-		defer cancel()
-	}
+	c.deepSearch(ctx, start, deadline)
 
 	for _, callback := range c.completionCallbacks {
-		if deadline == nil || time.Now().Before(*deadline) {
-			if err := c.snapshot.RunProcessEnvFunc(ctx, callback); err != nil {
-				return nil, nil, err
-			}
+		if err := c.snapshot.RunProcessEnvFunc(ctx, callback); err != nil {
+			return nil, nil, err
 		}
 	}
 
 	// Search candidates populated by expensive operations like
 	// unimportedMembers etc. for more completion items.
-	c.deepSearch(ctx, 0, deadline)
+	c.deepSearch(ctx, start, deadline)
 
 	// Statement candidates offer an entire statement in certain contexts, as
 	// opposed to a single object. Add statement candidates last because they
@@ -1175,7 +1158,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 				Label:      id.Name,
 				Detail:     fmt.Sprintf("%s (from %q)", strings.ToLower(tok.String()), m.PkgPath),
 				InsertText: id.Name,
-				Score:      float64(score) * unimportedScore(relevances[path]),
+				Score:      unimportedScore(relevances[path]),
 			}
 			switch tok {
 			case token.FUNC:
@@ -1199,18 +1182,32 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 
 			// For functions, add a parameter snippet.
 			if fn != nil {
-				paramList := func(list *ast.FieldList) []string {
-					var params []string
+				var sn snippet.Builder
+				sn.WriteText(id.Name)
+
+				paramList := func(open, close string, list *ast.FieldList) {
 					if list != nil {
 						var cfg printer.Config // slight overkill
+						var nparams int
 						param := func(name string, typ ast.Expr) {
-							var buf strings.Builder
-							buf.WriteString(name)
-							buf.WriteByte(' ')
-							cfg.Fprint(&buf, token.NewFileSet(), typ)
-							params = append(params, buf.String())
+							if nparams > 0 {
+								sn.WriteText(", ")
+							}
+							nparams++
+							if c.opts.placeholders {
+								sn.WritePlaceholder(func(b *snippet.Builder) {
+									var buf strings.Builder
+									buf.WriteString(name)
+									buf.WriteByte(' ')
+									cfg.Fprint(&buf, token.NewFileSet(), typ)
+									b.WriteText(buf.String())
+								})
+							} else {
+								sn.WriteText(name)
+							}
 						}
 
+						sn.WriteText(open)
 						for _, field := range list.List {
 							if field.Names != nil {
 								for _, name := range field.Names {
@@ -1220,14 +1217,13 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 								param("_", field.Type)
 							}
 						}
+						sn.WriteText(close)
 					}
-					return params
 				}
 
-				tparams := paramList(fn.Type.TypeParams)
-				params := paramList(fn.Type.Params)
-				var sn snippet.Builder
-				c.functionCallSnippet(id.Name, tparams, params, &sn)
+				paramList("[", "]", typeparams.ForFuncType(fn.Type))
+				paramList("(", ")", fn.Type.Params)
+
 				item.snippet = &sn
 			}
 
@@ -1260,10 +1256,6 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 	ctx, cancel := context.WithCancel(ctx)
 	var mu sync.Mutex
 	add := func(pkgExport imports.PackageExport) {
-		if ignoreUnimportedCompletion(pkgExport.Fix) {
-			return
-		}
-
 		mu.Lock()
 		defer mu.Unlock()
 		// TODO(adonovan): what if the actual package has a vendor/ prefix?
@@ -1487,7 +1479,7 @@ func (c *gopCompleter) lexical(ctx context.Context) error {
 // gopAlreadyImports reports whether f has an import with the specified path.
 func gopAlreadyImports(f *ast.File, path source.ImportPath) bool {
 	for _, s := range f.Imports {
-		if source.UnquoteGopImportPath(s) == path {
+		if source.GopUnquoteImportPath(s) == path {
 			return true
 		}
 	}
@@ -1613,12 +1605,10 @@ func (c *gopCompleter) unimportedPackages(ctx context.Context, seen map[string]s
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
+	_ = ctx
 
 	var mu sync.Mutex
 	add := func(pkg imports.ImportFix) {
-		if ignoreUnimportedCompletion(&pkg) {
-			return
-		}
 		mu.Lock()
 		defer mu.Unlock()
 		if _, ok := seen[pkg.IdentName]; ok {
@@ -1826,7 +1816,7 @@ func (c *gopCompleter) expectedCallParamType(inf candidateInference, node *ast.C
 // deepSearch searches a candidate and its subordinate objects for completion
 // items if deep completion is enabled and adds the valid candidates to
 // completion items.
-func (c *gopCompleter) deepSearch(ctx context.Context, minDepth int, deadline *time.Time) {
+func (c *gopCompleter) deepSearch(ctx context.Context, start time.Time, deadline *time.Time) {
 	defer func() {
 		// We can return early before completing the search, so be sure to
 		// clear out our queues to not impact any further invocations.
@@ -1834,25 +1824,9 @@ func (c *gopCompleter) deepSearch(ctx context.Context, minDepth int, deadline *t
 		c.deepState.nextQueue = c.deepState.nextQueue[:0]
 	}()
 
-	depth := 0 // current depth being processed
-	// Stop reports whether we should stop the search immediately.
-	stop := func() bool {
-		// Context cancellation indicates that the actual completion operation was
-		// cancelled, so ignore minDepth and deadline.
-		select {
-		case <-ctx.Done():
-			return true
-		default:
-		}
-		// Otherwise, only stop if we've searched at least minDepth and reached the deadline.
-		return depth > minDepth && deadline != nil && time.Now().After(*deadline)
-	}
-
-	for len(c.deepState.nextQueue) > 0 {
-		depth++
-		if stop() {
-			return
-		}
+	first := true // always fully process the first set of candidates
+	for len(c.deepState.nextQueue) > 0 && (first || deadline == nil || time.Now().Before(*deadline)) {
+		first = false
 		c.deepState.thisQueue, c.deepState.nextQueue = c.deepState.nextQueue, c.deepState.thisQueue[:0]
 
 	outer:
@@ -1901,15 +1875,17 @@ func (c *gopCompleter) deepSearch(ctx context.Context, minDepth int, deadline *t
 
 			c.deepState.candidateCount++
 			if c.opts.budget > 0 && c.deepState.candidateCount%100 == 0 {
-				if stop() {
+				spent := float64(time.Since(start)) / float64(c.opts.budget)
+				select {
+				case <-ctx.Done():
 					return
-				}
-				spent := float64(time.Since(c.startTime)) / float64(c.opts.budget)
-				// If we are almost out of budgeted time, no further elements
-				// should be added to the queue. This ensures remaining time is
-				// used for processing current queue.
-				if !c.deepState.queueClosed && spent >= 0.85 {
-					c.deepState.queueClosed = true
+				default:
+					// If we are almost out of budgeted time, no further elements
+					// should be added to the queue. This ensures remaining time is
+					// used for processing current queue.
+					if !c.deepState.queueClosed && spent >= 0.85 {
+						c.deepState.queueClosed = true
+					}
 				}
 			}
 
@@ -2516,4 +2492,3 @@ func gopForEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ide
 		}
 	}
 }
-*/
