@@ -7,7 +7,136 @@ package completion
 import (
 	"context"
 	"go/types"
+	"time"
 )
+
+// deepSearch searches a candidate and its subordinate objects for completion
+// items if deep completion is enabled and adds the valid candidates to
+// completion items.
+func (c *gopCompleter) deepSearch(ctx context.Context, start time.Time, deadline *time.Time) {
+	defer func() {
+		// We can return early before completing the search, so be sure to
+		// clear out our queues to not impact any further invocations.
+		c.deepState.thisQueue = c.deepState.thisQueue[:0]
+		c.deepState.nextQueue = c.deepState.nextQueue[:0]
+	}()
+
+	first := true // always fully process the first set of candidates
+	for len(c.deepState.nextQueue) > 0 && (first || deadline == nil || time.Now().Before(*deadline)) {
+		first = false
+		c.deepState.thisQueue, c.deepState.nextQueue = c.deepState.nextQueue, c.deepState.thisQueue[:0]
+
+	outer:
+		for _, cand := range c.deepState.thisQueue {
+			obj := cand.obj
+
+			if obj == nil {
+				continue
+			}
+
+			// At the top level, dedupe by object.
+			if len(cand.path) == 0 {
+				if c.seen[obj] {
+					continue
+				}
+				c.seen[obj] = true
+			}
+
+			// If obj is not accessible because it lives in another package and is
+			// not exported, don't treat it as a completion candidate unless it's
+			// a package completion candidate.
+			if !c.completionContext.packageCompletion &&
+				obj.Pkg() != nil && obj.Pkg() != c.pkg.GetTypes() && !obj.Exported() {
+				continue
+			}
+
+			// If we want a type name, don't offer non-type name candidates.
+			// However, do offer package names since they can contain type names,
+			// and do offer any candidate without a type since we aren't sure if it
+			// is a type name or not (i.e. unimported candidate).
+			if c.wantTypeName() && obj.Type() != nil && !isTypeName(obj) && !isPkgName(obj) {
+				continue
+			}
+
+			// When searching deep, make sure we don't have a cycle in our chain.
+			// We don't dedupe by object because we want to allow both "foo.Baz"
+			// and "bar.Baz" even though "Baz" is represented the same types.Object
+			// in both.
+			for _, seenObj := range cand.path {
+				if seenObj == obj {
+					continue outer
+				}
+			}
+
+			c.addCandidate(ctx, &cand)
+
+			c.deepState.candidateCount++
+			if c.opts.budget > 0 && c.deepState.candidateCount%100 == 0 {
+				spent := float64(time.Since(start)) / float64(c.opts.budget)
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// If we are almost out of budgeted time, no further elements
+					// should be added to the queue. This ensures remaining time is
+					// used for processing current queue.
+					if !c.deepState.queueClosed && spent >= 0.85 {
+						c.deepState.queueClosed = true
+					}
+				}
+			}
+
+			// if deep search is disabled, don't add any more candidates.
+			if !c.deepState.enabled || c.deepState.queueClosed {
+				continue
+			}
+
+			// Searching members for a type name doesn't make sense.
+			if isTypeName(obj) {
+				continue
+			}
+			if obj.Type() == nil {
+				continue
+			}
+
+			// Don't search embedded fields because they were already included in their
+			// parent's fields.
+			if v, ok := obj.(*types.Var); ok && v.Embedded() {
+				continue
+			}
+
+			if sig, ok := obj.Type().Underlying().(*types.Signature); ok {
+				// If obj is a function that takes no arguments and returns one
+				// value, keep searching across the function call.
+				if sig.Params().Len() == 0 && sig.Results().Len() == 1 {
+					path := c.deepState.newPath(cand, obj)
+					// The result of a function call is not addressable.
+					c.methodsAndFields(sig.Results().At(0).Type(), false, cand.imp, func(newCand candidate) {
+						newCand.pathInvokeMask = cand.pathInvokeMask | (1 << uint64(len(cand.path)))
+						newCand.path = path
+						c.deepState.enqueue(newCand)
+					})
+				}
+			}
+
+			path := c.deepState.newPath(cand, obj)
+			switch obj := obj.(type) {
+			case *types.PkgName:
+				c.packageMembers(obj.Imported(), stdScore, cand.imp, func(newCand candidate) {
+					newCand.pathInvokeMask = cand.pathInvokeMask
+					newCand.path = path
+					c.deepState.enqueue(newCand)
+				})
+			default:
+				c.methodsAndFields(obj.Type(), cand.addressable, cand.imp, func(newCand candidate) {
+					newCand.pathInvokeMask = cand.pathInvokeMask
+					newCand.path = path
+					c.deepState.enqueue(newCand)
+				})
+			}
+		}
+	}
+}
 
 // addCandidate adds a completion candidate to suggestions, without searching
 // its members for more candidates.

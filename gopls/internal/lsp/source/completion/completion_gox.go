@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"go/constant"
 	"go/types"
+	"log"
 	"math"
 	"sort"
 	"strconv"
@@ -277,6 +278,9 @@ func gopEnclosingFunction(path []ast.Node, info *typesutil.Info) *gopFuncInfo {
 // the client to score the quality of the completion. For instance, some clients
 // may tolerate imperfect matches as valid completion results, since users may make typos.
 func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.FileHandle, protoPos protocol.Position, protoContext protocol.CompletionContext) ([]CompletionItem, *Selection, error) {
+	log.Println("GopCompletion:", fh.URI().Filename(), "kind:", protoContext.TriggerKind, "triggerCh:", protoContext.TriggerCharacter)
+	defer log.Println("GopCompletion done:", fh.URI().Filename(), "kind:", protoContext.TriggerKind, "triggerCh:", protoContext.TriggerCharacter)
+
 	ctx, done := event.Start(ctx, "completion.GopCompletion")
 	defer done()
 
@@ -323,7 +327,9 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 		}
 	case *ast.Ident:
 		// reject defining identifiers
-		if obj, ok := pkg.GopTypesInfo().Defs[n]; ok {
+		obj, ok := pkg.GopTypesInfo().Defs[n]
+		log.Println("GopCompletion ident:", n, "obj:", obj)
+		if ok {
 			if v, ok := obj.(*types.Var); ok && v.IsField() && v.Embedded() {
 				// An anonymous field is also a reference to a type.
 			} else if pgf.File.Name == n {
@@ -415,28 +421,43 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 	defer cancel()
 
 	if surrounding := c.containingIdent(pgf.Src); surrounding != nil {
+		log.Println("GopCompletion surrounding:", surrounding)
 		c.setSurrounding(surrounding)
 	}
 
 	c.inference = gopExpectedCandidate(ctx, c)
+	if true {
+		infer := c.inference
+		log.Printf(`GopCompletion infer:
+	  objType: %v, convertibleTo: %v
+	  objKind: %d, variadic: %v
+	  assignees: %v, variadicAssignees: %v
+	  objChain: %v
+	`, infer.objType, infer.convertibleTo, infer.objKind, infer.variadic,
+			infer.assignees, infer.variadicAssignees, infer.objChain)
+	}
 
 	err = c.collectCompletions(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
+	log.Println("GopCompletion collect: len(items) =", len(c.items))
 
 	// Deep search collected candidates and their members for more candidates.
 	c.deepSearch(ctx, start, deadline)
+	log.Println("GopCompletion deepSearch: len(items) =", len(c.items))
 
 	for _, callback := range c.completionCallbacks {
 		if err := c.snapshot.RunProcessEnvFunc(ctx, callback); err != nil {
 			return nil, nil, err
 		}
+		log.Println("GopCompletion callbak: len(items) =", len(c.items))
 	}
 
 	// Search candidates populated by expensive operations like
 	// unimportedMembers etc. for more completion items.
 	c.deepSearch(ctx, start, deadline)
+	log.Println("GopCompletion deepSearch(2): len(items) =", len(c.items))
 
 	// Statement candidates offer an entire statement in certain contexts, as
 	// opposed to a single object. Add statement candidates last because they
@@ -444,6 +465,7 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 	c.addStatementCandidates()
 
 	c.sortItems()
+	log.Println("GopCompletion ret: len(items) =", len(c.items))
 	return c.items, c.getSurrounding(), nil
 }
 
@@ -1811,134 +1833,6 @@ func (c *gopCompleter) expectedCallParamType(inf candidateInference, node *ast.C
 	}
 
 	return inf
-}
-
-// deepSearch searches a candidate and its subordinate objects for completion
-// items if deep completion is enabled and adds the valid candidates to
-// completion items.
-func (c *gopCompleter) deepSearch(ctx context.Context, start time.Time, deadline *time.Time) {
-	defer func() {
-		// We can return early before completing the search, so be sure to
-		// clear out our queues to not impact any further invocations.
-		c.deepState.thisQueue = c.deepState.thisQueue[:0]
-		c.deepState.nextQueue = c.deepState.nextQueue[:0]
-	}()
-
-	first := true // always fully process the first set of candidates
-	for len(c.deepState.nextQueue) > 0 && (first || deadline == nil || time.Now().Before(*deadline)) {
-		first = false
-		c.deepState.thisQueue, c.deepState.nextQueue = c.deepState.nextQueue, c.deepState.thisQueue[:0]
-
-	outer:
-		for _, cand := range c.deepState.thisQueue {
-			obj := cand.obj
-
-			if obj == nil {
-				continue
-			}
-
-			// At the top level, dedupe by object.
-			if len(cand.path) == 0 {
-				if c.seen[obj] {
-					continue
-				}
-				c.seen[obj] = true
-			}
-
-			// If obj is not accessible because it lives in another package and is
-			// not exported, don't treat it as a completion candidate unless it's
-			// a package completion candidate.
-			if !c.completionContext.packageCompletion &&
-				obj.Pkg() != nil && obj.Pkg() != c.pkg.GetTypes() && !obj.Exported() {
-				continue
-			}
-
-			// If we want a type name, don't offer non-type name candidates.
-			// However, do offer package names since they can contain type names,
-			// and do offer any candidate without a type since we aren't sure if it
-			// is a type name or not (i.e. unimported candidate).
-			if c.wantTypeName() && obj.Type() != nil && !isTypeName(obj) && !isPkgName(obj) {
-				continue
-			}
-
-			// When searching deep, make sure we don't have a cycle in our chain.
-			// We don't dedupe by object because we want to allow both "foo.Baz"
-			// and "bar.Baz" even though "Baz" is represented the same types.Object
-			// in both.
-			for _, seenObj := range cand.path {
-				if seenObj == obj {
-					continue outer
-				}
-			}
-
-			c.addCandidate(ctx, &cand)
-
-			c.deepState.candidateCount++
-			if c.opts.budget > 0 && c.deepState.candidateCount%100 == 0 {
-				spent := float64(time.Since(start)) / float64(c.opts.budget)
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					// If we are almost out of budgeted time, no further elements
-					// should be added to the queue. This ensures remaining time is
-					// used for processing current queue.
-					if !c.deepState.queueClosed && spent >= 0.85 {
-						c.deepState.queueClosed = true
-					}
-				}
-			}
-
-			// if deep search is disabled, don't add any more candidates.
-			if !c.deepState.enabled || c.deepState.queueClosed {
-				continue
-			}
-
-			// Searching members for a type name doesn't make sense.
-			if isTypeName(obj) {
-				continue
-			}
-			if obj.Type() == nil {
-				continue
-			}
-
-			// Don't search embedded fields because they were already included in their
-			// parent's fields.
-			if v, ok := obj.(*types.Var); ok && v.Embedded() {
-				continue
-			}
-
-			if sig, ok := obj.Type().Underlying().(*types.Signature); ok {
-				// If obj is a function that takes no arguments and returns one
-				// value, keep searching across the function call.
-				if sig.Params().Len() == 0 && sig.Results().Len() == 1 {
-					path := c.deepState.newPath(cand, obj)
-					// The result of a function call is not addressable.
-					c.methodsAndFields(sig.Results().At(0).Type(), false, cand.imp, func(newCand candidate) {
-						newCand.pathInvokeMask = cand.pathInvokeMask | (1 << uint64(len(cand.path)))
-						newCand.path = path
-						c.deepState.enqueue(newCand)
-					})
-				}
-			}
-
-			path := c.deepState.newPath(cand, obj)
-			switch obj := obj.(type) {
-			case *types.PkgName:
-				c.packageMembers(obj.Imported(), stdScore, cand.imp, func(newCand candidate) {
-					newCand.pathInvokeMask = cand.pathInvokeMask
-					newCand.path = path
-					c.deepState.enqueue(newCand)
-				})
-			default:
-				c.methodsAndFields(obj.Type(), cand.addressable, cand.imp, func(newCand candidate) {
-					newCand.pathInvokeMask = cand.pathInvokeMask
-					newCand.path = path
-					c.deepState.enqueue(newCand)
-				})
-			}
-		}
-	}
 }
 
 // matchingCandidate reports whether cand matches our type inferences.
