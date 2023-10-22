@@ -13,6 +13,12 @@ import (
 	"github.com/goplus/mod/gopmod"
 )
 
+// Info holds result type information for a type-checked package.
+// Only the information for which a map is provided is collected.
+// If the package has type errors, the collected information may
+// be incomplete.
+type Info = typesutil.Info
+
 // A Checker maintains the state of the type checker.
 // It must be created with NewChecker.
 type Checker = typesutil.Checker
@@ -43,8 +49,4 @@ func NewChecker(conf *types.Config, opts *Config, goInfo *types.Info, gopInfo *I
 		LookupClass: mod.LookupClass,
 	}
 	return typesutil.NewChecker(conf, chkOpts, goInfo, gopInfo)
-}
-
-func init() {
-	typesutil.SetDebug(typesutil.DbgFlagDefault)
 }

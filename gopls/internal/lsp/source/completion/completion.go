@@ -29,6 +29,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/ast/astutil"
 	goplsastutil "golang.org/x/tools/gopls/internal/astutil"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/snippet"
@@ -435,9 +436,10 @@ func (e ErrIsDefinition) Error() string {
 // the client to score the quality of the completion. For instance, some clients
 // may tolerate imperfect matches as valid completion results, since users may make typos.
 func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHandle, protoPos protocol.Position, protoContext protocol.CompletionContext) ([]CompletionItem, *Selection, error) {
-	log.Println("Completion:", fh.URI().Filename(), "kind:", protoContext.TriggerKind, "triggerCh:", protoContext.TriggerCharacter)
-	defer log.Println("Completion done:", fh.URI().Filename(), "kind:", protoContext.TriggerKind, "triggerCh:", protoContext.TriggerCharacter)
-
+	if goxls.DbgCompletion {
+		log.Println("Completion:", fh.URI().Filename(), "kind:", protoContext.TriggerKind, "triggerCh:", protoContext.TriggerCharacter)
+		defer log.Println("Completion done:", fh.URI().Filename(), "kind:", protoContext.TriggerKind, "triggerCh:", protoContext.TriggerCharacter)
+	}
 	ctx, done := event.Start(ctx, "completion.Completion")
 	defer done()
 
@@ -485,7 +487,9 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 	case *ast.Ident:
 		// reject defining identifiers
 		obj, ok := pkg.GetTypesInfo().Defs[n]
-		log.Println("Completion ident:", n, "obj:", obj)
+		if goxls.DbgCompletion {
+			log.Println("Completion ident:", n, "obj:", obj)
+		}
 		if ok {
 			if v, ok := obj.(*types.Var); ok && v.IsField() && v.Embedded() {
 				// An anonymous field is also a reference to a type.
@@ -578,12 +582,14 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 	defer cancel()
 
 	if surrounding := c.containingIdent(pgf.Src); surrounding != nil {
-		log.Println("Completion surrounding:", surrounding)
+		if goxls.DbgCompletion {
+			log.Println("Completion surrounding:", surrounding)
+		}
 		c.setSurrounding(surrounding)
 	}
 
 	c.inference = expectedCandidate(ctx, c)
-	if true {
+	if goxls.DbgCompletion {
 		infer := c.inference
 		log.Printf(`Completion infer:
 	  objType: %v, convertibleTo: %v
@@ -598,23 +604,31 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Println("Completion collect: len(items) =", len(c.items))
+	if goxls.DbgCompletion {
+		log.Println("Completion collect: len(items) =", len(c.items))
+	}
 
 	// Deep search collected candidates and their members for more candidates.
 	c.deepSearch(ctx, start, deadline)
-	log.Println("Completion deepSearch: len(items) =", len(c.items))
+	if goxls.DbgCompletion {
+		log.Println("Completion deepSearch: len(items) =", len(c.items))
+	}
 
 	for _, callback := range c.completionCallbacks {
 		if err := c.snapshot.RunProcessEnvFunc(ctx, callback); err != nil {
 			return nil, nil, err
 		}
-		log.Println("Completion callbak: len(items) =", len(c.items))
+		if goxls.DbgCompletion {
+			log.Println("Completion callbak: len(items) =", len(c.items))
+		}
 	}
 
 	// Search candidates populated by expensive operations like
 	// unimportedMembers etc. for more completion items.
 	c.deepSearch(ctx, start, deadline)
-	log.Println("Completion deepSearch(2): len(items) =", len(c.items))
+	if goxls.DbgCompletion {
+		log.Println("Completion deepSearch(2): len(items) =", len(c.items))
+	}
 
 	// Statement candidates offer an entire statement in certain contexts, as
 	// opposed to a single object. Add statement candidates last because they
@@ -622,7 +636,9 @@ func Completion(ctx context.Context, snapshot source.Snapshot, fh source.FileHan
 	c.addStatementCandidates()
 
 	c.sortItems()
-	log.Println("Completion ret: len(items) =", len(c.items))
+	if goxls.DbgCompletion {
+		log.Println("Completion ret: len(items) =", len(c.items))
+	}
 	return c.items, c.getSurrounding(), nil
 }
 
@@ -1133,7 +1149,9 @@ func (c *completer) selector(ctx context.Context, sel *ast.SelectorExpr) error {
 
 	// True selector?
 	tv, ok := c.pkg.GetTypesInfo().Types[sel.X]
-	log.Println("completer.selector:", ok, "type:", tv.Type)
+	if goxls.DbgCompletion {
+		log.Println("completer.selector:", sel.X, ok, "type:", tv.Type)
+	}
 	if ok {
 		c.methodsAndFields(tv.Type, tv.Addressable(), nil, c.deepState.enqueue)
 		c.addPostfixSnippetCandidates(ctx, sel)
