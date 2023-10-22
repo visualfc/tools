@@ -4,7 +4,6 @@
 
 package completion
 
-/*
 import (
 	"github.com/goplus/gop/ast"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -124,4 +123,3 @@ func (c *gopCompleter) addKeywordItems(seen map[string]bool, score float64, kws 
 		}
 	}
 }
-*/

@@ -8,15 +8,16 @@ import (
 	"context"
 	"go/types"
 	"strconv"
+	"strings"
 
 	"github.com/goplus/gop/ast"
+	"github.com/goplus/gop/token"
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/goxls/typeparams"
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/span"
 )
 
-/*
 // GopCollectScopes returns all scopes in an ast path, ordered as innermost scope
 // first.
 func GopCollectScopes(info *typesutil.Info, path []ast.Node, pos token.Pos) []*types.Scope {
@@ -108,7 +109,7 @@ func gopImportInfo(s MetadataSource, imp *ast.ImportSpec, m *Metadata) (string, 
 	var (
 		name    string // local name
 		pkgName PackageName
-		impPath = UnquoteGopImportPath(imp)
+		impPath = GopUnquoteImportPath(imp)
 		pkgPath PackagePath
 	)
 
@@ -136,7 +137,6 @@ func gopImportInfo(s MetadataSource, imp *ast.ImportSpec, m *Metadata) (string, 
 	}
 	return name, pkgName, impPath, pkgPath
 }
-*/
 
 // IsGopGenerated gets and reads the file denoted by uri and reports
 // whether it contains a "generated file" comment as described at

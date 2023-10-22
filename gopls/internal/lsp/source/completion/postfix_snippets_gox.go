@@ -4,7 +4,6 @@
 
 package completion
 
-/*
 import (
 	"context"
 	"fmt"
@@ -145,7 +144,7 @@ func (c *gopCompleter) importIfNeeded(pkgPath string, scope *types.Scope) (strin
 	for _, s := range c.file.Imports {
 		// TODO(adonovan): what if pkgPath has a vendor/ suffix?
 		// This may be the cause of go.dev/issue/56291.
-		if source.UnquoteGopImportPath(s) == source.ImportPath(pkgPath) {
+		if source.GopUnquoteImportPath(s) == source.ImportPath(pkgPath) {
 			if s.Name == nil {
 				return defaultName, nil, nil
 			}
@@ -169,4 +168,3 @@ func (c *gopCompleter) importIfNeeded(pkgPath string, scope *types.Scope) (strin
 
 	return defaultName, edits, nil
 }
-*/

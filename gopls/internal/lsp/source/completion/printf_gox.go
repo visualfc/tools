@@ -4,7 +4,6 @@
 
 package completion
 
-/*
 import (
 	"go/constant"
 	"go/types"
@@ -48,4 +47,3 @@ func gopPrintfArgKind(info *typesutil.Info, call *ast.CallExpr, argIdx int) objK
 
 	return formatOperandKind(constant.StringVal(strArg), argIdx-(numParams-1)+1)
 }
-*/

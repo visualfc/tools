@@ -4,7 +4,6 @@
 
 package completion
 
-/*
 import (
 	"fmt"
 	"go/types"
@@ -135,4 +134,3 @@ Loop:
 	// let the standard processing take care of it instead
 	return false
 }
-*/

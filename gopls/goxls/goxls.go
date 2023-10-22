@@ -9,6 +9,7 @@ import (
 	"os"
 	"sync"
 
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/hooks"
 	"golang.org/x/tools/gopls/internal/lsp/cmd"
 	"golang.org/x/tools/internal/event"
@@ -28,5 +29,6 @@ func Main() {
 		printer.WriteEvent(os.Stderr, e, m)
 		return ctx
 	})
+	goxls.SetDebug(goxls.DbgFlagDefault)
 	tool.Main(ctx, cmd.New("goxls", "", nil, hooks.Options), os.Args[1:])
 }

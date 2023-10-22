@@ -4,7 +4,6 @@
 
 package completion
 
-/*
 import (
 	"github.com/goplus/gop/ast"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
@@ -51,11 +50,6 @@ func (c *gopCompleter) structFieldSnippet(cand candidate, detail string, snip *s
 
 // functionCallSnippet calculates the snippet for function calls.
 func (c *gopCompleter) functionCallSnippet(name string, tparams, params []string, snip *snippet.Builder) {
-	if !c.opts.completeFunctionCalls {
-		snip.WriteText(name)
-		return
-	}
-
 	// If there is no suffix then we need to reuse existing call parens
 	// "()" if present. If there is an identifier suffix then we always
 	// need to include "()" since we don't overwrite the suffix.
@@ -119,4 +113,3 @@ func (c *gopCompleter) functionCallSnippet(name string, tparams, params []string
 
 	snip.WriteText(")")
 }
-*/
