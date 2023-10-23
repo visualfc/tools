@@ -13,6 +13,7 @@ import (
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/internal/event"
@@ -20,6 +21,10 @@ import (
 
 // GopDefinition handles the textDocument/definition request for Go files.
 func GopDefinition(ctx context.Context, snapshot Snapshot, fh FileHandle, position protocol.Position) ([]protocol.Location, error) {
+	if goxls.DbgDefinition {
+		log.Println("GopDefinition:", fh.URI().Filename(), position.Line+1, position.Character+1)
+		defer log.Println("GopDefinition done:", fh.URI().Filename(), position.Line+1, position.Character+1)
+	}
 	ctx, done := event.Start(ctx, "source.GopDefinition")
 	defer done()
 
@@ -37,6 +42,9 @@ func GopDefinition(ctx context.Context, snapshot Snapshot, fh FileHandle, positi
 	if err != nil {
 		return nil, err
 	}
+	if goxls.DbgDefinition {
+		log.Println("gopImportDefinition: len(importLocations) =", len(importLocations))
+	}
 	if len(importLocations) > 0 {
 		return importLocations, nil
 	}
@@ -46,7 +54,7 @@ func GopDefinition(ctx context.Context, snapshot Snapshot, fh FileHandle, positi
 	// goxls: a Go+ file maybe no `package xxx`
 	// if pgf.File != nil && pgf.File.Name.Pos() <= pos && pos <= pgf.File.Name.End() {
 	if pgf.File != nil && pgf.HasPkgDecl() && pgf.File.Name.Pos() <= pos && pos <= pgf.File.Name.End() {
-		for _, pgf := range pkg.CompiledGoFiles() {
+		for _, pgf := range pkg.CompiledNongenGoFiles() {
 			if pgf.File.Name != nil && pgf.File.Doc != nil {
 				loc, err := pgf.NodeLocation(pgf.File.Name)
 				if err != nil {
@@ -74,6 +82,9 @@ func GopDefinition(ctx context.Context, snapshot Snapshot, fh FileHandle, positi
 	_, obj, _ := gopReferencedObject(pkg, pgf, pos)
 	if obj == nil {
 		return nil, nil
+	}
+	if goxls.DbgDefinition {
+		log.Println("gopReferencedObject ret:", obj, "pos:", obj.Pos())
 	}
 
 	// Handle objects with no position: builtin, unsafe.
@@ -126,6 +137,9 @@ func GopDefinition(ctx context.Context, snapshot Snapshot, fh FileHandle, positi
 
 	// Finally, map the object position.
 	loc, err := mapPosition(ctx, pkg.FileSet(), snapshot, obj.Pos(), adjustedObjEnd(obj))
+	if goxls.DbgDefinition {
+		log.Println("gopReferencedObject mapPosition:", obj, "err:", err, "loc:", loc)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +173,9 @@ func gopReferencedObject(pkg Package, pgf *ParsedGopFile, pos token.Pos) (*ast.I
 	switch n := path[0].(type) {
 	case *ast.Ident:
 		obj = info.ObjectOf(n)
-		log.Println("gop info.ObjectOf:", n, obj)
+		if goxls.DbgDefinition {
+			log.Println("gop info.ObjectOf:", n, obj, "def:", info.Defs[n])
+		}
 
 		// If n is the var's declaring ident in a type switch
 		// [i.e. the x in x := foo.(type)], it will not have an object. In this
@@ -170,7 +186,9 @@ func gopReferencedObject(pkg Package, pgf *ParsedGopFile, pos token.Pos) (*ast.I
 		// implicit objects; this is a type error ("unused x"),
 		if obj == nil {
 			if implicits, typ := gopTypeSwitchImplicits(info, path); len(implicits) > 0 {
-				log.Println("gopTypeSwitchImplicits:", implicits[0])
+				if goxls.DbgDefinition {
+					log.Println("gopTypeSwitchImplicits:", implicits[0])
+				}
 				return n, implicits[0], typ
 			}
 		}
@@ -183,7 +201,6 @@ func gopReferencedObject(pkg Package, pgf *ParsedGopFile, pos token.Pos) (*ast.I
 				obj = typeName
 			}
 		}
-		log.Println("gopReferencedObject:", n, "obj:", obj)
 		return n, obj, nil
 	}
 	return nil, nil, nil

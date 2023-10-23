@@ -6,6 +6,8 @@ package cache
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -14,6 +16,20 @@ import (
 
 func (p *Package) GopTypesInfo() *typesutil.Info {
 	return p.pkg.gopTypesInfo
+}
+
+// CompiledNongenGoFiles returns all Go files excluding "gop_autogen*.go".
+func (p *Package) CompiledNongenGoFiles() []*source.ParsedGoFile {
+	gofs := p.pkg.compiledGoFiles
+	ret := make([]*source.ParsedGoFile, 0, len(gofs))
+	for _, f := range gofs {
+		fname := filepath.Base(f.URI.Filename())
+		if strings.HasPrefix(fname, "gop_autogen") {
+			continue
+		}
+		ret = append(ret, f)
+	}
+	return ret
 }
 
 func (p *Package) CompiledGopFiles() []*source.ParsedGopFile {

@@ -973,7 +973,8 @@ type Package interface {
 	GetParseErrors() []scanner.ErrorList
 
 	// goxls: Go+ files
-	CompiledGopFiles() []*ParsedGopFile // (borrowed)
+	CompiledNongenGoFiles() []*ParsedGoFile // (borrowed)
+	CompiledGopFiles() []*ParsedGopFile     // (borrowed)
 	GopFile(uri span.URI) (*ParsedGopFile, error)
 	GopTypesInfo() *typesutil.Info
 

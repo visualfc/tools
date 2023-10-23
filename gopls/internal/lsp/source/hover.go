@@ -24,6 +24,7 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/types/typeutil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/span"
@@ -66,7 +67,9 @@ func Hover(ctx context.Context, snapshot Snapshot, fh FileHandle, position proto
 	defer done()
 
 	rng, h, err := hover(ctx, snapshot, fh, position)
-	log.Println("hover:", rng, h, "err:", err)
+	if goxls.DbgHover {
+		log.Println("hover:", rng, h, "err:", err)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +93,10 @@ func Hover(ctx context.Context, snapshot Snapshot, fh FileHandle, position proto
 // hovering at the position, it returns _, nil, nil: an error is only returned
 // if the position is valid but we fail to compute hover information.
 func hover(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol.Position) (protocol.Range, *HoverJSON, error) {
-	log.Println("hover:", fh.URI().Filename(), "pos:", pp.Line+1, pp.Character+1)
-	defer log.Println("hover done:", fh.URI().Filename(), "pos:", pp.Line+1, pp.Character+1)
+	if goxls.DbgHover {
+		log.Println("hover:", fh.URI().Filename(), "pos:", pp.Line+1, pp.Character+1)
+		defer log.Println("hover done:", fh.URI().Filename(), "pos:", pp.Line+1, pp.Character+1)
+	}
 
 	pkg, pgf, err := NarrowestPackageForFile(ctx, snapshot, fh.URI())
 	if err != nil {
