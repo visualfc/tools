@@ -11,6 +11,7 @@ import (
 
 	"github.com/goplus/gop/ast"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/goxls/inspector"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/analysis/fillstruct"
@@ -30,10 +31,12 @@ func (s *Server) gopCodeAction(
 	want map[protocol.CodeActionKind]bool) ([]protocol.CodeAction, error) {
 	diagnostics := params.Context.Diagnostics
 
-	log.Println(
-		"gopCodeAction:", uri.Filename(), "diagnostics:", len(diagnostics),
-		"refactorRewrite:", want[protocol.RefactorRewrite], "orgImports:", want[protocol.SourceOrganizeImports], "goTest:", want[protocol.GoTest])
-	defer log.Println("gopCodeAction end:", uri.Filename())
+	if goxls.DbgCodeAction {
+		log.Println(
+			"gopCodeAction:", uri.Filename(), "diagnostics:", len(diagnostics),
+			"refactorRewrite:", want[protocol.RefactorRewrite], "orgImports:", want[protocol.SourceOrganizeImports], "goTest:", want[protocol.GoTest])
+		defer log.Println("gopCodeAction done:", uri.Filename())
+	}
 
 	// Don't suggest fixes for generated files, since they are generally
 	// not useful and some editors may apply them automatically on save.

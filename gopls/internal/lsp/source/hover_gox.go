@@ -23,6 +23,7 @@ import (
 	"golang.org/x/text/unicode/runenames"
 	"golang.org/x/tools/go/types/typeutil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/goxls/astutil"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/goxls/typeparams"
@@ -39,7 +40,9 @@ func GopHover(ctx context.Context, snapshot Snapshot, fh FileHandle, position pr
 	defer done()
 
 	rng, h, err := gopHover(ctx, snapshot, fh, position)
-	log.Println("gopHover:", rng, h, "err:", err)
+	if goxls.DbgHover {
+		log.Println("gopHover:", rng, h, "err:", err)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -63,8 +66,10 @@ func GopHover(ctx context.Context, snapshot Snapshot, fh FileHandle, position pr
 // hovering at the position, it returns _, nil, nil: an error is only returned
 // if the position is valid but we fail to compute hover information.
 func gopHover(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol.Position) (protocol.Range, *HoverJSON, error) {
-	log.Println("gopHover:", fh.URI().Filename(), "pos:", pp.Line+1, pp.Character+1)
-	defer log.Println("gopHover done:", fh.URI().Filename(), "pos:", pp.Line+1, pp.Character+1)
+	if goxls.DbgHover {
+		log.Println("gopHover:", fh.URI().Filename(), "pos:", pp.Line+1, pp.Character+1)
+		defer log.Println("gopHover done:", fh.URI().Filename(), "pos:", pp.Line+1, pp.Character+1)
+	}
 
 	pkg, pgf, err := NarrowestPackageForGopFile(ctx, snapshot, fh.URI())
 	if err != nil {
@@ -321,7 +326,9 @@ func gopHover(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol
 //
 // If we do not have metadata for the hovered import, it returns _
 func gopHoverImport(ctx context.Context, snapshot Snapshot, pkg Package, pgf *ParsedGopFile, imp *ast.ImportSpec) (protocol.Range, *HoverJSON, error) {
-	log.Println("gopHoverImport:", imp.Path)
+	if goxls.DbgHover {
+		log.Println("gopHoverImport:", imp.Path)
+	}
 
 	rng, err := pgf.NodeRange(imp.Path)
 	if err != nil {
@@ -397,7 +404,9 @@ func gopHoverImport(ctx context.Context, snapshot Snapshot, pkg Package, pgf *Pa
 // gopHoverPackageName computes hover information for the package name of the file
 // pgf in pkg.
 func gopHoverPackageName(pkg Package, pgf *ParsedGopFile) (protocol.Range, *HoverJSON, error) {
-	log.Println("gopHoverPackageName:", pgf.File.Name)
+	if goxls.DbgHover {
+		log.Println("gopHoverPackageName:", pgf.File.Name)
+	}
 
 	var comment *ast.CommentGroup
 	for _, pgf := range pkg.CompiledGopFiles() {
@@ -427,7 +436,9 @@ func gopHoverPackageName(pkg Package, pgf *ParsedGopFile) (protocol.Range, *Hove
 //
 //	'∑', U+2211, N-ARY SUMMATION
 func gopHoverLit(pgf *ParsedGopFile, lit *ast.BasicLit, pos token.Pos) (protocol.Range, *HoverJSON, error) {
-	log.Println("gopHoverLit:", lit.Value)
+	if goxls.DbgHover {
+		log.Println("gopHoverLit:", lit.Value)
+	}
 
 	var (
 		value      string    // if non-empty, a constant value to format in hover

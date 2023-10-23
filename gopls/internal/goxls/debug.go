@@ -13,14 +13,18 @@ type dbgFlags int
 
 const (
 	DbgFlagTypesUtil = 1 << iota
-	DbgFlagCompletion
 	DbgFlagDisableRecover
-	DbgFlagDefault = DbgFlagTypesUtil | DbgFlagCompletion
+	DbgFlagCompletion
+	DbgFlagCodeAction
+	DbgFlagHover
+	DbgFlagDefault = DbgFlagTypesUtil | DbgFlagCompletion | DbgFlagCodeAction | DbgFlagHover
 	DbgFlagAll     = DbgFlagDefault | DbgFlagDisableRecover
 )
 
 var (
 	DbgCompletion bool
+	DbgCodeAction bool
+	DbgHover      bool
 )
 
 func SetDebug(flags dbgFlags) {
@@ -31,4 +35,6 @@ func SetDebug(flags dbgFlags) {
 		cl.SetDisableRecover(true)
 	}
 	DbgCompletion = (flags & DbgFlagCompletion) != 0
+	DbgHover = (flags & DbgFlagHover) != 0
+	DbgCodeAction = (flags & DbgFlagCodeAction) != 0
 }
