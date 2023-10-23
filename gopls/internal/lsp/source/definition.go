@@ -13,6 +13,7 @@ import (
 	"log"
 
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/event"
@@ -20,6 +21,10 @@ import (
 
 // Definition handles the textDocument/definition request for Go files.
 func Definition(ctx context.Context, snapshot Snapshot, fh FileHandle, position protocol.Position) ([]protocol.Location, error) {
+	if goxls.DbgDefinition {
+		log.Println("Definition:", fh.URI().Filename(), position.Line+1, position.Character+1)
+		defer log.Println("Definition done:", fh.URI().Filename(), position.Line+1, position.Character+1)
+	}
 	ctx, done := event.Start(ctx, "source.Definition")
 	defer done()
 
@@ -63,6 +68,9 @@ func Definition(ctx context.Context, snapshot Snapshot, fh FileHandle, position 
 	_, obj, _ := referencedObject(pkg, pgf, pos)
 	if obj == nil {
 		return nil, nil
+	}
+	if goxls.DbgDefinition {
+		log.Println("referencedObject ret:", obj, "pos:", obj.Pos())
 	}
 
 	// Handle objects with no position: builtin, unsafe.
@@ -116,6 +124,9 @@ func Definition(ctx context.Context, snapshot Snapshot, fh FileHandle, position 
 
 	// Finally, map the object position.
 	loc, err := mapPosition(ctx, pkg.FileSet(), snapshot, obj.Pos(), adjustedObjEnd(obj))
+	if goxls.DbgDefinition {
+		log.Println("referencedObject mapPosition:", obj, "err:", err, "loc:", loc)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +160,9 @@ func referencedObject(pkg Package, pgf *ParsedGoFile, pos token.Pos) (*ast.Ident
 	switch n := path[0].(type) {
 	case *ast.Ident:
 		obj = info.ObjectOf(n)
-		log.Println("info.ObjectOf:", n, obj)
+		if goxls.DbgDefinition {
+			log.Println("info.ObjectOf:", n, obj, "def:", info.Defs[n])
+		}
 
 		// If n is the var's declaring ident in a type switch
 		// [i.e. the x in x := foo.(type)], it will not have an object. In this
@@ -160,6 +173,9 @@ func referencedObject(pkg Package, pgf *ParsedGoFile, pos token.Pos) (*ast.Ident
 		// implicit objects; this is a type error ("unused x"),
 		if obj == nil {
 			if implicits, typ := typeSwitchImplicits(info, path); len(implicits) > 0 {
+				if goxls.DbgDefinition {
+					log.Println("typeSwitchImplicits:", implicits[0])
+				}
 				return n, implicits[0], typ
 			}
 		}
@@ -172,7 +188,6 @@ func referencedObject(pkg Package, pgf *ParsedGoFile, pos token.Pos) (*ast.Ident
 				obj = typeName
 			}
 		}
-		log.Println("referencedObject:", n, obj)
 		return n, obj, nil
 	}
 	return nil, nil, nil
