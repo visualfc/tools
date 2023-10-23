@@ -24,7 +24,15 @@ func (s *Server) documentHighlight(ctx context.Context, params *protocol.Documen
 		return nil, err
 	}
 
-	if snapshot.View().FileKind(fh) == source.Tmpl {
+	// goxls: Go+
+	// if snapshot.View().FileKind(fh) == source.Tmpl {
+	if kind := snapshot.View().FileKind(fh); kind == source.Gop {
+		rngs, err := source.GopHighlight(ctx, snapshot, fh, params.Position)
+		if err != nil {
+			event.Error(ctx, "no highlight", err)
+		}
+		return toProtocolHighlight(rngs), nil
+	} else if kind == source.Tmpl {
 		return template.Highlight(ctx, snapshot, fh, params.Position)
 	}
 
