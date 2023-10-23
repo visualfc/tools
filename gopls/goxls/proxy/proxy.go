@@ -28,6 +28,15 @@ func Main(gopls, goxls string, args ...string) {
 	check(err)
 
 	goplsDir := home + "/.gopls/"
+
+	_, errStat := os.Stat(goplsDir)
+	if errStat != nil {
+		if os.IsNotExist(errStat) {
+			errDir := os.MkdirAll(goplsDir, 0755)
+			check(errDir)
+		}
+	}
+
 	rotateDir := goplsDir + strconv.FormatInt(time.Now().UnixMicro(), 36)
 	if _, e := os.Lstat(goplsDir + "gopls.in"); e == nil {
 		err = os.MkdirAll(rotateDir, 0755)
