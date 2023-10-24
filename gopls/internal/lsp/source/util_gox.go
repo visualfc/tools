@@ -11,12 +11,30 @@ import (
 	"strings"
 
 	"github.com/goplus/gop/ast"
+	"github.com/goplus/gop/printer"
 	"github.com/goplus/gop/token"
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/goxls/typeparams"
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/span"
+	"golang.org/x/tools/internal/tokeninternal"
 )
+
+// GopFormatNode returns the "pretty-print" output for an ast node.
+func GopFormatNode(fset *token.FileSet, n ast.Node) string {
+	var buf strings.Builder
+	if err := printer.Fprint(&buf, fset, n); err != nil {
+		return ""
+	}
+	return buf.String()
+}
+
+// GopFormatNodeFile is like FormatNode, but requires only the token.File for the
+// syntax containing the given ast node.
+func GopFormatNodeFile(file *token.File, n ast.Node) string {
+	fset := tokeninternal.FileSetFor(file)
+	return GopFormatNode(fset, n)
+}
 
 // GopCollectScopes returns all scopes in an ast path, ordered as innermost scope
 // first.

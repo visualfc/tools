@@ -16,6 +16,7 @@ import (
 	"sync"
 	"text/template"
 
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/snippet"
@@ -315,6 +316,9 @@ func (c *completer) addPostfixSnippetCandidates(ctx context.Context, sel *ast.Se
 	}
 
 	selType := c.pkg.GetTypesInfo().TypeOf(sel.X)
+	if goxls.DbgCompletion {
+		log.Println("completer.addPostfixSnippetCandidates selType:", selType, "c.path:", len(c.path))
+	}
 	if selType == nil {
 		return
 	}
@@ -348,6 +352,9 @@ func (c *completer) addPostfixSnippetCandidates(ctx context.Context, sel *ast.Se
 	}
 
 	scope := c.pkg.GetTypes().Scope().Innermost(c.pos)
+	if goxls.DbgCompletion {
+		log.Println("completer.addPostfixSnippetCandidates Innermost:", scope, "c.pos:", c.pos)
+	}
 	if scope == nil {
 		return
 	}

@@ -1051,7 +1051,13 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 		// goxls: assume tv.Addressable() => true
 		// c.methodsAndFields(tv.Type, tv.Addressable(), nil, c.deepState.enqueue)
 		c.methodsAndFields(tv.Type, true, nil, c.deepState.enqueue)
+		if goxls.DbgCompletion {
+			log.Println("gopCompleter methodsAndFields:", len(c.items))
+		}
 		c.addPostfixSnippetCandidates(ctx, sel)
+		if goxls.DbgCompletion {
+			log.Println("gopCompleter addPostfixSnippetCandidates:", len(c.items))
+		}
 		return nil
 	}
 

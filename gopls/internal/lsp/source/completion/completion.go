@@ -1154,7 +1154,13 @@ func (c *completer) selector(ctx context.Context, sel *ast.SelectorExpr) error {
 	}
 	if ok {
 		c.methodsAndFields(tv.Type, tv.Addressable(), nil, c.deepState.enqueue)
+		if goxls.DbgCompletion {
+			log.Println("completer methodsAndFields:", len(c.items))
+		}
 		c.addPostfixSnippetCandidates(ctx, sel)
+		if goxls.DbgCompletion {
+			log.Println("completer addPostfixSnippetCandidates:", len(c.items))
+		}
 		return nil
 	}
 

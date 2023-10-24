@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"log"
 	"strings"
 
 	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -31,6 +33,9 @@ func (c *gopCompleter) addPostfixSnippetCandidates(ctx context.Context, sel *ast
 	}
 
 	selType := c.pkg.GopTypesInfo().TypeOf(sel.X)
+	if goxls.DbgCompletion {
+		log.Println("gopCompleter.addPostfixSnippetCandidates selType:", selType, "c.path:", len(c.path))
+	}
 	if selType == nil {
 		return
 	}
@@ -64,6 +69,9 @@ func (c *gopCompleter) addPostfixSnippetCandidates(ctx context.Context, sel *ast
 	}
 
 	scope := c.pkg.GetTypes().Scope().Innermost(c.pos)
+	if goxls.DbgCompletion {
+		log.Println("gopCompleter.addPostfixSnippetCandidates Innermost:", scope, "c.pos:", c.pos)
+	}
 	if scope == nil {
 		return
 	}
@@ -97,7 +105,7 @@ func (c *gopCompleter) addPostfixSnippetCandidates(ctx context.Context, sel *ast
 		}
 
 		tmplArgs := postfixTmplArgs{
-			X:              source.FormatNode(c.pkg.FileSet(), sel.X),
+			X:              source.GopFormatNode(c.pkg.FileSet(), sel.X),
 			StmtOK:         stmtOK,
 			Obj:            gopExprObj(c.pkg.GopTypesInfo(), sel.X),
 			Type:           selType,

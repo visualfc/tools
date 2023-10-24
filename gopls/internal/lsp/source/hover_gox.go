@@ -583,7 +583,7 @@ func gopObjectString(obj types.Object, qf types.Qualifier, declPos token.Pos, fi
 				for i, name := range spec.Names {
 					if declPos == name.Pos() {
 						if i < len(spec.Values) {
-							originalDeclaration := FormatNodeFile(file, spec.Values[i])
+							originalDeclaration := GopFormatNodeFile(file, spec.Values[i])
 							if originalDeclaration != declaration {
 								comment = declaration
 								declaration = originalDeclaration
