@@ -311,6 +311,9 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 	if path == nil {
 		return nil, nil, fmt.Errorf("cannot find node enclosing position")
 	}
+	if len(path) < 2 {
+		return nil, nil, nil
+	}
 	if goxls.DbgCompletion {
 		log.Println("GopCompletion PathEnclosingInterval:", reflect.TypeOf(path[0]), reflect.TypeOf(path[1]))
 	}
