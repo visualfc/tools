@@ -11,6 +11,7 @@ import (
 	"go/types"
 	"log"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -287,7 +288,7 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 	defer done()
 
 	pkg, pgf, err := source.NarrowestPackageForGopFile(ctx, snapshot, fh.URI())
-	if err != nil || pgf.File.Package == token.NoPos {
+	if err != nil || (pgf.File.Package == token.NoPos && pkg.GetTypes().Name() != "main") {
 		// If we can't parse this file or find position for the package
 		// keyword, it may be missing a package declaration. Try offering
 		// suggestions for the package declaration.
@@ -309,6 +310,9 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 	path, _ := astutil.PathEnclosingInterval(pgf.File, pos-1, pos-1)
 	if path == nil {
 		return nil, nil, fmt.Errorf("cannot find node enclosing position")
+	}
+	if goxls.DbgCompletion {
+		log.Println("GopCompletion PathEnclosingInterval:", reflect.TypeOf(path[0]), reflect.TypeOf(path[1]))
 	}
 
 	// Check if completion at this position is valid. If not, return early.
