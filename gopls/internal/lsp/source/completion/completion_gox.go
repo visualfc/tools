@@ -543,6 +543,9 @@ func (c *gopCompleter) collectCompletions(ctx context.Context) error {
 		return nil
 	}
 
+	if goxls.DbgCompletion {
+		log.Println("collectCompletions: path", reflect.TypeOf(c.path[0]))
+	}
 	switch n := c.path[0].(type) {
 	case *ast.Ident:
 		if c.file.Name == n {
@@ -1045,7 +1048,9 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 		log.Println("gopCompleter.selector:", sel.X, ok, "type:", tv.Type)
 	}
 	if ok {
-		c.methodsAndFields(tv.Type, tv.Addressable(), nil, c.deepState.enqueue)
+		// goxls: assume tv.Addressable() => true
+		// c.methodsAndFields(tv.Type, tv.Addressable(), nil, c.deepState.enqueue)
+		c.methodsAndFields(tv.Type, true, nil, c.deepState.enqueue)
 		c.addPostfixSnippetCandidates(ctx, sel)
 		return nil
 	}
