@@ -78,7 +78,7 @@ func (c *gopCompleter) addAssignAppend() {
 		}
 
 		// The name or our slice is whatever's in the LHS expression.
-		sliceText = source.FormatNode(fset, n.Lhs[exprIdx])
+		sliceText = source.GopFormatNode(fset, n.Lhs[exprIdx])
 	case *ast.SelectorExpr:
 		// Make sure we are a selector at the beginning of a statement.
 		if _, parentIsExprtStmt := c.path[2].(*ast.ExprStmt); !parentIsExprtStmt {
@@ -88,7 +88,7 @@ func (c *gopCompleter) addAssignAppend() {
 		// So far we only know the first part of our slice name. For
 		// example in "s.a<>" we only know our slice begins with "s."
 		// since the user could still be typing.
-		sliceText = source.FormatNode(fset, n.X) + "."
+		sliceText = source.GopFormatNode(fset, n.X) + "."
 		needsLHS = true
 	case *ast.ExprStmt:
 		needsLHS = true
@@ -209,7 +209,7 @@ func (c *gopCompleter) addErrCheck() {
 
 	var (
 		// errVar is e.g. "err" in "foo, err := bar()".
-		errVar = source.FormatNode(c.pkg.FileSet(), lastAssignee)
+		errVar = source.GopFormatNode(c.pkg.FileSet(), lastAssignee)
 
 		// Whether we need to include the "if" keyword in our candidate.
 		needsIf = true

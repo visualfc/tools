@@ -316,12 +316,12 @@ func (c *gopCompleter) importEdits(imp *importInfo) ([]protocol.TextEdit, error)
 		return nil, nil
 	}
 
-	pgf, err := c.pkg.File(span.URIFromPath(c.filename))
+	pgf, err := c.pkg.GopFile(span.URIFromPath(c.filename))
 	if err != nil {
 		return nil, err
 	}
 
-	return source.ComputeOneImportFixEdits(c.snapshot, pgf, &imports.ImportFix{
+	return source.GopComputeOneImportFixEdits(c.snapshot, pgf, &imports.ImportFix{
 		StmtInfo: imports.ImportInfo{
 			ImportPath: imp.importPath,
 			Name:       imp.name,
