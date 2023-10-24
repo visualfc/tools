@@ -107,10 +107,12 @@ func AddNamedImport(fset *token.FileSet, f *ast.File, name, path string) (added 
 			// Our new import, preceded by a blank line,  goes after the package declaration
 			// and after the comment, if any, that starts on the same line as the
 			// package declaration.
-			impDecl.TokPos = f.Package
 
-			file := fset.File(f.Package)
-			pkgLine := file.Line(f.Package)
+			// goxls: f.Package can be NoPos
+			pos := f.Pos()
+			impDecl.TokPos = pos
+			file := fset.File(pos)
+			pkgLine := file.Line(pos)
 			for _, c := range f.Comments {
 				if file.Line(c.Pos()) > pkgLine {
 					break
