@@ -108,7 +108,7 @@ func gopResolveInvalid(fset *token.FileSet, obj types.Object, node ast.Node, inf
 		}
 	})
 	// Construct a fake type for the object and return a fake object with this type.
-	typename := source.FormatNode(fset, resultExpr)
+	typename := source.GopFormatNode(fset, resultExpr)
 	typ := types.NewNamed(types.NewTypeName(token.NoPos, obj.Pkg(), typename, nil), types.Typ[types.Invalid], nil)
 	return types.NewVar(obj.Pos(), obj.Pkg(), obj.Name(), typ)
 }
