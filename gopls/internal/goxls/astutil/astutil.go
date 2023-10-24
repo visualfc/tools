@@ -188,7 +188,9 @@ func childrenOf(n ast.Node) []ast.Node {
 			return true // recur
 		}
 		if node != nil { // push child
-			children = append(children, node)
+			if f, ok := node.(*ast.FuncDecl); ok && !f.Shadow { // goxls: skip Go+ shadow entry
+				children = append(children, node)
+			}
 		}
 		return false // no recursion
 	})
