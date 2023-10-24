@@ -8,9 +8,11 @@ import (
 	"context"
 	"fmt"
 	"go/types"
+	"log"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/goxls/astutil"
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -35,6 +37,9 @@ func GopHighlight(ctx context.Context, snapshot Snapshot, fh FileHandle, positio
 	path, _ := astutil.PathEnclosingInterval(pgf.File, pos, pos)
 	if len(path) == 0 {
 		return nil, fmt.Errorf("no enclosing position found for %v:%v", position.Line, position.Character)
+	}
+	if goxls.DbgHighlight {
+		log.Println("GopHighlight PathEnclosingInterval:", path[0])
 	}
 	// If start == end for astutil.PathEnclosingInterval, the 1-char interval
 	// following start is used instead. As a result, we might not get an exact
