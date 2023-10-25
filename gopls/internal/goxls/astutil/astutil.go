@@ -64,6 +64,14 @@ func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Nod
 	visit = func(node ast.Node) bool {
 		path = append(path, node)
 
+		// goxls: Go+ shadow entry
+		if f, ok := node.(*ast.FuncDecl); ok && f.Shadow {
+			if f.Body == nil {
+				return false
+			}
+			return visit(f.Body)
+		}
+
 		nodePos := node.Pos()
 		nodeEnd := node.End()
 
@@ -84,7 +92,6 @@ func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Nod
 			// [childPos, childEnd) is unaugmented interval of child.
 			childPos := child.Pos()
 			childEnd := child.End()
-
 			// [augPos, augEnd) is whitespace-augmented interval of child.
 			augPos := childPos
 			augEnd := childEnd
@@ -188,9 +195,7 @@ func childrenOf(n ast.Node) []ast.Node {
 			return true // recur
 		}
 		if node != nil { // push child
-			if f, ok := node.(*ast.FuncDecl); !ok || !f.Shadow { // goxls: skip Go+ shadow entry
-				children = append(children, node)
-			}
+			children = append(children, node)
 		}
 		return false // no recursion
 	})
