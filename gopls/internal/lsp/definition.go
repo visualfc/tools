@@ -48,7 +48,7 @@ func (s *Server) typeDefinition(ctx context.Context, params *protocol.TypeDefini
 	defer done()
 
 	// TODO(rfindley): type definition requests should be multiplexed across all views.
-	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.Go)
+	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.UnknownKind)
 	defer release()
 	if !ok {
 		return nil, err
@@ -56,6 +56,8 @@ func (s *Server) typeDefinition(ctx context.Context, params *protocol.TypeDefini
 	switch kind := snapshot.View().FileKind(fh); kind {
 	case source.Go:
 		return source.TypeDefinition(ctx, snapshot, fh, params.Position)
+	case source.Gop: // goxls: Go+
+		return source.GopTypeDefinition(ctx, snapshot, fh, params.Position)
 	default:
 		return nil, fmt.Errorf("can't find type definitions for file type %s", kind)
 	}
