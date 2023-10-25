@@ -115,7 +115,7 @@ func GopFormatVarType(ctx context.Context, snapshot Snapshot, srcpkg Package, ob
 		return "", err // e.g. ctx cancelled
 	}
 
-	targetMeta := findFileInDeps(snapshot, srcpkg.Metadata(), targetpgf.URI)
+	targetMeta := gopFindFileInDeps(snapshot, srcpkg.Metadata(), targetpgf.URI)
 	if targetMeta == nil {
 		// If we have an object from type-checking, it should exist in a file in
 		// the forward transitive closure.

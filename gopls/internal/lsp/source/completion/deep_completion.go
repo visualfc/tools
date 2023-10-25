@@ -135,7 +135,6 @@ func (c *completer) deepSearch(ctx context.Context, start time.Time, deadline *t
 	outer:
 		for _, cand := range c.deepState.thisQueue {
 			obj := cand.obj
-
 			if obj == nil {
 				continue
 			}
@@ -146,12 +145,6 @@ func (c *completer) deepSearch(ctx context.Context, start time.Time, deadline *t
 					continue
 				}
 				c.seen[obj] = true
-			}
-			if goxls.DbgCompletion && len(c.deepState.nextQueue) == 1 {
-				log.Println(
-					"deepSearch obj:", obj,
-					"pkgDecl:", c.completionContext.packageCompletion,
-					"objExp:", obj.Exported())
 			}
 
 			// If obj is not accessible because it lives in another package and is
@@ -296,7 +289,11 @@ func (c *completer) addCandidate(ctx context.Context, cand *candidate) {
 	}
 
 	cand.name = deepCandName(cand)
-	if item, err := c.item(ctx, *cand); err == nil {
+	item, err := c.item(ctx, *cand)
+	if goxls.DbgCompletion && err != nil {
+		log.Println("completer.addCandidate item:", err)
+	}
+	if err == nil {
 		c.items = append(c.items, item)
 	}
 }
