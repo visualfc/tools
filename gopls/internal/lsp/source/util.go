@@ -31,6 +31,11 @@ import (
 // TODO(adonovan): opt: this function does too much.
 // Move snapshot.ReadFile into the caller (most of which have already done it).
 func IsGenerated(ctx context.Context, snapshot Snapshot, uri span.URI) bool {
+	// goxls: assume all non-Go files are not generated files to avoid using ParseGoSrc to Go+ files
+	if !strings.HasSuffix(uri.Filename(), ".go") {
+		return false
+	}
+
 	fh, err := snapshot.ReadFile(ctx, uri)
 	if err != nil {
 		return false
