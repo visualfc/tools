@@ -147,6 +147,12 @@ func (c *completer) deepSearch(ctx context.Context, start time.Time, deadline *t
 				}
 				c.seen[obj] = true
 			}
+			if goxls.DbgCompletion && len(c.deepState.nextQueue) == 1 {
+				log.Println(
+					"deepSearch obj:", obj,
+					"pkgDecl:", c.completionContext.packageCompletion,
+					"objExp:", obj.Exported())
+			}
 
 			// If obj is not accessible because it lives in another package and is
 			// not exported, don't treat it as a completion candidate unless it's
@@ -234,6 +240,8 @@ func (c *completer) deepSearch(ctx context.Context, start time.Time, deadline *t
 					c.deepState.enqueue(newCand)
 				})
 			default:
+				// goxls: force cand.addressable = true (TODO)
+				cand.addressable = true
 				c.methodsAndFields(obj.Type(), cand.addressable, cand.imp, func(newCand candidate) {
 					newCand.pathInvokeMask = cand.pathInvokeMask
 					newCand.path = path

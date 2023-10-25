@@ -14,8 +14,11 @@ import (
 	"go/token"
 	"path/filepath"
 	"reflect"
+	"strings"
 
+	"github.com/qiniu/x/log"
 	goplsastutil "golang.org/x/tools/gopls/internal/astutil"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -62,6 +65,12 @@ func ParseGoSrc(ctx context.Context, fset *token.FileSet, uri span.URI, src []by
 	}
 	ctx, done := event.Start(ctx, "cache.ParseGoSrc", tag.File.Of(uri.Filename()))
 	defer done()
+
+	// goxls: misuse of ParseGoSrc
+	if goxls.DbgMisuse && strings.HasSuffix(uri.Filename(), ".gop") {
+		log.Println("misuse: use ParseGoSrc to parse a Go+ file")
+		log.SingleStack()
+	}
 
 	file, err := parser.ParseFile(fset, uri.Filename(), src, mode)
 	var parseErr scanner.ErrorList
