@@ -66,9 +66,10 @@ func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Nod
 
 		// goxls: Go+ shadow entry
 		if f, ok := node.(*ast.FuncDecl); ok && f.Shadow {
-			if f.Body != nil && visit(f.Body) {
-				return true
+			if f.Body == nil {
+				return false
 			}
+			return visit(f.Body)
 		}
 
 		nodePos := node.Pos()
