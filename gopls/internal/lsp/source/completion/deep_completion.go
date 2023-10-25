@@ -135,7 +135,6 @@ func (c *completer) deepSearch(ctx context.Context, start time.Time, deadline *t
 	outer:
 		for _, cand := range c.deepState.thisQueue {
 			obj := cand.obj
-
 			if obj == nil {
 				continue
 			}
@@ -290,7 +289,11 @@ func (c *completer) addCandidate(ctx context.Context, cand *candidate) {
 	}
 
 	cand.name = deepCandName(cand)
-	if item, err := c.item(ctx, *cand); err == nil {
+	item, err := c.item(ctx, *cand)
+	if goxls.DbgCompletion && err != nil {
+		log.Println("completer.addCandidate item:", err)
+	}
+	if err == nil {
 		c.items = append(c.items, item)
 	}
 }

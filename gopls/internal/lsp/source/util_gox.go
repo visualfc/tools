@@ -238,6 +238,29 @@ func GopQualifier(f *ast.File, pkg *types.Package, info *typesutil.Info) types.Q
 	}
 }
 
+// gopRequalifier returns a function that re-qualifies identifiers and qualified
+// identifiers contained in targetFile using the given metadata qualifier.
+func gopRequalifier(s MetadataSource, targetFile *ast.File, targetMeta *Metadata, mq MetadataQualifier) func(string) string {
+	qm := map[string]string{
+		"": mq(targetMeta.Name, "", targetMeta.PkgPath),
+	}
+
+	// Construct mapping of import paths to their defined or implicit names.
+	for _, imp := range targetFile.Imports {
+		name, pkgName, impPath, pkgPath := gopImportInfo(s, imp, targetMeta)
+
+		// Re-map the target name for the source file.
+		qm[name] = mq(pkgName, impPath, pkgPath)
+	}
+
+	return func(name string) string {
+		if newName, ok := qm[name]; ok {
+			return newName
+		}
+		return name
+	}
+}
+
 // gopEmbeddedIdent returns the type name identifier for an embedding x, if x in a
 // valid embedding. Otherwise, it returns nil.
 //

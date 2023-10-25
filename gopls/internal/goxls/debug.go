@@ -23,6 +23,10 @@ const (
 	DbgFlagAll     = DbgFlagDefault | DbgFlagDisableRecover
 )
 
+const (
+	DbgMisuse = true
+)
+
 var (
 	DbgCompletion bool
 	DbgCodeAction bool
