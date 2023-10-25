@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/govulncheck"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/cache"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/debug"
@@ -766,9 +768,18 @@ func (c *commandHandler) ListImports(ctx context.Context, args command.URIArg) (
 	err := c.run(ctx, commandConfig{
 		forURI: args.URI,
 	}, func(ctx context.Context, deps commandDeps) error {
-		fh, err := deps.snapshot.ReadFile(ctx, args.URI.SpanURI())
-		if err != nil {
-			return err
+		// goxls: use deps.fh & support Go+
+		// fh, err := deps.snapshot.ReadFile(ctx, args.URI.SpanURI())
+		// if err != nil {
+		//	  return err
+		// }
+		fh := deps.fh
+		kind := deps.snapshot.View().FileKind(fh)
+		if goxls.DbgCommand {
+			log.Println("commandHandler.ListImports:", kind)
+		}
+		if kind == source.Gop {
+			return gopListImportsCmd(&result, ctx, args, deps)
 		}
 		pgf, err := deps.snapshot.ParseGo(ctx, fh, source.ParseHeader)
 		if err != nil {
