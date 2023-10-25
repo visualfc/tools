@@ -240,8 +240,6 @@ func (c *completer) deepSearch(ctx context.Context, start time.Time, deadline *t
 					c.deepState.enqueue(newCand)
 				})
 			default:
-				// goxls: force cand.addressable = true (TODO)
-				cand.addressable = true
 				c.methodsAndFields(obj.Type(), cand.addressable, cand.imp, func(newCand candidate) {
 					newCand.pathInvokeMask = cand.pathInvokeMask
 					newCand.path = path
