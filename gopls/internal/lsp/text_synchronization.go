@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -134,6 +135,10 @@ func (s *Server) didChange(ctx context.Context, params *protocol.DidChangeTextDo
 // warnAboutModifyingGeneratedFiles shows a warning if a user tries to edit a
 // generated file for the first time.
 func (s *Server) warnAboutModifyingGeneratedFiles(ctx context.Context, uri span.URI) error {
+	// goxls: assume all non-Go files are not generated files to avoid using ParseGoSrc to Go+ files
+	if !strings.HasSuffix(uri.Filename(), ".go") {
+		return nil
+	}
 	s.changedFilesMu.Lock()
 	_, ok := s.changedFiles[uri]
 	if !ok {

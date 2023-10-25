@@ -618,6 +618,26 @@ func gopObjectString(obj types.Object, qf types.Qualifier, declPos token.Pos, fi
 	return str
 }
 
+// GopHoverDocForObject returns the best doc comment for obj (for which
+// fset provides file/line information).
+//
+// TODO(rfindley): there appears to be zero(!) tests for this functionality.
+func GopHoverDocForObject(ctx context.Context, snapshot Snapshot, fset *token.FileSet, obj types.Object) (*ast.CommentGroup, error) {
+	if _, isTypeName := obj.(*types.TypeName); isTypeName {
+		if _, isTypeParam := obj.Type().(*typeparams.TypeParam); isTypeParam {
+			return nil, nil
+		}
+	}
+
+	pgf, pos, err := gopParseFull(ctx, snapshot, fset, obj.Pos())
+	if err != nil {
+		return nil, fmt.Errorf("re-parsing: %v", err)
+	}
+
+	decl, spec, field := gopFindDeclInfo([]*ast.File{pgf.File}, pos)
+	return gopChooseDocComment(decl, spec, field), nil
+}
+
 func gopChooseDocComment(decl ast.Decl, spec ast.Spec, field *ast.Field) *ast.CommentGroup {
 	if field != nil {
 		if field.Doc != nil {

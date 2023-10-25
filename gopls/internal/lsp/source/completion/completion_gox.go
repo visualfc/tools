@@ -372,8 +372,9 @@ func GopCompletion(ctx context.Context, snapshot source.Snapshot, fh source.File
 		qf:       source.GopQualifier(pgf.File, pkg.GetTypes(), pkg.GopTypesInfo()),
 		mq:       source.MetadataQualifierForGopFile(snapshot, pgf.File, pkg.Metadata()),
 		completionContext: completionContext{
-			triggerCharacter: protoContext.TriggerCharacter,
-			triggerKind:      protoContext.TriggerKind,
+			triggerCharacter:  protoContext.TriggerCharacter,
+			triggerKind:       protoContext.TriggerKind,
+			packageCompletion: true, // goxls: Go+ always has `package xxx`
 		},
 		fh:                        fh,
 		filename:                  fh.URI().Filename(),
