@@ -193,7 +193,7 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	cand.name = deepCandName(cand)
 	if item, err := c.item(ctx, *cand); err == nil {
 		c.items = append(c.items, item)
-	} else if goxls.DbgCompletion {
+	} else if false && goxls.DbgCompletion {
 		log.Println("gopCompleter.addCandidate item:", err)
 		log.SingleStack()
 	}
