@@ -7,13 +7,16 @@ package cache
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	goplsastutil "golang.org/x/tools/gopls/internal/astutil"
+	"golang.org/x/tools/gopls/internal/goxls"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
+	"github.com/qiniu/x/log"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
@@ -62,6 +65,12 @@ func ParseGopSrc(ctx context.Context, fset *token.FileSet, uri span.URI, src []b
 	}
 	ctx, done := event.Start(ctx, "cache.ParseGopSrc", tag.File.Of(uri.Filename()))
 	defer done()
+
+	// goxls: misuse of ParseGopSrc
+	if goxls.DbgMisuse && strings.HasSuffix(uri.Filename(), ".go") {
+		log.Println("misuse: use ParseGopSrc to parse a Go file")
+		log.SingleStack()
+	}
 
 	file, err := parser.ParseFile(fset, uri.Filename(), src, mode)
 	var parseErr scanner.ErrorList

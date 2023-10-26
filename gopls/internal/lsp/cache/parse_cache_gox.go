@@ -11,13 +11,16 @@ import (
 	"fmt"
 	"math/bits"
 	"runtime"
+	"strings"
 	"time"
 
 	goparser "go/parser"
 
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/token"
+	"github.com/qiniu/x/log"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/internal/memoize"
 	"golang.org/x/tools/internal/tokeninternal"
@@ -78,6 +81,11 @@ func (c *parseCache) startParseGop(mode parser.Mode, purgeFuncBodies bool, fhs .
 		}
 
 		uri := fh.URI()
+		// goxls: misuse of parseCache.startParseGop
+		if goxls.DbgMisuse && strings.HasSuffix(uri.Filename(), ".go") {
+			log.Println("misuse: use parseCache.startParseGop to parse a Go file")
+			log.SingleStack()
+		}
 		promise := memoize.NewPromise("parseCache.parseGop", func(ctx context.Context, _ interface{}) interface{} {
 			// Allocate 2*len(content)+parsePadding to allow for re-parsing once
 			// inside of parseGoSrc without exceeding the allocated space.
