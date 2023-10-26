@@ -108,7 +108,7 @@ FindCall:
 		name = "func"
 	}
 	mq := MetadataQualifierForGopFile(snapshot, pgf.File, pkg.Metadata())
-	s, err := GopNewSignature(ctx, snapshot, pkg, sig, comment, qf, mq)
+	s, err := NewSignature(ctx, snapshot, pkg, sig, comment, qf, mq)
 	if err != nil {
 		return nil, 0, err
 	}
