@@ -57,14 +57,6 @@ import (
 // file, but unfortunately ast.File records only the token.Pos of
 // the 'package' keyword, but not of the start of the file itself.
 func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Node, exact bool) {
-	return pathEnclosingInterval(root, start, end, false)
-}
-
-func PathEnclosingIntervalWithShadow(root *ast.File, start, end token.Pos) (path []ast.Node, exact bool) {
-	return pathEnclosingInterval(root, start, end, true)
-}
-
-func pathEnclosingInterval(root *ast.File, start, end token.Pos, withShadow bool) (path []ast.Node, exact bool) {
 	// log.Printf("EnclosingInterval %d %d\n", start, end) // debugging
 
 	// Precondition: node.[Pos..End) and adjoining whitespace contain [start, end).
@@ -94,7 +86,7 @@ func pathEnclosingInterval(root *ast.File, start, end token.Pos, withShadow bool
 		}
 
 		// Find sole child that contains [start, end).
-		children := childrenOf(node, withShadow)
+		children := childrenOf(node)
 		l := len(children)
 		for i, child := range children {
 			// [childPos, childEnd) is unaugmented interval of child.
@@ -194,7 +186,7 @@ func tok(pos token.Pos, len int) ast.Node {
 // childrenOf returns the direct non-nil children of ast.Node n.
 // It may include fake ast.Node implementations for bare tokens.
 // it is not safe to call (e.g.) ast.Walk on such nodes.
-func childrenOf(n ast.Node, withShadow bool) []ast.Node {
+func childrenOf(n ast.Node) []ast.Node {
 	var children []ast.Node
 
 	// First add nodes for all true subtrees.
@@ -203,9 +195,7 @@ func childrenOf(n ast.Node, withShadow bool) []ast.Node {
 			return true // recur
 		}
 		if node != nil { // push child
-			if f, ok := node.(*ast.FuncDecl); !ok || !f.Shadow || withShadow { // goxls: skip Go+ shadow entry if withShadow: false
-				children = append(children, node)
-			}
+			children = append(children, node)
 		}
 		return false // no recursion
 	})
@@ -323,9 +313,6 @@ func childrenOf(n ast.Node, withShadow bool) []ast.Node {
 			tok(n.For, len("for")))
 
 	case *ast.FuncDecl:
-		if n.Shadow { // goxls: skip Go+ shadow entry
-			break
-		}
 		// TODO(adonovan): FuncDecl.Comment?
 
 		// Uniquely, FuncDecl breaks the invariant that

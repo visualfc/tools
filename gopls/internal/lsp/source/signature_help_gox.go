@@ -33,7 +33,7 @@ func GopSignatureHelp(ctx context.Context, snapshot Snapshot, fh FileHandle, pos
 	}
 	// Find a call expression surrounding the query position.
 	var callExpr *ast.CallExpr
-	path, _ := astutil.PathEnclosingIntervalWithShadow(pgf.File, pos, pos)
+	path, _ := astutil.PathEnclosingInterval(pgf.File, pos, pos)
 	if path == nil {
 		return nil, 0, fmt.Errorf("cannot find node enclosing position")
 	}
