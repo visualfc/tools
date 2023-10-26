@@ -75,7 +75,7 @@ func (c *gopCompleter) item(ctx context.Context, cand candidate) (CompletionItem
 			detail = "struct{...}" // for anonymous structs
 		} else if obj.IsField() {
 			var err error
-			detail, err = source.GopFormatVarType(ctx, c.snapshot, c.pkg, obj, c.qf, c.mq)
+			detail, err = source.FormatVarType(ctx, c.snapshot, c.pkg, obj, c.qf, c.mq)
 			if err != nil {
 				return CompletionItem{}, err
 			}
@@ -127,7 +127,7 @@ Suffixes:
 		switch mod {
 		case invoke:
 			if sig, ok := funcType.Underlying().(*types.Signature); ok {
-				s, err := source.GopNewSignature(ctx, c.snapshot, c.pkg, sig, nil, c.qf, c.mq)
+				s, err := source.NewSignature(ctx, c.snapshot, c.pkg, sig, nil, c.qf, c.mq)
 				if err != nil {
 					return CompletionItem{}, err
 				}
@@ -236,7 +236,7 @@ Suffixes:
 		return item, nil
 	}
 
-	comment, err := source.GopHoverDocForObject(ctx, c.snapshot, c.pkg.FileSet(), obj)
+	comment, err := source.HoverDocForObject(ctx, c.snapshot, c.pkg.FileSet(), obj)
 	if err != nil {
 		event.Error(ctx, fmt.Sprintf("failed to find Hover for %q", obj.Name()), err)
 		return item, nil

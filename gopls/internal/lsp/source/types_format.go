@@ -291,7 +291,12 @@ func FormatVarType(ctx context.Context, snapshot Snapshot, srcpkg Package, obj *
 
 	// TODO(rfindley): parsing to produce candidates can be costly; consider
 	// using faster methods.
-	targetpgf, pos, err := parseFull(ctx, snapshot, srcpkg.FileSet(), obj.Pos())
+	// goxls: maybe a Go or Go+ file
+	// targetpgf, pos, err := parseFull(ctx, snapshot, srcpkg.FileSet(), obj.Pos())
+	gopf, targetpgf, pos, err := gopParseFull(ctx, snapshot, srcpkg.FileSet(), obj.Pos())
+	if gopf != nil {
+		return gopFormatVarType(snapshot, srcpkg, obj, qf, mq, pos, gopf)
+	}
 	if err != nil {
 		return "", err // e.g. ctx cancelled
 	}

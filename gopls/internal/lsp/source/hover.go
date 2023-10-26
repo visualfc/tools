@@ -20,6 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	gopast "github.com/goplus/gop/ast"
 	"golang.org/x/text/unicode/runenames"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/types/typeutil"
@@ -324,6 +325,182 @@ func hover(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol.Po
 			if recv == nil || !recv.Exported() {
 				path := pathEnclosingObjNode(pgf.File, pos)
 				if enclosing := searchForEnclosing(pkg.GetTypesInfo(), path); enclosing != nil {
+					recv = enclosing
+				} else {
+					recv = nil // note: just recv = ... could result in a typed nil.
+				}
+			}
+
+			pkg := obj.Pkg()
+			if recv != nil {
+				linkName = fmt.Sprintf("(%s.%s).%s", pkg.Name(), recv.Name(), obj.Name())
+				if obj.Exported() && recv.Exported() && pkg.Scope().Lookup(recv.Name()) == recv {
+					linkPath = pkg.Path()
+					anchor = fmt.Sprintf("%s.%s", recv.Name(), obj.Name())
+				}
+			} else {
+				linkName = fmt.Sprintf("%s.%s", pkg.Name(), obj.Name())
+				if obj.Exported() && pkg.Scope().Lookup(obj.Name()) == obj {
+					linkPath = pkg.Path()
+					anchor = obj.Name()
+				}
+			}
+		}
+	}
+
+	if snapshot.View().IsGoPrivatePath(linkPath) || linkMeta.ForTest != "" {
+		linkPath = ""
+	} else if linkMeta.Module != nil && linkMeta.Module.Version != "" {
+		mod := linkMeta.Module
+		linkPath = strings.Replace(linkPath, mod.Path, mod.Path+"@"+mod.Version, 1)
+	}
+
+	return rng, &HoverJSON{
+		Synopsis:          doc.Synopsis(docText),
+		FullDocumentation: docText,
+		SingleLine:        singleLineSignature,
+		SymbolName:        linkName,
+		Signature:         signature,
+		LinkPath:          linkPath,
+		LinkAnchor:        anchor,
+	}, nil
+}
+
+// goxls: hover a Go object in a Go+ file
+// sync code from func hover(...)
+func goHover(
+	snapshot Snapshot,
+	pkg Package, pgf *ParsedGopFile, pos token.Pos, ident *gopast.Ident, obj types.Object, rng protocol.Range, qf types.Qualifier,
+	declPGF *ParsedGoFile, declPos token.Pos) (protocol.Range, *HoverJSON, error) {
+	decl, spec, field := findDeclInfo([]*ast.File{declPGF.File}, declPos)
+	comment := chooseDocComment(decl, spec, field)
+	docText := comment.Text()
+
+	// By default, types.ObjectString provides a reasonable signature.
+	signature := objectString(obj, qf, declPos, declPGF.Tok, spec)
+	singleLineSignature := signature
+
+	// TODO(rfindley): we could do much better for inferred signatures.
+	if inferred := gopInferredSignature(pkg.GopTypesInfo(), ident); inferred != nil {
+		if s := inferredSignatureString(obj, qf, inferred); s != "" {
+			signature = s
+		}
+	}
+
+	// For "objects defined by a type spec", the signature produced by
+	// objectString is insufficient:
+	//  (1) large structs are formatted poorly, with no newlines
+	//  (2) we lose inline comments
+	//
+	// Furthermore, we include a summary of their method set.
+	//
+	// TODO(rfindley): this should use FormatVarType to get proper qualification
+	// of identifiers, and we should revisit the formatting of method set.
+	_, isTypeName := obj.(*types.TypeName)
+	_, isTypeParam := obj.Type().(*typeparams.TypeParam)
+	if isTypeName && !isTypeParam {
+		spec, ok := spec.(*ast.TypeSpec)
+		if !ok {
+			return protocol.Range{}, nil, bug.Errorf("type name %q without type spec", obj.Name())
+		}
+		spec2 := *spec
+		// Don't duplicate comments when formatting type specs.
+		spec2.Doc = nil
+		spec2.Comment = nil
+		var b strings.Builder
+		b.WriteString("type ")
+		fset := tokeninternal.FileSetFor(declPGF.Tok)
+		if err := format.Node(&b, fset, &spec2); err != nil {
+			return protocol.Range{}, nil, err
+		}
+
+		// Display the declared methods accessible from the identifier.
+		//
+		// (The format.Node call above displays any struct fields, public
+		// or private, in syntactic form. We choose not to recursively
+		// enumerate any fields and methods promoted from them.)
+		if !types.IsInterface(obj.Type()) {
+			sep := "\n\n"
+			for _, m := range typeutil.IntuitiveMethodSet(obj.Type(), nil) {
+				// Show direct methods that are either exported, or defined in the
+				// current package.
+				if (m.Obj().Exported() || m.Obj().Pkg() == pkg.GetTypes()) && len(m.Index()) == 1 {
+					b.WriteString(sep)
+					sep = "\n"
+					b.WriteString(types.ObjectString(m.Obj(), qf))
+				}
+			}
+		}
+		signature = b.String()
+	}
+
+	// Compute link data (on pkg.go.dev or other documentation host).
+	//
+	// If linkPath is empty, the symbol is not linkable.
+	var (
+		linkName string    // => link title, always non-empty
+		linkPath string    // => link path
+		anchor   string    // link anchor
+		linkMeta *Metadata // metadata for the linked package
+	)
+	{
+		linkMeta = findFileInDeps(snapshot, pkg.Metadata(), declPGF.URI)
+		if linkMeta == nil {
+			return protocol.Range{}, nil, bug.Errorf("no metadata for %s", declPGF.URI)
+		}
+
+		// For package names, we simply link to their imported package.
+		if pkgName, ok := obj.(*types.PkgName); ok {
+			linkName = pkgName.Name()
+			linkPath = pkgName.Imported().Path()
+			impID := linkMeta.DepsByPkgPath[PackagePath(pkgName.Imported().Path())]
+			linkMeta = snapshot.Metadata(impID)
+			if linkMeta == nil {
+				return protocol.Range{}, nil, bug.Errorf("no metadata for %s", declPGF.URI)
+			}
+		} else {
+			// For all others, check whether the object is in the package scope, or
+			// an exported field or method of an object in the package scope.
+			//
+			// We try to match pkgsite's heuristics for what is linkable, and what is
+			// not.
+			var recv types.Object
+			switch obj := obj.(type) {
+			case *types.Func:
+				sig := obj.Type().(*types.Signature)
+				if sig.Recv() != nil {
+					tname := typeToObject(sig.Recv().Type())
+					if tname != nil { // beware typed nil
+						recv = tname
+					}
+				}
+			case *types.Var:
+				if obj.IsField() {
+					if spec, ok := spec.(*ast.TypeSpec); ok {
+						typeName := spec.Name
+						scopeObj, _ := obj.Pkg().Scope().Lookup(typeName.Name).(*types.TypeName)
+						if scopeObj != nil {
+							if st, _ := scopeObj.Type().Underlying().(*types.Struct); st != nil {
+								for i := 0; i < st.NumFields(); i++ {
+									if obj == st.Field(i) {
+										recv = scopeObj
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Even if the object is not available in package documentation, it may
+			// be embedded in a documented receiver. Detect this by searching
+			// enclosing selector expressions.
+			//
+			// TODO(rfindley): pkgsite doesn't document fields from embedding, just
+			// methods.
+			if recv == nil || !recv.Exported() {
+				path := gopPathEnclosingObjNode(pgf.File, pos)
+				if enclosing := gopSearchForEnclosing(pkg.GopTypesInfo(), path); enclosing != nil {
 					recv = enclosing
 				} else {
 					recv = nil // note: just recv = ... could result in a typed nil.
@@ -727,7 +904,12 @@ func HoverDocForObject(ctx context.Context, snapshot Snapshot, fset *token.FileS
 		}
 	}
 
-	pgf, pos, err := parseFull(ctx, snapshot, fset, obj.Pos())
+	// goxls: maybe a Go or Go+ file
+	// pgf, pos, err := parseFull(ctx, snapshot, fset, obj.Pos())
+	gopf, pgf, pos, err := gopParseFull(ctx, snapshot, fset, obj.Pos())
+	if gopf != nil {
+		return gopHoverDocForObject(gopf, pos)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("re-parsing: %v", err)
 	}

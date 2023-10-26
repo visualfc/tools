@@ -147,7 +147,11 @@ func gopHover(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol
 
 	// For all other objects, consider the full syntax of their declaration in
 	// order to correctly compute their documentation, signature, and link.
-	declPGF, declPos, err := gopParseFull(ctx, snapshot, pkg.FileSet(), obj.Pos())
+	// goxls: mybe is a Go object in a Go+ file
+	declPGF, goDeclPGF, declPos, err := gopParseFull(ctx, snapshot, pkg.FileSet(), obj.Pos())
+	if goDeclPGF != nil {
+		return goHover(snapshot, pkg, pgf, pos, ident, obj, rng, qf, goDeclPGF, declPos)
+	}
 	if err != nil {
 		return protocol.Range{}, nil, fmt.Errorf("re-parsing declaration of %s: %v", obj.Name(), err)
 	}
@@ -618,22 +622,7 @@ func gopObjectString(obj types.Object, qf types.Qualifier, declPos token.Pos, fi
 	return str
 }
 
-// GopHoverDocForObject returns the best doc comment for obj (for which
-// fset provides file/line information).
-//
-// TODO(rfindley): there appears to be zero(!) tests for this functionality.
-func GopHoverDocForObject(ctx context.Context, snapshot Snapshot, fset *token.FileSet, obj types.Object) (*ast.CommentGroup, error) {
-	if _, isTypeName := obj.(*types.TypeName); isTypeName {
-		if _, isTypeParam := obj.Type().(*typeparams.TypeParam); isTypeParam {
-			return nil, nil
-		}
-	}
-
-	pgf, pos, err := gopParseFull(ctx, snapshot, fset, obj.Pos())
-	if err != nil {
-		return nil, fmt.Errorf("re-parsing: %v", err)
-	}
-
+func gopHoverDocForObject(pgf *ParsedGopFile, pos token.Pos) (*ast.CommentGroup, error) {
 	decl, spec, field := gopFindDeclInfo([]*ast.File{pgf.File}, pos)
 	return gopChooseDocComment(decl, spec, field), nil
 }
@@ -677,38 +666,55 @@ func gopChooseDocComment(decl ast.Decl, spec ast.Spec, field *ast.Field) *ast.Co
 // gopParseFull fully parses the file corresponding to position pos (for
 // which fset provides file/line information).
 //
-// It returns the resulting ParsedGopFile as well as new pos contained in the
+// It returns the resulting ParsedGopFile or ParsedGoFile as well as new pos contained in the
 // parsed file.
-//
-// goxls: TODO - maybe is a Go file
-func gopParseFull(ctx context.Context, snapshot Snapshot, fset *token.FileSet, pos token.Pos) (*ParsedGopFile, token.Pos, error) {
+func gopParseFull(ctx context.Context, snapshot Snapshot, fset *token.FileSet, pos token.Pos) (*ParsedGopFile, *ParsedGoFile, token.Pos, error) {
 	f := fset.File(pos)
 	if f == nil {
-		return nil, 0, bug.Errorf("internal error: no file for position %d", pos)
+		return nil, nil, 0, bug.Errorf("internal error: no file for position %d", pos)
 	}
 
 	uri := span.URIFromPath(f.Name())
 	fh, err := snapshot.ReadFile(ctx, uri)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 
-	pgf, err := snapshot.ParseGop(ctx, fh, parserutil.ParseFull)
+	// goxls: check Go/Go+ file kind
+	kind := snapshot.View().FileKind(fh)
+	if kind == Gop {
+		pgf, err := snapshot.ParseGop(ctx, fh, parserutil.ParseFull)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+
+		offset, err := safetoken.Offset(f, pos)
+		if err != nil {
+			return nil, nil, 0, bug.Errorf("offset out of bounds in %q", uri)
+		}
+
+		fullPos, err := safetoken.Pos(pgf.Tok, offset)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		return pgf, nil, fullPos, nil
+	}
+
+	pgf, err := snapshot.ParseGo(ctx, fh, ParseFull)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 
 	offset, err := safetoken.Offset(f, pos)
 	if err != nil {
-		return nil, 0, bug.Errorf("offset out of bounds in %q", uri)
+		return nil, nil, 0, bug.Errorf("offset out of bounds in %q", uri)
 	}
 
 	fullPos, err := safetoken.Pos(pgf.Tok, offset)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
-
-	return pgf, fullPos, nil
+	return nil, pgf, fullPos, nil
 }
 
 // gopFindDeclInfo returns the syntax nodes involved in the declaration of the
