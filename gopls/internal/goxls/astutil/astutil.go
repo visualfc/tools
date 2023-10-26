@@ -57,7 +57,15 @@ import (
 // file, but unfortunately ast.File records only the token.Pos of
 // the 'package' keyword, but not of the start of the file itself.
 func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Node, exact bool) {
-	// fmt.Printf("EnclosingInterval %d %d\n", start, end) // debugging
+	return pathEnclosingInterval(root, start, end, false)
+}
+
+func PathEnclosingIntervalWithShadow(root *ast.File, start, end token.Pos) (path []ast.Node, exact bool) {
+	return pathEnclosingInterval(root, start, end, true)
+}
+
+func pathEnclosingInterval(root *ast.File, start, end token.Pos, withShadow bool) (path []ast.Node, exact bool) {
+	// log.Printf("EnclosingInterval %d %d\n", start, end) // debugging
 
 	// Precondition: node.[Pos..End) and adjoining whitespace contain [start, end).
 	var visit func(node ast.Node) bool
@@ -75,7 +83,7 @@ func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Nod
 		nodePos := node.Pos()
 		nodeEnd := node.End()
 
-		// fmt.Printf("visit(%T, %d, %d)\n", node, nodePos, nodeEnd) // debugging
+		// log.Printf("visit(%T, %d, %d)\n", node, nodePos, nodeEnd) // debugging
 
 		// Intersect [start, end) with interval of node.
 		if start < nodePos {
@@ -86,7 +94,7 @@ func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Nod
 		}
 
 		// Find sole child that contains [start, end).
-		children := childrenOf(node)
+		children := childrenOf(node, withShadow)
 		l := len(children)
 		for i, child := range children {
 			// [childPos, childEnd) is unaugmented interval of child.
@@ -107,7 +115,7 @@ func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Nod
 				augEnd = nextChildPos // end of following whitespace
 			}
 
-			// fmt.Printf("\tchild %d: [%d..%d)\tcontains interval [%d..%d)?\n",
+			// log.Printf("\tchild %d: [%d..%d)\tcontains interval [%d..%d)?\n",
 			// 	i, augPos, augEnd, start, end) // debugging
 
 			// Does augmented child strictly contain [start, end)?
@@ -186,7 +194,7 @@ func tok(pos token.Pos, len int) ast.Node {
 // childrenOf returns the direct non-nil children of ast.Node n.
 // It may include fake ast.Node implementations for bare tokens.
 // it is not safe to call (e.g.) ast.Walk on such nodes.
-func childrenOf(n ast.Node) []ast.Node {
+func childrenOf(n ast.Node, withShadow bool) []ast.Node {
 	var children []ast.Node
 
 	// First add nodes for all true subtrees.
@@ -195,7 +203,9 @@ func childrenOf(n ast.Node) []ast.Node {
 			return true // recur
 		}
 		if node != nil { // push child
-			children = append(children, node)
+			if f, ok := node.(*ast.FuncDecl); !ok || !f.Shadow || withShadow { // goxls: skip Go+ shadow entry if withShadow: false
+				children = append(children, node)
+			}
 		}
 		return false // no recursion
 	})
@@ -313,6 +323,9 @@ func childrenOf(n ast.Node) []ast.Node {
 			tok(n.For, len("for")))
 
 	case *ast.FuncDecl:
+		if n.Shadow { // goxls: skip Go+ shadow entry
+			break
+		}
 		// TODO(adonovan): FuncDecl.Comment?
 
 		// Uniquely, FuncDecl breaks the invariant that
