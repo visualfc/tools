@@ -17,12 +17,23 @@ func (s *Server) signatureHelp(ctx context.Context, params *protocol.SignatureHe
 	ctx, done := event.Start(ctx, "lsp.Server.signatureHelp", tag.URI.Of(params.TextDocument.URI))
 	defer done()
 
-	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.Go)
+	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.UnknownKind)
 	defer release()
 	if !ok {
 		return nil, err
 	}
-	info, activeParameter, err := source.SignatureHelp(ctx, snapshot, fh, params.Position)
+	var (
+		info            *protocol.SignatureInformation
+		activeParameter int
+	)
+	switch kind := snapshot.View().FileKind(fh); kind {
+	case source.Gop: // goxls: Go+
+		info, activeParameter, err = source.GopSignatureHelp(ctx, snapshot, fh, params.Position)
+	case source.Go:
+		info, activeParameter, err = source.SignatureHelp(ctx, snapshot, fh, params.Position)
+	default:
+		return nil, nil
+	}
 	if err != nil {
 		event.Error(ctx, "no signature help", err, tag.Position.Of(params.Position))
 		return nil, nil // sic? There could be many reasons for failure.

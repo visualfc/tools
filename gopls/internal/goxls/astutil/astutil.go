@@ -57,7 +57,7 @@ import (
 // file, but unfortunately ast.File records only the token.Pos of
 // the 'package' keyword, but not of the start of the file itself.
 func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Node, exact bool) {
-	// fmt.Printf("EnclosingInterval %d %d\n", start, end) // debugging
+	// log.Printf("EnclosingInterval %d %d\n", start, end) // debugging
 
 	// Precondition: node.[Pos..End) and adjoining whitespace contain [start, end).
 	var visit func(node ast.Node) bool
@@ -75,7 +75,7 @@ func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Nod
 		nodePos := node.Pos()
 		nodeEnd := node.End()
 
-		// fmt.Printf("visit(%T, %d, %d)\n", node, nodePos, nodeEnd) // debugging
+		// log.Printf("visit(%T, %d, %d)\n", node, nodePos, nodeEnd) // debugging
 
 		// Intersect [start, end) with interval of node.
 		if start < nodePos {
@@ -107,7 +107,7 @@ func PathEnclosingInterval(root *ast.File, start, end token.Pos) (path []ast.Nod
 				augEnd = nextChildPos // end of following whitespace
 			}
 
-			// fmt.Printf("\tchild %d: [%d..%d)\tcontains interval [%d..%d)?\n",
+			// log.Printf("\tchild %d: [%d..%d)\tcontains interval [%d..%d)?\n",
 			// 	i, augPos, augEnd, start, end) // debugging
 
 			// Does augmented child strictly contain [start, end)?
