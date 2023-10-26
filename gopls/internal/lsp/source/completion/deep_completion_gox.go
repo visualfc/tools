@@ -7,9 +7,9 @@ package completion
 import (
 	"context"
 	"go/types"
-	"log"
 	"time"
 
+	"github.com/qiniu/x/log"
 	"golang.org/x/tools/gopls/internal/goxls"
 )
 
@@ -191,12 +191,11 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	}
 
 	cand.name = deepCandName(cand)
-	item, err := c.item(ctx, *cand)
-	if goxls.DbgCompletion && err != nil {
-		log.Println("gopCompleter.addCandidate item:", err)
-	}
-	if err == nil {
+	if item, err := c.item(ctx, *cand); err == nil {
 		c.items = append(c.items, item)
+	} else if goxls.DbgCompletion {
+		log.Println("gopCompleter.addCandidate item:", err)
+		log.SingleStack()
 	}
 }
 
