@@ -20,8 +20,10 @@ const (
 	DbgFlagHighlight
 	DbgFlagDefinition
 	DbgFlagCommand
-	DbgFlagDefault = DbgFlagTypesUtil | DbgFlagCompletion | DbgFlagCodeAction | DbgFlagHover | DbgFlagHighlight | DbgFlagDefinition | DbgFlagCommand
-	DbgFlagAll     = DbgFlagDefault | DbgFlagDisableRecover
+	DbgFlagCodeLens
+	DbgFlagDefault = DbgFlagTypesUtil | DbgFlagCompletion | DbgFlagCodeAction | DbgFlagHover |
+		DbgFlagHighlight | DbgFlagDefinition | DbgFlagCommand | DbgFlagCodeLens
+	DbgFlagAll = DbgFlagDefault | DbgFlagDisableRecover
 )
 
 const (
@@ -35,6 +37,7 @@ var (
 	DbgHighlight  bool
 	DbgDefinition bool
 	DbgCommand    bool
+	DbgCodeLens   bool
 )
 
 func SetDebug(flags dbgFlags) {
@@ -50,4 +53,5 @@ func SetDebug(flags dbgFlags) {
 	DbgHighlight = (flags & DbgFlagHighlight) != 0
 	DbgDefinition = (flags & DbgFlagDefinition) != 0
 	DbgCommand = (flags & DbgFlagCommand) != 0
+	DbgCodeLens = (flags & DbgFlagCodeLens) != 0
 }
