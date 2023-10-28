@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	gopparser "github.com/goplus/gop/parser"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/imports"
 )
@@ -38,15 +39,29 @@ func KnownPackagePaths(ctx context.Context, snapshot Snapshot, fh FileHandle) ([
 	if err != nil {
 		return nil, err
 	}
-	file, err := parser.ParseFile(token.NewFileSet(), fh.URI().Filename(), src, parser.ImportsOnly)
-	if err != nil {
-		return nil, err
-	}
 	imported := make(map[PackagePath]bool)
-	for _, imp := range file.Imports {
-		if id := current.DepsByImpPath[UnquoteImportPath(imp)]; id != "" {
-			if m := snapshot.Metadata(id); m != nil {
-				imported[m.PkgPath] = true
+	if kind := snapshot.View().FileKind(fh); kind == Gop { // goxls: Go+
+		file, err := gopparser.ParseFile(token.NewFileSet(), fh.URI().Filename(), src, gopparser.ImportsOnly)
+		if err != nil {
+			return nil, err
+		}
+		for _, imp := range file.Imports {
+			if id := current.DepsByImpPath[GopUnquoteImportPath(imp)]; id != "" {
+				if m := snapshot.Metadata(id); m != nil {
+					imported[m.PkgPath] = true
+				}
+			}
+		}
+	} else {
+		file, err := parser.ParseFile(token.NewFileSet(), fh.URI().Filename(), src, parser.ImportsOnly)
+		if err != nil {
+			return nil, err
+		}
+		for _, imp := range file.Imports {
+			if id := current.DepsByImpPath[UnquoteImportPath(imp)]; id != "" {
+				if m := snapshot.Metadata(id); m != nil {
+					imported[m.PkgPath] = true
+				}
 			}
 		}
 	}
