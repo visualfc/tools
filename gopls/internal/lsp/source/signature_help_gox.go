@@ -56,7 +56,6 @@ FindCall:
 				return nil, 0, fmt.Errorf("no signature help within a string literal")
 			}
 		}
-
 	}
 	if callExpr == nil || callExpr.Fun == nil {
 		return nil, 0, fmt.Errorf("cannot find an enclosing function")
