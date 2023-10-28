@@ -25,16 +25,6 @@ import (
 	"golang.org/x/tools/internal/tokeninternal"
 )
 
-/*
-import (
-	"bytes"
-	"context"
-	"fmt"
-	"golang.org/x/tools/gopls/internal/goxls/parserutil"
-	"golang.org/x/tools/gopls/internal/lsp/protocol"
-	"golang.org/x/tools/internal/event"
-)
-*/
 // FormatGop formats a file with a given range.
 func FormatGop(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protocol.TextEdit, error) {
 	ctx, done := event.Start(ctx, "gop.Format")

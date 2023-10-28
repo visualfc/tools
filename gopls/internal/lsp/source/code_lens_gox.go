@@ -7,10 +7,12 @@ package source
 import (
 	"context"
 	"go/types"
+	"log"
 	"regexp"
 	"strings"
 
 	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -35,6 +37,9 @@ func gopRunTestCodeLens(ctx context.Context, snapshot Snapshot, fh FileHandle) (
 	fns, err := GopTestsAndBenchmarks(ctx, snapshot, pkg, pgf)
 	if err != nil {
 		return nil, err
+	}
+	if goxls.DbgCodeLens {
+		log.Println("GopTestsAndBenchmarks: tests -", len(fns.Tests), "benchmarks -", len(fns.Benchmarks))
 	}
 	puri := protocol.URIFromSpanURI(fh.URI())
 	for _, fn := range fns.Tests {
