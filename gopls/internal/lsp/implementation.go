@@ -17,10 +17,20 @@ func (s *Server) implementation(ctx context.Context, params *protocol.Implementa
 	ctx, done := event.Start(ctx, "lsp.Server.implementation", tag.URI.Of(params.TextDocument.URI))
 	defer done()
 
-	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.Go)
+	// goxls: Go+
+	// snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.Go)
+	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.UnknownKind)
 	defer release()
 	if !ok {
 		return nil, err
 	}
+
+	// goxls: Go+
+	if kind := snapshot.View().FileKind(fh); kind == source.Gop {
+		return source.GopImplementation(ctx, snapshot, fh, params.Position)
+	} else if kind != source.Go {
+		return nil, nil
+	}
+
 	return source.Implementation(ctx, snapshot, fh, params.Position)
 }

@@ -70,7 +70,6 @@ func Implementation(ctx context.Context, snapshot Snapshot, f FileHandle, pp pro
 }
 
 func implementations(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol.Position) ([]protocol.Location, error) {
-
 	// Type-check the query package, find the query identifier,
 	// and locate the type or method declaration it refers to.
 	declPosn, err := typeDeclPosition(ctx, snapshot, fh.URI(), pp)
@@ -397,6 +396,70 @@ func localImplementations(ctx context.Context, snapshot Snapshot, pkg Package, q
 	}
 
 	return locs, nil
+}
+
+// goxls: for Go/Go+ mixed project
+func goLocalImplementations(pkg Package, queryType types.Type, methodID string) (locs []protocol.Location, methodLocs []methodsets.Location) {
+	for _, pgf := range pkg.CompiledNongenGoFiles() {
+		ast.Inspect(pgf.File, func(n ast.Node) bool {
+			spec, ok := n.(*ast.TypeSpec)
+			if !ok {
+				return true // not a type declaration
+			}
+			def := pkg.GetTypesInfo().Defs[spec.Name]
+			if def == nil {
+				return true // "can't happen" for types
+			}
+			if def.(*types.TypeName).IsAlias() {
+				return true // skip type aliases to avoid duplicate reporting
+			}
+			candidateType := methodsets.EnsurePointer(def.Type())
+
+			// The historical behavior enshrined by this
+			// function rejects cases where both are
+			// (nontrivial) interface types?
+			// That seems like useful information.
+			// TODO(adonovan): UX: report I/I pairs too?
+			// The same question appears in the global algorithm (methodsets).
+			if !concreteImplementsIntf(candidateType, queryType) {
+				return true // not assignable
+			}
+
+			// Ignore types with empty method sets.
+			// (No point reporting that every type satisfies 'any'.)
+			mset := types.NewMethodSet(candidateType)
+			if mset.Len() == 0 {
+				return true
+			}
+
+			if methodID == "" {
+				// Found matching type.
+				locs = append(locs, mustLocation(pgf, spec.Name))
+				return true
+			}
+
+			// Find corresponding method.
+			//
+			// We can't use LookupFieldOrMethod because it requires
+			// the methodID's types.Package, which we don't know.
+			// We could recursively search pkg.Imports for it,
+			// but it's easier to walk the method set.
+			for i := 0; i < mset.Len(); i++ {
+				method := mset.At(i).Obj()
+				if method.Id() == methodID {
+					posn := safetoken.StartPosition(pkg.FileSet(), method.Pos())
+					methodLocs = append(methodLocs, methodsets.Location{
+						Filename: posn.Filename,
+						Start:    posn.Offset,
+						End:      posn.Offset + len(method.Name()),
+					})
+					break
+				}
+			}
+			return true
+		})
+	}
+	return
 }
 
 var errorInterfaceType = types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
