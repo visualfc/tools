@@ -11,12 +11,14 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"log"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/source/methodsets"
@@ -73,6 +75,9 @@ func implementations(ctx context.Context, snapshot Snapshot, fh FileHandle, pp p
 	// Type-check the query package, find the query identifier,
 	// and locate the type or method declaration it refers to.
 	declPosn, err := typeDeclPosition(ctx, snapshot, fh.URI(), pp)
+	if goxls.DbgImplementation {
+		log.Println("implementations typeDeclPosition:", declPosn, err)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +191,9 @@ func implementations(ctx context.Context, snapshot Snapshot, fh FileHandle, pp p
 	for _, localPkg := range localPkgs {
 		localPkg := localPkg
 		group.Go(func() error {
-			localLocs, err := localImplementations(ctx, snapshot, localPkg, queryType, queryMethodID)
+			// goxls: use Go+ version
+			// localLocs, err := localImplementations(ctx, snapshot, localPkg, queryType, queryMethodID)
+			localLocs, err := gopLocalImplementations(ctx, snapshot, localPkg, queryType, queryMethodID)
 			if err != nil {
 				return err
 			}
@@ -300,6 +307,7 @@ func typeDeclPosition(ctx context.Context, snapshot Snapshot, uri span.URI, ppos
 	return declPosn, nil
 }
 
+/* goxls: use Go+ version
 // localImplementations searches within pkg for declarations of all
 // types that are assignable to/from the query type, and returns a new
 // unordered array of their locations.
@@ -397,6 +405,7 @@ func localImplementations(ctx context.Context, snapshot Snapshot, pkg Package, q
 
 	return locs, nil
 }
+*/
 
 // goxls: for Go/Go+ mixed project
 func goLocalImplementations(pkg Package, queryType types.Type, methodID string) (locs []protocol.Location, methodLocs []methodsets.Location) {
