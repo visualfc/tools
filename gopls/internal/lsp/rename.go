@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
+	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/event/tag"
 )
@@ -18,15 +19,29 @@ func (s *Server) rename(ctx context.Context, params *protocol.RenameParams) (*pr
 	ctx, done := event.Start(ctx, "lsp.Server.rename", tag.URI.Of(params.TextDocument.URI))
 	defer done()
 
-	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.Go)
+	// goxls: Go+
+	// snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.Go)
+	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.UnknownKind)
 	defer release()
 	if !ok {
 		return nil, err
 	}
-	// Because we don't handle directory renaming within source.Rename, source.Rename returns
-	// boolean value isPkgRenaming to determine whether an DocumentChanges of type RenameFile should
-	// be added to the return protocol.WorkspaceEdit value.
-	edits, isPkgRenaming, err := source.Rename(ctx, snapshot, fh, params.Position, params.NewName)
+	var (
+		edits         map[span.URI][]protocol.TextEdit
+		isPkgRenaming bool
+	)
+	// goxls: Go+
+	switch kind := snapshot.View().FileKind(fh); kind {
+	default:
+		return nil, nil
+	case source.Gop:
+		edits, isPkgRenaming, err = source.GopRename(ctx, snapshot, fh, params.Position, params.NewName)
+	case source.Go:
+		// Because we don't handle directory renaming within source.Rename, source.Rename returns
+		// boolean value isPkgRenaming to determine whether an DocumentChanges of type RenameFile should
+		// be added to the return protocol.WorkspaceEdit value.
+		edits, isPkgRenaming, err = source.Rename(ctx, snapshot, fh, params.Position, params.NewName)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -66,14 +81,28 @@ func (s *Server) prepareRename(ctx context.Context, params *protocol.PrepareRena
 	ctx, done := event.Start(ctx, "lsp.Server.prepareRename", tag.URI.Of(params.TextDocument.URI))
 	defer done()
 
-	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.Go)
+	// goxls: Go+
+	// snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.Go)
+	snapshot, fh, ok, release, err := s.beginFileRequest(ctx, params.TextDocument.URI, source.UnknownKind)
 	defer release()
 	if !ok {
 		return nil, err
 	}
-	// Do not return errors here, as it adds clutter.
-	// Returning a nil result means there is not a valid rename.
-	item, usererr, err := source.PrepareRename(ctx, snapshot, fh, params.Position)
+	var (
+		item    *source.PrepareItem
+		usererr error
+	)
+	// goxls: Go+
+	switch kind := snapshot.View().FileKind(fh); kind {
+	default:
+		return nil, nil
+	case source.Gop:
+		item, usererr, err = source.GopPrepareRename(ctx, snapshot, fh, params.Position)
+	case source.Go:
+		// Do not return errors here, as it adds clutter.
+		// Returning a nil result means there is not a valid rename.
+		item, usererr, err = source.PrepareRename(ctx, snapshot, fh, params.Position)
+	}
 	if err != nil {
 		// Return usererr here rather than err, to avoid cluttering the UI with
 		// internal error details.
