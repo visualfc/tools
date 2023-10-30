@@ -42,7 +42,9 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/qiniu/x/log"
 	"golang.org/x/tools/go/ast/astutil"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/refactor/satisfy"
 )
@@ -138,7 +140,10 @@ func (r *renamer) checkInPackageBlock(from types.Object) {
 	// Check that there are no references to the name from another
 	// package if the renaming would make it unexported.
 	if typ := r.pkg.GetTypes(); typ != from.Pkg() && ast.IsExported(r.from) && !ast.IsExported(r.to) {
-		if id := someUse(r.pkg.GetTypesInfo(), from); id != nil {
+		// goxls: use by Go+ code
+		if id := gopSomeUse(r.pkg.GopTypesInfo(), from); id != nil {
+			r.gopCheckExport(id, typ, from)
+		} else if id := someUse(r.pkg.GetTypesInfo(), from); id != nil {
 			r.checkExport(id, typ, from)
 		}
 	}
@@ -147,14 +152,28 @@ func (r *renamer) checkInPackageBlock(from types.Object) {
 	if r.to == "init" {
 		kind := objectKind(from)
 		if kind == "func" {
-			// Reject if intra-package references to it exist.
-			for id, obj := range r.pkg.GetTypesInfo().Uses {
+			// goxls: use by Go+ code
+			canRenameToInit := true // don't report same error message
+			for id, obj := range r.pkg.GopTypesInfo().Uses {
 				if obj == from {
 					r.errorf(from.Pos(),
 						"renaming this func %q to %q would make it a package initializer",
 						from.Name(), r.to)
 					r.errorf(id.Pos(), "\tbut references to it exist")
+					canRenameToInit = false
 					break
+				}
+			}
+			if canRenameToInit {
+				// Reject if intra-package references to it exist.
+				for id, obj := range r.pkg.GetTypesInfo().Uses {
+					if obj == from {
+						r.errorf(from.Pos(),
+							"renaming this func %q to %q would make it a package initializer",
+							from.Name(), r.to)
+						r.errorf(id.Pos(), "\tbut references to it exist")
+						break
+					}
 				}
 			}
 		} else {
@@ -164,10 +183,32 @@ func (r *renamer) checkInPackageBlock(from types.Object) {
 	}
 
 	// Check for conflicts between package block and all file blocks.
-	for _, f := range r.pkg.GetSyntax() {
+	// goxls: skip gop_autogen*.go
+	// for _, f := range r.pkg.GetSyntax() {
+	for _, f := range r.pkg.GetNongenSyntax() {
 		fileScope := r.pkg.GetTypesInfo().Scopes[f]
 		b, prev := fileScope.LookupParent(r.to, token.NoPos)
 		if b == fileScope {
+			r.errorf(from.Pos(), "renaming this %s %q to %q would conflict", objectKind(from), from.Name(), r.to)
+			var prevPos token.Pos
+			if prev != nil {
+				prevPos = prev.Pos()
+			}
+			r.errorf(prevPos, "\twith this %s", objectKind(prev))
+			return // since checkInPackageBlock would report redundant errors
+		}
+	}
+
+	// goxls: Go+ files
+	for _, pgf := range r.pkg.CompiledGopFiles() {
+		f := pgf.File
+		fileScope := r.pkg.GopTypesInfo().Scopes[f]
+		b, prev := fileScope.LookupParent(r.to, token.NoPos)
+		if b == fileScope {
+			if goxls.DbgRename {
+				log.Println("gopRenameObjects renamer.checkInPackageBlock conflict with:", prev)
+				log.SingleStack()
+			}
 			r.errorf(from.Pos(), "renaming this %s %q to %q would conflict", objectKind(from), from.Name(), r.to)
 			var prevPos token.Pos
 			if prev != nil {
@@ -226,6 +267,8 @@ func (r *renamer) checkInLexicalScope(from types.Object) {
 				objectKind(to))
 			return
 		} else if toBlock != nil {
+			// goxls: TODO
+			_ = gopForEachLexicalRef
 			// Check for super-block conflict.
 			// The name r.to is defined in a superblock.
 			// Is that name referenced from within this block?
@@ -352,7 +395,9 @@ func forEachLexicalRef(pkg Package, obj types.Object, fn func(id *ast.Ident, blo
 		return true
 	}
 
-	for _, f := range pkg.GetSyntax() {
+	// goxls: skip gop_autogen*.go
+	// for _, f := range pkg.GetSyntax() {
+	for _, f := range pkg.GetNongenSyntax() {
 		ast.Inspect(f, visit)
 		if len(stack) != 0 {
 			panic(stack)
