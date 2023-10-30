@@ -101,6 +101,8 @@ func FileKindForLang(langID string) FileKind {
 		return Tmpl
 	case "go.work":
 		return Work
+	case "gop": // goxls: Support Go+
+		return Gop
 	default:
 		return UnknownKind
 	}
