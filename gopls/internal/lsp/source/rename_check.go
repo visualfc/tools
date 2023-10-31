@@ -952,7 +952,9 @@ func isPackageLevel(obj types.Object) bool {
 	if obj == nil {
 		return false
 	}
-	return obj.Pkg().Scope().Lookup(obj.Name()) == obj
+	// goxls: fast version
+	// return obj.Pkg().Scope().Lookup(obj.Name()) == obj
+	return obj.Pkg().Scope() == obj.Parent()
 }
 
 // -- Plundered from go/scanner: ---------------------------------------

@@ -15,10 +15,8 @@ import (
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
-	"github.com/qiniu/x/log"
 	"golang.org/x/tools/go/types/objectpath"
 	"golang.org/x/tools/gopls/internal/bug"
-	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/goxls/astutil"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -307,7 +305,7 @@ func gopRenameOrdinary(ctx context.Context, snapshot Snapshot, f FileHandle, pp 
 		for obj := range targets {
 			objects = append(objects, obj)
 		}
-		editMap, _, err := gopRenameObjects(ctx, snapshot, newName, pkg, objects...)
+		editMap, _, err := renameObjects(ctx, snapshot, newName, pkg, objects...)
 		return editMap, err
 	}
 
@@ -365,99 +363,7 @@ func gopRenameOrdinary(ctx context.Context, snapshot Snapshot, f FileHandle, pp 
 
 	// Apply the renaming to the (initial) object.
 	declPkgPath := PackagePath(obj.Pkg().Path())
-	return gopRenameExported(ctx, snapshot, pkgs, declPkgPath, declObjPath, newName)
-}
-
-// gopRenameExported renames the object denoted by (pkgPath, objPath)
-// within the specified packages, along with any other objects that
-// must be renamed as a consequence. The slice of packages must be
-// topologically ordered.
-func gopRenameExported(ctx context.Context, snapshot Snapshot, pkgs []Package, declPkgPath PackagePath, declObjPath objectpath.Path, newName string) (map[span.URI][]diff.Edit, error) {
-
-	// A target is a name for an object that is stable across types.Packages.
-	type target struct {
-		pkg PackagePath
-		obj objectpath.Path
-	}
-
-	// Populate the initial set of target objects.
-	// This set may grow as we discover the consequences of each renaming.
-	//
-	// TODO(adonovan): strictly, each cone of reverse dependencies
-	// of a single variant should have its own target map that
-	// monotonically expands as we go up the import graph, because
-	// declarations in test files can alter the set of
-	// package-level names and change the meaning of field and
-	// method selectors. So if we parallelize the graph
-	// visitation (see above), we should also compute the targets
-	// as a union of dependencies.
-	//
-	// Or we could decide that the logic below is fast enough not
-	// to need parallelism. In small measurements so far the
-	// type-checking step is about 95% and the renaming only 5%.
-	targets := map[target]bool{{declPkgPath, declObjPath}: true}
-
-	// Apply the renaming operation to each package.
-	allEdits := make(map[span.URI][]diff.Edit)
-	for _, pkg := range pkgs {
-
-		// Resolved target objects within package pkg.
-		var objects []types.Object
-		for t := range targets {
-			p := pkg.DependencyTypes(t.pkg)
-			if p == nil {
-				continue // indirect dependency of no consequence
-			}
-			obj, err := objectpath.Object(p, t.obj)
-			if err != nil {
-				// Possibly a method or an unexported type
-				// that is not reachable through export data?
-				// See https://github.com/golang/go/issues/60789.
-				//
-				// TODO(adonovan): it seems unsatisfactory that Object
-				// should return an error for a "valid" path. Perhaps
-				// we should define such paths as invalid and make
-				// objectpath.For compute reachability?
-				// Would that be a compatible change?
-				continue
-			}
-			objects = append(objects, obj)
-		}
-		if len(objects) == 0 {
-			continue // no targets of consequence to this package
-		}
-
-		// Apply the renaming.
-		editMap, moreObjects, err := gopRenameObjects(ctx, snapshot, newName, pkg, objects...)
-		if err != nil {
-			return nil, err
-		}
-
-		// It is safe to concatenate the edits as they are non-overlapping
-		// (or identical, in which case they will be de-duped by Rename).
-		for uri, edits := range editMap {
-			allEdits[uri] = append(allEdits[uri], edits...)
-		}
-
-		// Expand the search set?
-		for obj := range moreObjects {
-			objpath, err := objectpath.For(obj)
-			if err != nil {
-				continue // not exported
-			}
-			target := target{PackagePath(obj.Pkg().Path()), objpath}
-			targets[target] = true
-
-			// TODO(adonovan): methods requires dynamic
-			// programming of the product targets x
-			// packages as any package might add a new
-			// target (from a foward dep) as a
-			// consequence, and any target might imply a
-			// new set of rdeps. See golang/go#58461.
-		}
-	}
-
-	return allEdits, nil
+	return renameExported(ctx, snapshot, pkgs, declPkgPath, declObjPath, newName)
 }
 
 // gopRenamePackageName renames package declarations, imports, and go.mod files.
@@ -465,68 +371,8 @@ func gopRenamePackageName(ctx context.Context, s Snapshot, f FileHandle, newName
 	panic("todo")
 }
 
-// gopRenameObjects computes the edits to the type-checked syntax package pkg
-// required to rename a set of target objects to newName.
-//
-// It also returns the set of objects that were found (due to
-// corresponding methods and embedded fields) to require renaming as a
-// consequence of the requested renamings.
-//
-// It returns an error if the renaming would cause a conflict.
-func gopRenameObjects(ctx context.Context, snapshot Snapshot, newName string, pkg Package, targets ...types.Object) (map[span.URI][]diff.Edit, map[types.Object]bool, error) {
-	r := renamer{
-		pkg:          pkg,
-		objsToUpdate: make(map[types.Object]bool),
-		from:         targets[0].Name(),
-		to:           newName,
-	}
-
-	// A renaming initiated at an interface method indicates the
-	// intention to rename abstract and concrete methods as needed
-	// to preserve assignability.
-	// TODO(adonovan): pull this into the caller.
-	for _, obj := range targets {
-		if obj, ok := obj.(*types.Func); ok {
-			recv := obj.Type().(*types.Signature).Recv()
-			if recv != nil && types.IsInterface(recv.Type().Underlying()) {
-				r.changeMethods = true
-				break
-			}
-		}
-	}
-
-	// Check that the renaming of the identifier is ok.
-	for _, obj := range targets {
-		if goxls.DbgRename {
-			log.Printf("gopRenameObjects: %T, %s => %s\n", obj, r.from, r.to)
-		}
-		r.check(obj)
-		if len(r.conflicts) > 0 {
-			if goxls.DbgRename {
-				log.Println("gopRenameObjects:", r.conflicts)
-				log.SingleStack()
-			}
-			// Stop at first error.
-			return nil, nil, fmt.Errorf("%s", strings.Join(r.conflicts, "\n"))
-		}
-	}
-
-	editMap, err := r.gopUpdate()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Remove initial targets so that only 'consequences' remain.
-	for _, obj := range targets {
-		delete(r.objsToUpdate, obj)
-	}
-	return editMap, r.objsToUpdate, nil
-}
-
 // Rename all references to the target objects.
-func (r *renamer) gopUpdate() (map[span.URI][]diff.Edit, error) {
-	result := make(map[span.URI][]diff.Edit)
-
+func (r *renamer) gopUpdate(result map[span.URI][]diff.Edit) (map[span.URI][]diff.Edit, error) {
 	// shouldUpdate reports whether obj is one of (or an
 	// instantiation of one of) the target objects.
 	shouldUpdate := func(obj types.Object) bool {
