@@ -1417,7 +1417,7 @@ func localPackageKey(inputs typeCheckInputs) source.Hash {
 	for _, fh := range inputs.goFiles {
 		fmt.Fprintln(hasher, fh.FileIdentity())
 	}
-	// goxls: include gop files while calculating package key
+	// goxls: include Go+ files while calculating package key
 	fmt.Fprintf(hasher, "compiledGopFiles: %d\n", len(inputs.compiledGopFiles))
 	for _, fh := range inputs.compiledGopFiles {
 		fmt.Fprintln(hasher, fh.FileIdentity())
