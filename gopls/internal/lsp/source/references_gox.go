@@ -24,8 +24,6 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/event"
-
-	goast "go/ast"
 )
 
 // References returns a list of all references (sorted with
@@ -471,7 +469,7 @@ func gopOrdinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI,
 				targets[obj] = true
 			}
 
-			return gopLocalReferences(pkg, targets, true, report)
+			return localReferences(pkg, targets, true, report)
 		})
 	}
 
@@ -503,7 +501,7 @@ func gopOrdinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI,
 			// since expansions did that already, and we don't
 			// want (e.g.) concrete -> interface -> concrete.
 			const correspond = false
-			return gopLocalReferences(pkg, targets, correspond, report)
+			return localReferences(pkg, targets, correspond, report)
 		})
 	}
 
@@ -529,70 +527,6 @@ func gopOrdinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI,
 		return nil, err
 	}
 	return refs, nil
-}
-
-// gopLocalReferences traverses syntax and reports each reference to one
-// of the target objects, or (if correspond is set) an object that
-// corresponds to one of them via interface satisfaction.
-func gopLocalReferences(pkg Package, targets map[types.Object]bool, correspond bool, report func(loc protocol.Location, isDecl bool)) error {
-	// If we're searching for references to a method optionally
-	// broaden the search to include references to corresponding
-	// methods of mutually assignable receiver types.
-	// (We use a slice, but objectsAt never returns >1 methods.)
-	var methodRecvs []types.Type
-	var methodName string // name of an arbitrary target, iff a method
-	if correspond {
-		for obj := range targets {
-			if t := effectiveReceiver(obj); t != nil {
-				methodRecvs = append(methodRecvs, t)
-				methodName = obj.Name()
-			}
-		}
-	}
-
-	// matches reports whether obj either is or corresponds to a target.
-	// (Correspondence is defined as usual for interface methods.)
-	matches := func(obj types.Object) bool {
-		for target := range targets {
-			if equalOrigin(obj, target) {
-				return true
-			}
-		}
-		if methodRecvs != nil && obj.Name() == methodName {
-			if orecv := effectiveReceiver(obj); orecv != nil {
-				for _, mrecv := range methodRecvs {
-					if concreteImplementsIntf(orecv, mrecv) {
-						return true
-					}
-				}
-			}
-		}
-		return false
-	}
-
-	// Scan through syntax looking for uses of one of the target objects.
-	for _, pgf := range pkg.CompiledGopFiles() {
-		ast.Inspect(pgf.File, func(n ast.Node) bool {
-			if id, ok := n.(*ast.Ident); ok {
-				if obj, ok := pkg.GopTypesInfo().Uses[id]; ok && matches(obj) {
-					report(gopMustLocation(pgf, id), false)
-				}
-			}
-			return true
-		})
-	}
-	// looking for go files
-	for _, pgf := range pkg.CompiledGoFiles() {
-		goast.Inspect(pgf.File, func(n goast.Node) bool {
-			if id, ok := n.(*goast.Ident); ok {
-				if obj, ok := pkg.GetTypesInfo().Uses[id]; ok && matches(obj) {
-					report(mustLocation(pgf, id), false)
-				}
-			}
-			return true
-		})
-	}
-	return nil
 }
 
 // gopObjectsAt returns the non-empty set of objects denoted (def or use)
@@ -721,5 +655,5 @@ func gopFindLocalReferences(pkg Package, declURI span.URI, declPosn token.Positi
 		targets[obj] = true
 	}
 
-	return gopLocalReferences(pkg, targets, true, report)
+	return localReferences(pkg, targets, true, report)
 }
