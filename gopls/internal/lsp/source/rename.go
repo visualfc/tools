@@ -55,11 +55,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/qiniu/x/log"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/types/objectpath"
 	"golang.org/x/tools/go/types/typeutil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/span"
@@ -1028,8 +1030,15 @@ func renameObjects(ctx context.Context, snapshot Snapshot, newName string, pkg P
 
 	// Check that the renaming of the identifier is ok.
 	for _, obj := range targets {
+		if goxls.DbgRename {
+			log.Printf("renameObjects: %T, %s => %s\n", obj, r.from, r.to)
+		}
 		r.check(obj)
 		if len(r.conflicts) > 0 {
+			if goxls.DbgRename {
+				log.Println("renameObjects:", r.conflicts)
+				log.SingleStack()
+			}
 			// Stop at first error.
 			return nil, nil, fmt.Errorf("%s", strings.Join(r.conflicts, "\n"))
 		}
@@ -1170,7 +1179,9 @@ func (r *renamer) update() (map[span.URI][]diff.Edit, error) {
 		}
 	}
 
-	return result, nil
+	// return result, nil
+	// goxls: update Go+ files
+	return r.gopUpdate(result)
 }
 
 // docComment returns the doc for an identifier within the specified file.

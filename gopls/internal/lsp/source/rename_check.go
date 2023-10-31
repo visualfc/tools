@@ -952,6 +952,8 @@ func isPackageLevel(obj types.Object) bool {
 	if obj == nil {
 		return false
 	}
+	// goxls: fast version
+	// return obj.Pkg().Scope() == obj.Parent()
 	return obj.Pkg().Scope().Lookup(obj.Name()) == obj
 }
 
