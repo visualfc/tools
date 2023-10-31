@@ -92,16 +92,30 @@ func parseErrorDiagnostics(pkg *syntaxPackage, errList scanner.ErrorList) ([]*so
 		return nil, fmt.Errorf("no errors in %v", errList)
 	}
 	e := errList[0]
-	pgf, err := pkg.File(span.URIFromPath(e.Pos.Filename))
-	if err != nil {
-		return nil, err
+	// goxls: check in both go & gop files
+	var (
+		pgf  *source.ParsedGoFile
+		pgpf *source.ParsedGopFile
+		uri  span.URI
+		rng  protocol.Range
+		err  error
+	)
+	pgf, err = pkg.File(span.URIFromPath(e.Pos.Filename))
+	if err == nil {
+		uri = pgf.URI
+		rng, err = pgf.Mapper.OffsetRange(e.Pos.Offset, e.Pos.Offset)
+	} else if strings.Contains(err.Error(), "no parsed file for") {
+		pgpf, err = pkg.GopFile(span.URIFromPath(e.Pos.Filename))
+		if err == nil {
+			uri = pgpf.URI
+			rng, err = pgpf.Mapper.OffsetRange(e.Pos.Offset, e.Pos.Offset)
+		}
 	}
-	rng, err := pgf.Mapper.OffsetRange(e.Pos.Offset, e.Pos.Offset)
 	if err != nil {
 		return nil, err
 	}
 	return []*source.Diagnostic{{
-		URI:      pgf.URI,
+		URI:      uri,
 		Range:    rng,
 		Severity: protocol.SeverityError,
 		Source:   source.ParseError,

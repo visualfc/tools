@@ -10,10 +10,10 @@ github.com/google/go-cmp v0.5.9/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeN
 github.com/google/safehtml v0.0.2/go.mod h1:L4KWwDsUJdECRAEpZoBn3O64bQaywRscowZjJAzjHnU=
 github.com/google/safehtml v0.1.0 h1:EwLKo8qawTKfsi0orxcQAZzu07cICaBeFMegAU9eaT8=
 github.com/google/safehtml v0.1.0/go.mod h1:L4KWwDsUJdECRAEpZoBn3O64bQaywRscowZjJAzjHnU=
-github.com/goplus/gop v1.1.4-0.20231029081257-7c4429466bfa h1:141L92aPkOkeQIx574zLIOt09xPs++TYFn891rbA4QA=
-github.com/goplus/gop v1.1.4-0.20231029081257-7c4429466bfa/go.mod h1:naB8rxxZx1Kn0Cr/Cb6OZ6Q9iz1+iTL8+9aYSnXpmmo=
-github.com/goplus/gox v1.12.2-0.20231028071646-bb6d796d66cf h1:67Lz2V9Nj6pZz+u4d9uq5rCfw2t/zE34Qo6AF5dJN3c=
-github.com/goplus/gox v1.12.2-0.20231028071646-bb6d796d66cf/go.mod h1:Ek1YIy3wRaZ1i0DD2XG29i3r5AFdhcOradK0/GGs1YQ=
+github.com/goplus/gop v1.1.4-0.20231030141523-d40c1e219d04 h1:kA+3CzupPX4kC3CUZCCVokIfe0vOMou00VoxIOQteUE=
+github.com/goplus/gop v1.1.4-0.20231030141523-d40c1e219d04/go.mod h1:I3XdNVzGBXO+TVW84/1r2WUkXGKi4dR467T193e/TVQ=
+github.com/goplus/gox v1.12.2-0.20231030070332-723a6b4b6c99 h1:2lqPMMQM+F4Cpp/LSkoChGb+nQmpypRzzpNTmXDr0Fc=
+github.com/goplus/gox v1.12.2-0.20231030070332-723a6b4b6c99/go.mod h1:Ek1YIy3wRaZ1i0DD2XG29i3r5AFdhcOradK0/GGs1YQ=
 github.com/goplus/mod v0.11.8-0.20231019172744-da5848421263 h1:PE0HveOss5mai9pa52L4/ZvVqZtltogJ9rIUIsdlG/I=
 github.com/goplus/mod v0.11.8-0.20231019172744-da5848421263/go.mod h1:yl2QncBKTdXk+8UaNsdo4u2zSpGEJYA5JKjgD3K2h00=
 github.com/jba/printsrc v0.2.2 h1:9OHK51UT+/iMAEBlQIIXW04qvKyF3/vvLuwW/hL8tDU=
