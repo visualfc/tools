@@ -408,9 +408,39 @@ func ordinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI, pp
 			}
 			pkg := pkgs[0]
 
+			// goxls: check go+ files
+			if !strings.HasSuffix(string(declURI), ".go") {
+				return gopFindLocalReferences(pkg, declURI, declPosn, report)
+			}
+
 			// Find the declaration of the corresponding
 			// object in this package based on (URI, offset).
-			return findLocalReferencesGoAndGop(pkg, declURI, declPosn, report)
+			pgf, err := pkg.File(declURI)
+			if err != nil {
+				return err
+			}
+			pos, err := safetoken.Pos(pgf.Tok, declPosn.Offset)
+			if err != nil {
+				return err
+			}
+			objects, _, err := objectsAt(pkg.GetTypesInfo(), pgf.File, pos)
+			if err != nil {
+				return err // unreachable? (probably caught earlier)
+			}
+
+			// Report the locations of the declaration(s).
+			// TODO(adonovan): what about for corresponding methods? Add tests.
+			for _, node := range objects {
+				report(mustLocation(pgf, node), true)
+			}
+
+			// Convert targets map to set.
+			targets := make(map[types.Object]bool)
+			for obj := range objects {
+				targets[obj] = true
+			}
+
+			return localReferences(pkg, targets, true, report)
 		})
 	}
 

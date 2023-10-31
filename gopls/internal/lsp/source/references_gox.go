@@ -440,10 +440,38 @@ func gopOrdinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI,
 			}
 			pkg := pkgs[0]
 
+			if strings.HasSuffix(string(declURI), ".go") {
+				return goFindLocalReferences(pkg, declURI, declPosn, report)
+			}
+
 			// Find the declaration of the corresponding
 			// object in this package based on (URI, offset).
+			pgf, err := pkg.GopFile(declURI)
+			if err != nil {
+				return err
+			}
+			pos, err := safetoken.Pos(pgf.Tok, declPosn.Offset)
+			if err != nil {
+				return err
+			}
+			objects, _, err := gopObjectsAt(pkg.GopTypesInfo(), pgf.File, pos)
+			if err != nil {
+				return err // unreachable? (probably caught earlier)
+			}
 
-			return findLocalReferencesGoAndGop(pkg, declURI, declPosn, report)
+			// Report the locations of the declaration(s).
+			// TODO(adonovan): what about for corresponding methods? Add tests.
+			for _, node := range objects {
+				report(gopMustLocation(pgf, node), true)
+			}
+
+			// Convert targets map to set.
+			targets := make(map[types.Object]bool)
+			for obj := range objects {
+				targets[obj] = true
+			}
+
+			return gopLocalReferences(pkg, targets, true, report)
 		})
 	}
 
@@ -638,60 +666,60 @@ func gopMustLocation(pgf *ParsedGopFile, n ast.Node) protocol.Location {
 	return loc
 }
 
-func findLocalReferencesGoAndGop(pkg Package, declURI span.URI, declPosn token.Position, report func(loc protocol.Location, isDecl bool)) error {
-	if strings.HasSuffix(string(declURI), ".go") {
-		pgf, err := pkg.File(declURI)
-		if err != nil {
-			return err
-		}
-		pos, err := safetoken.Pos(pgf.Tok, declPosn.Offset)
-		if err != nil {
-			return err
-		}
-		objects, _, err := objectsAt(pkg.GetTypesInfo(), pgf.File, pos)
-		if err != nil {
-			return err // unreachable? (probably caught earlier)
-		}
-
-		// Report the locations of the declaration(s).
-		// TODO(adonovan): what about for corresponding methods? Add tests.
-		for _, node := range objects {
-			report(mustLocation(pgf, node), true)
-		}
-
-		// Convert targets map to set.
-		targets := make(map[types.Object]bool)
-		for obj := range objects {
-			targets[obj] = true
-		}
-
-		return localReferences(pkg, targets, true, report)
-	} else {
-		pgf, err := pkg.GopFile(declURI)
-		if err != nil {
-			return err
-		}
-		pos, err := safetoken.Pos(pgf.Tok, declPosn.Offset)
-		if err != nil {
-			return err
-		}
-		objects, _, err := gopObjectsAt(pkg.GopTypesInfo(), pgf.File, pos)
-		if err != nil {
-			return err // unreachable? (probably caught earlier)
-		}
-
-		// Report the locations of the declaration(s).
-		// TODO(adonovan): what about for corresponding methods? Add tests.
-		for _, node := range objects {
-			report(gopMustLocation(pgf, node), true)
-		}
-
-		// Convert targets map to set.
-		targets := make(map[types.Object]bool)
-		for obj := range objects {
-			targets[obj] = true
-		}
-
-		return gopLocalReferences(pkg, targets, true, report)
+func goFindLocalReferences(pkg Package, declURI span.URI, declPosn token.Position, report func(loc protocol.Location, isDecl bool)) error {
+	pgf, err := pkg.File(declURI)
+	if err != nil {
+		return err
 	}
+	pos, err := safetoken.Pos(pgf.Tok, declPosn.Offset)
+	if err != nil {
+		return err
+	}
+	objects, _, err := objectsAt(pkg.GetTypesInfo(), pgf.File, pos)
+	if err != nil {
+		return err // unreachable? (probably caught earlier)
+	}
+
+	// Report the locations of the declaration(s).
+	// TODO(adonovan): what about for corresponding methods? Add tests.
+	for _, node := range objects {
+		report(mustLocation(pgf, node), true)
+	}
+
+	// Convert targets map to set.
+	targets := make(map[types.Object]bool)
+	for obj := range objects {
+		targets[obj] = true
+	}
+
+	return localReferences(pkg, targets, true, report)
+}
+
+func gopFindLocalReferences(pkg Package, declURI span.URI, declPosn token.Position, report func(loc protocol.Location, isDecl bool)) error {
+	pgf, err := pkg.GopFile(declURI)
+	if err != nil {
+		return err
+	}
+	pos, err := safetoken.Pos(pgf.Tok, declPosn.Offset)
+	if err != nil {
+		return err
+	}
+	objects, _, err := gopObjectsAt(pkg.GopTypesInfo(), pgf.File, pos)
+	if err != nil {
+		return err // unreachable? (probably caught earlier)
+	}
+
+	// Report the locations of the declaration(s).
+	// TODO(adonovan): what about for corresponding methods? Add tests.
+	for _, node := range objects {
+		report(gopMustLocation(pgf, node), true)
+	}
+
+	// Convert targets map to set.
+	targets := make(map[types.Object]bool)
+	for obj := range objects {
+		targets[obj] = true
+	}
+
+	return gopLocalReferences(pkg, targets, true, report)
 }
