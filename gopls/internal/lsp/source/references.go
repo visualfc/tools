@@ -31,6 +31,8 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp/source/methodsets"
 	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/event"
+
+	gopast "github.com/goplus/gop/ast"
 )
 
 // References returns a list of all references (sorted with
@@ -406,6 +408,11 @@ func ordinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI, pp
 			}
 			pkg := pkgs[0]
 
+			// goxls: find go+ files
+			if !strings.HasSuffix(string(declURI), ".go") {
+				return gopFindLocalReferences(pkg, declURI, declPosn, report)
+			}
+
 			// Find the declaration of the corresponding
 			// object in this package based on (URI, offset).
 			pgf, err := pkg.File(declURI)
@@ -603,6 +610,17 @@ func localReferences(pkg Package, targets map[types.Object]bool, correspond bool
 			if id, ok := n.(*ast.Ident); ok {
 				if obj, ok := pkg.GetTypesInfo().Uses[id]; ok && matches(obj) {
 					report(mustLocation(pgf, id), false)
+				}
+			}
+			return true
+		})
+	}
+	// goxls: looking for gop files
+	for _, pgf := range pkg.CompiledGopFiles() {
+		gopast.Inspect(pgf.File, func(n gopast.Node) bool {
+			if id, ok := n.(*gopast.Ident); ok {
+				if obj, ok := pkg.GopTypesInfo().Uses[id]; ok && matches(obj) {
+					report(gopMustLocation(pgf, id), false)
 				}
 			}
 			return true

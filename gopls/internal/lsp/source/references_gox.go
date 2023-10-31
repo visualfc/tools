@@ -438,6 +438,11 @@ func gopOrdinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI,
 			}
 			pkg := pkgs[0]
 
+			// find go files
+			if strings.HasSuffix(string(declURI), ".go") {
+				return goFindLocalReferences(pkg, declURI, declPosn, report)
+			}
+
 			// Find the declaration of the corresponding
 			// object in this package based on (URI, offset).
 			pgf, err := pkg.GopFile(declURI)
@@ -465,7 +470,7 @@ func gopOrdinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI,
 				targets[obj] = true
 			}
 
-			return gopLocalReferences(pkg, targets, true, report)
+			return localReferences(pkg, targets, true, report)
 		})
 	}
 
@@ -497,7 +502,7 @@ func gopOrdinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI,
 			// since expansions did that already, and we don't
 			// want (e.g.) concrete -> interface -> concrete.
 			const correspond = false
-			return gopLocalReferences(pkg, targets, correspond, report)
+			return localReferences(pkg, targets, correspond, report)
 		})
 	}
 
@@ -523,59 +528,6 @@ func gopOrdinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI,
 		return nil, err
 	}
 	return refs, nil
-}
-
-// gopLocalReferences traverses syntax and reports each reference to one
-// of the target objects, or (if correspond is set) an object that
-// corresponds to one of them via interface satisfaction.
-func gopLocalReferences(pkg Package, targets map[types.Object]bool, correspond bool, report func(loc protocol.Location, isDecl bool)) error {
-	// If we're searching for references to a method optionally
-	// broaden the search to include references to corresponding
-	// methods of mutually assignable receiver types.
-	// (We use a slice, but objectsAt never returns >1 methods.)
-	var methodRecvs []types.Type
-	var methodName string // name of an arbitrary target, iff a method
-	if correspond {
-		for obj := range targets {
-			if t := effectiveReceiver(obj); t != nil {
-				methodRecvs = append(methodRecvs, t)
-				methodName = obj.Name()
-			}
-		}
-	}
-
-	// matches reports whether obj either is or corresponds to a target.
-	// (Correspondence is defined as usual for interface methods.)
-	matches := func(obj types.Object) bool {
-		for target := range targets {
-			if equalOrigin(obj, target) {
-				return true
-			}
-		}
-		if methodRecvs != nil && obj.Name() == methodName {
-			if orecv := effectiveReceiver(obj); orecv != nil {
-				for _, mrecv := range methodRecvs {
-					if concreteImplementsIntf(orecv, mrecv) {
-						return true
-					}
-				}
-			}
-		}
-		return false
-	}
-
-	// Scan through syntax looking for uses of one of the target objects.
-	for _, pgf := range pkg.CompiledGopFiles() {
-		ast.Inspect(pgf.File, func(n ast.Node) bool {
-			if id, ok := n.(*ast.Ident); ok {
-				if obj, ok := pkg.GopTypesInfo().Uses[id]; ok && matches(obj) {
-					report(gopMustLocation(pgf, id), false)
-				}
-			}
-			return true
-		})
-	}
-	return nil
 }
 
 // gopObjectsAt returns the non-empty set of objects denoted (def or use)
@@ -647,4 +599,62 @@ func gopMustLocation(pgf *ParsedGopFile, n ast.Node) protocol.Location {
 		panic(err) // can't happen in references or implementations
 	}
 	return loc
+}
+
+func goFindLocalReferences(pkg Package, declURI span.URI, declPosn token.Position, report func(loc protocol.Location, isDecl bool)) error {
+	pgf, err := pkg.File(declURI)
+	if err != nil {
+		return err
+	}
+	pos, err := safetoken.Pos(pgf.Tok, declPosn.Offset)
+	if err != nil {
+		return err
+	}
+	objects, _, err := objectsAt(pkg.GetTypesInfo(), pgf.File, pos)
+	if err != nil {
+		return err // unreachable? (probably caught earlier)
+	}
+
+	// Report the locations of the declaration(s).
+	// TODO(adonovan): what about for corresponding methods? Add tests.
+	for _, node := range objects {
+		report(mustLocation(pgf, node), true)
+	}
+
+	// Convert targets map to set.
+	targets := make(map[types.Object]bool)
+	for obj := range objects {
+		targets[obj] = true
+	}
+
+	return localReferences(pkg, targets, true, report)
+}
+
+func gopFindLocalReferences(pkg Package, declURI span.URI, declPosn token.Position, report func(loc protocol.Location, isDecl bool)) error {
+	pgf, err := pkg.GopFile(declURI)
+	if err != nil {
+		return err
+	}
+	pos, err := safetoken.Pos(pgf.Tok, declPosn.Offset)
+	if err != nil {
+		return err
+	}
+	objects, _, err := gopObjectsAt(pkg.GopTypesInfo(), pgf.File, pos)
+	if err != nil {
+		return err // unreachable? (probably caught earlier)
+	}
+
+	// Report the locations of the declaration(s).
+	// TODO(adonovan): what about for corresponding methods? Add tests.
+	for _, node := range objects {
+		report(gopMustLocation(pgf, node), true)
+	}
+
+	// Convert targets map to set.
+	targets := make(map[types.Object]bool)
+	for obj := range objects {
+		targets[obj] = true
+	}
+
+	return localReferences(pkg, targets, true, report)
 }
