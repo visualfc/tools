@@ -438,6 +438,7 @@ func gopOrdinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI,
 			}
 			pkg := pkgs[0]
 
+			// find go files
 			if strings.HasSuffix(string(declURI), ".go") {
 				return goFindLocalReferences(pkg, declURI, declPosn, report)
 			}

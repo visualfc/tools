@@ -408,7 +408,7 @@ func ordinaryReferences(ctx context.Context, snapshot Snapshot, uri span.URI, pp
 			}
 			pkg := pkgs[0]
 
-			// goxls: check go+ files
+			// goxls: find go+ files
 			if !strings.HasSuffix(string(declURI), ".go") {
 				return gopFindLocalReferences(pkg, declURI, declPosn, report)
 			}
