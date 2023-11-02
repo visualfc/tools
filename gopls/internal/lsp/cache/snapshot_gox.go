@@ -23,7 +23,7 @@ func gopExtensions() string {
 	return goputil.Exts()
 }
 
-// metadataChanges detects features of the change from oldFH->newFH that may
+// gopMetadataChanges detects features of the change from oldFH->newFH that may
 // affect package metadata.
 //
 // It uses lockedSnapshot to access cached parse information. lockedSnapshot
