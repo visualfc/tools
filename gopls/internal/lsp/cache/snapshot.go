@@ -2039,9 +2039,10 @@ func (s *snapshot) clone(ctx, bgCtx context.Context, changes map[span.URI]*fileC
 		// because the file type that matters is not what the *client* tells us,
 		// but what the Go command sees.
 		var invalidateMetadata, pkgFileChanged, importDeleted bool
-		if strings.HasSuffix(uri.Filename(), ".go") ||
-			goputil.FileKind(path.Ext(uri.Filename())) != goputil.FileUnknown { // goxls: Support Go+
+		if strings.HasSuffix(uri.Filename(), ".go") {
 			invalidateMetadata, pkgFileChanged, importDeleted = metadataChanges(ctx, s, originalFH, change.fileHandle)
+		} else if goputil.FileKind(path.Ext(uri.Filename())) != goputil.FileUnknown { // goxls: Support Go+
+			invalidateMetadata, pkgFileChanged, importDeleted = gopMetadataChanges(ctx, s, originalFH, change.fileHandle)
 		}
 
 		invalidateMetadata = invalidateMetadata || forceReloadMetadata || reinit
