@@ -1507,6 +1507,24 @@ func typeCheckImpl(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*
 		}
 	}
 
+	// goxls: process pkg.gopTypeErrors
+	for _, e := range pkg.gopTypeErrors {
+		diags, err := gopTypeErrorDiagnostics(inputs.moduleMode, inputs.linkTarget, pkg, e)
+		if err != nil {
+			// If we fail here and there are no parse errors, it means we are hiding
+			// a valid type-checking error from the user. This must be a bug.
+			if len(pkg.parseErrors) == 0 {
+				bug.Reportf("failed to compute position for gop type error %v: %v", e, err)
+			}
+			continue
+		}
+		for _, diag := range diags {
+			if !unparseable[diag.URI] {
+				pkg.diagnostics = append(pkg.diagnostics, diag)
+			}
+		}
+	}
+
 	// Work around golang/go#61561: interface instances aren't concurrency-safe
 	// as they are not completed by the type checker.
 	for _, inst := range typeparams.GetInstances(pkg.typesInfo) {
@@ -1610,10 +1628,14 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 		return nil, ctx.Err()
 	}
 
-	// Type checking errors are handled via the config, so ignore them here.
-	// goxls: use Go+
-	// _ = check.Files(files) // 50us-15ms, depending on size of package
-	_ = checkFiles(check, files, pkg.compiledGopFiles)
+	// goxls: support Go+
+	checkErr := checkFiles(check, files, pkg.compiledGopFiles)
+	// Type checking errors of go files are handled via the config, so they can be ignored.
+	// But errors of gop files are not, we need to extract them here.
+	if checkErr != nil {
+		gopTypeErrors := extractGopTypeErrors(checkErr, pkg)
+		pkg.gopTypeErrors = append(pkg.gopTypeErrors, gopTypeErrors...)
+	}
 
 	// If the context was cancelled, we may have returned a ton of transient
 	// errors to the type checker. Swallow them.
