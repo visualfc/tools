@@ -14,6 +14,8 @@ github.com/goplus/gop v1.1.4-0.20231031042255-7625a67bb6cd h1:Rf5SoZM9TaV1gFdG5C
 github.com/goplus/gop v1.1.4-0.20231031042255-7625a67bb6cd/go.mod h1:I3XdNVzGBXO+TVW84/1r2WUkXGKi4dR467T193e/TVQ=
 github.com/goplus/gop v1.1.4-0.20231102152134-57106a4e6f3b h1:luorIyK+ruXjRCpYc8d2Vi/rxn6wvOMKrWq8yvJsImo=
 github.com/goplus/gop v1.1.4-0.20231102152134-57106a4e6f3b/go.mod h1:hR83L/WKMHIEiHTqKr/Q/oiOCEYQ2/JwLyGARQNe8KU=
+github.com/goplus/gop v1.1.4-0.20231103022942-a725ba0f7dbb h1:nqZZ/t9BYOXe/9YcmkSjh9YpkYbDnDcJFQbe++12iY8=
+github.com/goplus/gop v1.1.4-0.20231103022942-a725ba0f7dbb/go.mod h1:hR83L/WKMHIEiHTqKr/Q/oiOCEYQ2/JwLyGARQNe8KU=
 github.com/goplus/gop v1.1.9 h1:7e0jQFbTeFGOU5Rmd58YV/1nRLySdooSAFGWAeW6UBo=
 github.com/goplus/gop v1.1.9/go.mod h1:OQBkI9FbIOJWtHP9ahB1d6cKEq+2P10IJ588ewGhnhk=
 github.com/goplus/gox v1.12.2-0.20231030070332-723a6b4b6c99 h1:2lqPMMQM+F4Cpp/LSkoChGb+nQmpypRzzpNTmXDr0Fc=

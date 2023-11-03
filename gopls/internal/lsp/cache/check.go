@@ -1590,12 +1590,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 	}
 
 	onError := func(e error) {
-		switch te := e.(type) {
-		case types.Error:
-			pkg.typeErrors = append(pkg.typeErrors, te)
-		case *types.Error:
-			pkg.typeErrors = append(pkg.typeErrors, *te)
-		}
+		pkg.typeErrors = append(pkg.typeErrors, e.(types.Error))
 	}
 	cfg := b.typesConfig(ctx, inputs, onError)
 
