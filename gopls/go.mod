@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/google/go-cmp v0.5.9
-	github.com/goplus/gop v1.1.4-0.20231103022942-a725ba0f7dbb
+	github.com/goplus/gop v1.1.4-0.20231103110752-3785192f4fd0
 	github.com/goplus/mod v0.11.8
 	github.com/jba/printsrc v0.2.2
 	github.com/jba/templatecheck v0.6.0
@@ -25,7 +25,7 @@ require (
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/google/safehtml v0.1.0 // indirect
-	github.com/goplus/gox v1.12.2-0.20231102143433-424983d7a5ba // indirect
+	github.com/goplus/gox v1.12.2-0.20231103090303-19b970256b0e // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/exp/typeparams v0.0.0-20221212164502-fae10dda9338 // indirect
 )
