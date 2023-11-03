@@ -442,15 +442,27 @@ func typeErrorData(pkg *syntaxPackage, terr types.Error) (typesinternal.ErrorCod
 	if !posn.IsValid() {
 		return 0, protocol.Location{}, fmt.Errorf("position %d of type error %q (code %q) not found in FileSet", start, start, terr)
 	}
-	pgf, err := pkg.File(span.URIFromPath(posn.Filename))
-	if err != nil {
-		return 0, protocol.Location{}, err
+	if strings.HasSuffix(posn.Filename, ".go") {
+		pgf, err := pkg.File(span.URIFromPath(posn.Filename))
+		if err != nil {
+			return 0, protocol.Location{}, err
+		}
+		if !end.IsValid() || end == start {
+			end = analysisinternal.TypeErrorEndPos(fset, pgf.Src, start)
+		}
+		loc, err := pgf.Mapper.PosLocation(pgf.Tok, start, end)
+		return ecode, loc, err
+	} else { // goxls: Support Go+
+		pgf, err := pkg.GopFile(span.URIFromPath(posn.Filename))
+		if err != nil {
+			return 0, protocol.Location{}, err
+		}
+		if !end.IsValid() || end == start {
+			end = analysisinternal.TypeErrorEndPos(fset, pgf.Src, start)
+		}
+		loc, err := pgf.Mapper.PosLocation(pgf.Tok, start, end)
+		return ecode, loc, err
 	}
-	if !end.IsValid() || end == start {
-		end = analysisinternal.TypeErrorEndPos(fset, pgf.Src, start)
-	}
-	loc, err := pgf.Mapper.PosLocation(pgf.Tok, start, end)
-	return ecode, loc, err
 }
 
 // spanToRange converts a span.Span to a protocol.Range, by mapping content

@@ -55,7 +55,6 @@ type syntaxPackage struct {
 	diagnostics     []*source.Diagnostic
 	parseErrors     []scanner.ErrorList
 	typeErrors      []types.Error
-	gopTypeErrors   []typesutil.GopTypeError // goxls: support Go+
 	types           *types.Package
 	typesInfo       *types.Info
 	importMap       map[PackagePath]*types.Package
@@ -163,15 +162,8 @@ func (p *Package) GetParseErrors() []scanner.ErrorList {
 	return p.pkg.parseErrors
 }
 
-func (p *Package) GetTypeErrors() []typesutil.TypeError { // goxls: support pkg.gopTypeErrors
-	var errs []typesutil.TypeError
-	for _, err := range p.pkg.typeErrors {
-		errs = append(errs, err)
-	}
-	for _, err := range p.pkg.gopTypeErrors {
-		errs = append(errs, err)
-	}
-	return errs
+func (p *Package) GetTypeErrors() []types.Error {
+	return p.pkg.typeErrors
 }
 
 func (p *Package) DiagnosticsForFile(ctx context.Context, s source.Snapshot, uri span.URI) ([]*source.Diagnostic, error) {
