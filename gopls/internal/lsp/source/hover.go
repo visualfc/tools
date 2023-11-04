@@ -28,7 +28,6 @@ import (
 	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
-	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/tokeninternal"
 	"golang.org/x/tools/internal/typeparams"
@@ -192,7 +191,12 @@ func hover(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol.Po
 
 	// For all other objects, consider the full syntax of their declaration in
 	// order to correctly compute their documentation, signature, and link.
-	declPGF, declPos, err := parseFull(ctx, snapshot, pkg.FileSet(), obj.Pos())
+	// goxls: mybe is a Go+ object in a Go file
+	// declPGF, declPos, err := parseFull(ctx, snapshot, pkg.FileSet(), obj.Pos())
+	gopf, declPGF, declPos, err := gopParseFull(ctx, snapshot, pkg.FileSet(), obj.Pos())
+	if gopf != nil {
+		return gopHoverInGo(snapshot, pkg, pgf, pos, ident, obj, rng, qf, gopf, declPos)
+	}
 	if err != nil {
 		return protocol.Range{}, nil, fmt.Errorf("re-parsing declaration of %s: %v", obj.Name(), err)
 	}
@@ -368,7 +372,7 @@ func hover(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol.Po
 
 // goxls: hover a Go object in a Go+ file
 // sync code from func hover(...)
-func goHover(
+func goHoverInGop(
 	snapshot Snapshot,
 	pkg Package, pgf *ParsedGopFile, pos token.Pos, ident *gopast.Ident, obj types.Object, rng protocol.Range, qf types.Qualifier,
 	declPGF *ParsedGoFile, declPos token.Pos) (protocol.Range, *HoverJSON, error) {
@@ -954,6 +958,7 @@ func chooseDocComment(decl ast.Decl, spec ast.Spec, field *ast.Field) *ast.Comme
 	return nil
 }
 
+/* goxls: use gopParseFull
 // parseFull fully parses the file corresponding to position pos (for
 // which fset provides file/line information).
 //
@@ -988,6 +993,7 @@ func parseFull(ctx context.Context, snapshot Snapshot, fset *token.FileSet, pos 
 
 	return pgf, fullPos, nil
 }
+*/
 
 func formatHover(h *HoverJSON, options *Options) (string, error) {
 	signature := formatSignature(h, options)
