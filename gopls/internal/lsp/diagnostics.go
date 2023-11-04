@@ -504,6 +504,10 @@ func (s *Server) diagnosePkgs(ctx context.Context, snapshot source.Snapshot, toD
 			s.storeDiagnostics(snapshot, uri, typeCheckSource, pkgDiags[uri], true)
 			storedPkgDiags[uri] = true
 		}
+		for _, uri := range m.CompiledGopFiles { // goxls: Incldue gop files
+			s.storeDiagnostics(snapshot, uri, typeCheckSource, pkgDiags[uri], true)
+			storedPkgDiags[uri] = true
+		}
 	}
 	// Store the package diagnostics.
 	for uri, diags := range pkgDiags {
