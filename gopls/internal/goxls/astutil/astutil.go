@@ -12,6 +12,17 @@ import (
 	"golang.org/x/tools/gopls/internal/goxls/typeparams"
 )
 
+// Unparen returns e with any enclosing parentheses stripped.
+func Unparen(e ast.Expr) ast.Expr {
+	for {
+		p, ok := e.(*ast.ParenExpr)
+		if !ok {
+			return e
+		}
+		e = p.X
+	}
+}
+
 // PathEnclosingInterval returns the node that encloses the source
 // interval [start, end), and all its ancestors up to the AST root.
 //
