@@ -85,6 +85,9 @@ func SuggestedFixFromCommand(cmd protocol.Command, kind protocol.CodeActionKind)
 // ApplyFix applies the command's suggested fix to the given file and
 // range, returning the resulting edits.
 func ApplyFix(ctx context.Context, fix string, snapshot Snapshot, fh FileHandle, pRng protocol.Range) ([]protocol.TextDocumentEdit, error) {
+	if kind := snapshot.View().FileKind(fh); kind == Gop {
+		return GopApplyFix(ctx, fix, snapshot, fh, pRng)
+	}
 	handler, ok := suggestedFixes[fix]
 	if !ok {
 		return nil, fmt.Errorf("no suggested fix function for %s", fix)

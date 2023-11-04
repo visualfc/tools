@@ -1,4 +1,4 @@
-// Copyright 2022 The Go Authors. All rights reserved.
+// Copyright 2023 The GoPlus Authors (goplus.org). All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -8,17 +8,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"go/format"
-	"go/parser"
-	"go/token"
 	"go/types"
 	"io"
 	"path"
 	"strings"
 
+	"github.com/goplus/gop/format"
+	"github.com/goplus/gop/parser"
+	"github.com/goplus/gop/token"
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls/astutil"
 	"golang.org/x/tools/gopls/internal/lsp/analysis/stubmethods"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
@@ -26,11 +26,11 @@ import (
 	"golang.org/x/tools/internal/typeparams"
 )
 
-// stubSuggestedFixFunc returns a suggested fix to declare the missing
+// gopStubSuggestedFixFunc returns a suggested fix to declare the missing
 // methods of the concrete type that is assigned to an interface type
 // at the cursor position.
-func stubSuggestedFixFunc(ctx context.Context, snapshot Snapshot, fh FileHandle, rng protocol.Range) (*token.FileSet, *analysis.SuggestedFix, error) {
-	pkg, pgf, err := NarrowestPackageForFile(ctx, snapshot, fh.URI())
+func gopStubSuggestedFixFunc(ctx context.Context, snapshot Snapshot, fh FileHandle, rng protocol.Range) (*token.FileSet, *analysis.SuggestedFix, error) {
+	pkg, pgf, err := NarrowestPackageForGopFile(ctx, snapshot, fh.URI())
 	if err != nil {
 		return nil, nil, fmt.Errorf("GetTypedFile: %w", err)
 	}
@@ -39,32 +39,17 @@ func stubSuggestedFixFunc(ctx context.Context, snapshot Snapshot, fh FileHandle,
 		return nil, nil, err
 	}
 	nodes, _ := astutil.PathEnclosingInterval(pgf.File, start, end)
-	si := stubmethods.GetStubInfo(pkg.FileSet(), pkg.GetTypesInfo(), nodes, start)
+	si := stubmethods.GopGetStubInfo(pkg.FileSet(), pkg.GopTypesInfo(), nodes, start)
 	if si == nil {
 		return nil, nil, fmt.Errorf("nil interface request")
 	}
 	return stub(ctx, snapshot, si)
 }
 
-// stub returns a suggested fix to declare the missing methods of si.Concrete.
-func stub(ctx context.Context, snapshot Snapshot, si *stubmethods.StubInfo) (*token.FileSet, *analysis.SuggestedFix, error) {
-	// A function-local type cannot be stubbed
-	// since there's nowhere to put the methods.
-	conc := si.Concrete.Obj()
-	if conc.Parent() != conc.Pkg().Scope() {
-		return nil, nil, fmt.Errorf("local type %q cannot be stubbed", conc.Name())
-	}
-
-	// Parse the file declaring the concrete type.
-	// goxls: maybe a Go or Go+ file
-	// declPGF, _, err := parseFull(ctx, snapshot, si.Fset, conc.Pos())
-	gopf, declPGF, _, err := gopParseFull(ctx, snapshot, si.Fset, conc.Pos())
-	if gopf != nil {
-		return gopStub(ctx, snapshot, si, conc, gopf)
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse file %q declaring implementation type: %w", declPGF.URI, err)
-	}
+// gopStub returns a suggested fix to declare the missing methods of si.Concrete.
+func gopStub(
+	ctx context.Context, snapshot Snapshot, si *stubmethods.StubInfo,
+	conc *types.TypeName, declPGF *ParsedGopFile) (*token.FileSet, *analysis.SuggestedFix, error) {
 	if declPGF.Fixed() {
 		return nil, nil, fmt.Errorf("file contains parse errors: %s", declPGF.URI)
 	}
@@ -72,7 +57,7 @@ func stub(ctx context.Context, snapshot Snapshot, si *stubmethods.StubInfo) (*to
 	// Build import environment for the declaring file.
 	importEnv := make(map[ImportPath]string) // value is local name
 	for _, imp := range declPGF.File.Imports {
-		importPath := UnquoteImportPath(imp)
+		importPath := GopUnquoteImportPath(imp)
 		var name string
 		if imp.Name != nil {
 			name = imp.Name.Name

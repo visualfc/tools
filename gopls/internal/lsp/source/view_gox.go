@@ -64,6 +64,12 @@ type ParsedGopFile struct {
 	ParseErr scanner.ErrorList
 }
 
+// Fixed reports whether p was "Fixed", meaning that its source or positions
+// may not correlate with the original file.
+func (p ParsedGopFile) Fixed() bool {
+	return p.FixedSrc || p.FixedAST
+}
+
 // HasPkgDecl checks if `package xxx` exists or not.
 func (pgf *ParsedGopFile) HasPkgDecl() bool {
 	return pgf.File.Package != token.NoPos
