@@ -11,6 +11,7 @@ import (
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
+	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 )
 
 func ZeroValue(f *ast.File, pkg *types.Package, typ types.Type) ast.Expr {
@@ -247,4 +248,94 @@ func baseIfStmt(path []ast.Node, index int) ast.Stmt {
 		break
 	}
 	return stmt.(ast.Stmt)
+}
+
+// MatchingIdents finds the names of all identifiers in 'node' that match any of the given types.
+// 'pos' represents the position at which the identifiers may be inserted. 'pos' must be within
+// the scope of each of identifier we select. Otherwise, we will insert a variable at 'pos' that
+// is unrecognized.
+func MatchingIdents(typs []types.Type, node ast.Node, pos token.Pos, info *typesutil.Info, pkg *types.Package) map[types.Type][]string {
+
+	// Initialize matches to contain the variable types we are searching for.
+	matches := make(map[types.Type][]string)
+	for _, typ := range typs {
+		if typ == nil {
+			continue // TODO(adonovan): is this reachable?
+		}
+		matches[typ] = nil // create entry
+	}
+
+	seen := map[types.Object]struct{}{}
+	ast.Inspect(node, func(n ast.Node) bool {
+		if n == nil {
+			return false
+		}
+		// Prevent circular definitions. If 'pos' is within an assignment statement, do not
+		// allow any identifiers in that assignment statement to be selected. Otherwise,
+		// we could do the following, where 'x' satisfies the type of 'f0':
+		//
+		// x := fakeStruct{f0: x}
+		//
+		if assign, ok := n.(*ast.AssignStmt); ok && pos > assign.Pos() && pos <= assign.End() {
+			return false
+		}
+		if n.End() > pos {
+			return n.Pos() <= pos
+		}
+		ident, ok := n.(*ast.Ident)
+		if !ok || ident.Name == "_" {
+			return true
+		}
+		obj := info.Defs[ident]
+		if obj == nil || obj.Type() == nil {
+			return true
+		}
+		if _, ok := obj.(*types.TypeName); ok {
+			return true
+		}
+		// Prevent duplicates in matches' values.
+		if _, ok = seen[obj]; ok {
+			return true
+		}
+		seen[obj] = struct{}{}
+		// Find the scope for the given position. Then, check whether the object
+		// exists within the scope.
+		innerScope := pkg.Scope().Innermost(pos)
+		if innerScope == nil {
+			return true
+		}
+		_, foundObj := innerScope.LookupParent(ident.Name, pos)
+		if foundObj != obj {
+			return true
+		}
+		// The object must match one of the types that we are searching for.
+		// TODO(adonovan): opt: use typeutil.Map?
+		if names, ok := matches[obj.Type()]; ok {
+			matches[obj.Type()] = append(names, ident.Name)
+		} else {
+			// If the object type does not exactly match
+			// any of the target types, greedily find the first
+			// target type that the object type can satisfy.
+			for typ := range matches {
+				if equivalentTypes(obj.Type(), typ) {
+					matches[typ] = append(matches[typ], ident.Name)
+				}
+			}
+		}
+		return true
+	})
+	return matches
+}
+
+func equivalentTypes(want, got types.Type) bool {
+	if types.Identical(want, got) {
+		return true
+	}
+	// Code segment to help check for untyped equality from (golang/go#32146).
+	if rhs, ok := want.(*types.Basic); ok && rhs.Info()&types.IsUntyped > 0 {
+		if lhs, ok := got.Underlying().(*types.Basic); ok {
+			return rhs.Info()&types.IsConstType == lhs.Info()&types.IsConstType
+		}
+	}
+	return types.AssignableTo(want, got)
 }
