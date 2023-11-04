@@ -14,7 +14,7 @@ import (
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/goxls/typesutil"
-	"golang.org/x/tools/gopls/internal/lsp/analysis-gox/undeclaredname"
+	"golang.org/x/tools/gopls/internal/lsp/analysis/undeclaredname"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/imports"
@@ -28,7 +28,7 @@ type (
 var gopSuggestedFixes = map[string]SuggestedFixFunc{
 	// goxls: TODO
 	// FillStruct:        singleFile(fillstruct.SuggestedFix),
-	UndeclaredName:    gopSingleFile(undeclaredname.SuggestedFix),
+	UndeclaredName:    gopSingleFile(undeclaredname.GopSuggestedFix),
 	ExtractVariable:   gopSingleFile(gopExtractVariable),
 	ExtractFunction:   gopSingleFile(gopExtractFunction),
 	ExtractMethod:     gopSingleFile(gopExtractMethod),

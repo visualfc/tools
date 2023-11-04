@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"go/types"
 	"strings"
-	"unicode"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/format"
@@ -23,40 +22,22 @@ import (
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 )
 
-const Doc = `suggested fixes for "undeclared name: <>"
-
-This checker provides suggested fixes for type errors of the
-type "undeclared name: <>". It will either insert a new statement,
-such as:
-
-"<> := "
-
-or a new function declaration, such as:
-
-func <>(inferred parameters) {
-	panic("implement me!")
-}
-`
-
-var Analyzer = &analysis.Analyzer{
+var GopAnalyzer = &analysis.Analyzer{
 	Name:             "undeclaredname",
 	Doc:              Doc,
 	Requires:         []*analysis.Analyzer{},
-	Run:              run,
+	Run:              gopRun,
 	RunDespiteErrors: true,
 }
 
-// The prefix for this error message changed in Go 1.20.
-var undeclaredNamePrefixes = []string{"undeclared name: ", "undefined: "}
-
-func run(pass *analysis.Pass) (interface{}, error) {
+func gopRun(pass *analysis.Pass) (interface{}, error) {
 	for _, err := range pass.TypeErrors {
-		runForError(pass, err)
+		gopRunForError(pass, err)
 	}
 	return nil, nil
 }
 
-func runForError(pass *analysis.Pass, err types.Error) {
+func gopRunForError(pass *analysis.Pass, err types.Error) {
 	var name string
 	for _, prefix := range undeclaredNamePrefixes {
 		if !strings.HasPrefix(err.Msg, prefix) {
@@ -122,7 +103,7 @@ func runForError(pass *analysis.Pass, err types.Error) {
 	})
 }
 
-func SuggestedFix(fset *token.FileSet, start, end token.Pos, content []byte, file *ast.File, pkg *types.Package, info *typesutil.Info) (*analysis.SuggestedFix, error) {
+func GopSuggestedFix(fset *token.FileSet, start, end token.Pos, content []byte, file *ast.File, pkg *types.Package, info *typesutil.Info) (*analysis.SuggestedFix, error) {
 	pos := start // don't use the end
 	path, _ := astutil.PathEnclosingInterval(file, pos, pos)
 	if len(path) < 2 {
@@ -137,7 +118,7 @@ func SuggestedFix(fset *token.FileSet, start, end token.Pos, content []byte, fil
 	// new function declaration.
 	if len(path) > 1 {
 		if _, ok := path[1].(*ast.CallExpr); ok {
-			return newFunctionDeclaration(path, file, pkg, info, fset)
+			return gopNewFunctionDeclaration(path, file, pkg, info, fset)
 		}
 	}
 
@@ -168,7 +149,7 @@ func SuggestedFix(fset *token.FileSet, start, end token.Pos, content []byte, fil
 	}, nil
 }
 
-func newFunctionDeclaration(path []ast.Node, file *ast.File, pkg *types.Package, info *typesutil.Info, fset *token.FileSet) (*analysis.SuggestedFix, error) {
+func gopNewFunctionDeclaration(path []ast.Node, file *ast.File, pkg *types.Package, info *typesutil.Info, fset *token.FileSet) (*analysis.SuggestedFix, error) {
 	if len(path) < 3 {
 		return nil, fmt.Errorf("unexpected set of enclosing nodes: %v", path)
 	}
@@ -314,35 +295,4 @@ func newFunctionDeclaration(path []ast.Node, file *ast.File, pkg *types.Package,
 			NewText: b.Bytes(),
 		}},
 	}, nil
-}
-func typeToArgName(ty types.Type) string {
-	s := types.Default(ty).String()
-
-	switch t := ty.(type) {
-	case *types.Basic:
-		// use first letter in type name for basic types
-		return s[0:1]
-	case *types.Slice:
-		// use element type to decide var name for slices
-		return typeToArgName(t.Elem())
-	case *types.Array:
-		// use element type to decide var name for arrays
-		return typeToArgName(t.Elem())
-	case *types.Chan:
-		return "ch"
-	}
-
-	s = strings.TrimFunc(s, func(r rune) bool {
-		return !unicode.IsLetter(r)
-	})
-
-	if s == "error" {
-		return "err"
-	}
-
-	// remove package (if present)
-	// and make first letter lowercase
-	a := []rune(s[strings.LastIndexByte(s, '.')+1:])
-	a[0] = unicode.ToLower(a[0])
-	return string(a)
 }
