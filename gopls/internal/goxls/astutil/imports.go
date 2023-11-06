@@ -124,7 +124,7 @@ func AddNamedImport(fset *token.FileSet, f *ast.File, name, path string) (added 
 					impDecl.TokPos = c.End() + 2
 				}
 			} else {
-				needLparm = (len(f.Comments) > 0)
+				needLparm = (len(f.Comments) > 0 && f.Comments[0].Pos() == f.Pos())
 				// no package decl comment to skip
 			}
 		}
