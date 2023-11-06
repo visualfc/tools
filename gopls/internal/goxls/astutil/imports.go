@@ -95,6 +95,7 @@ func AddNamedImport(fset *token.FileSet, f *ast.File, name, path string) (added 
 		}
 	}
 
+	needLparm := false
 	// If no import decl found, add one after the last import.
 	if impDecl == nil {
 		impDecl = &ast.GenDecl{
@@ -113,12 +114,18 @@ func AddNamedImport(fset *token.FileSet, f *ast.File, name, path string) (added 
 			impDecl.TokPos = pos
 			file := fset.File(pos)
 			pkgLine := file.Line(pos)
-			for _, c := range f.Comments {
-				if file.Line(c.Pos()) > pkgLine {
-					break
+			if f.HasPkgDecl() {
+				// if has package decl, skip package decl comment
+				for _, c := range f.Comments {
+					if file.Line(c.Pos()) > pkgLine {
+						break
+					}
+					// +2 for a blank line
+					impDecl.TokPos = c.End() + 2
 				}
-				// +2 for a blank line
-				impDecl.TokPos = c.End() + 2
+			} else {
+				needLparm = (len(f.Comments) > 0 && f.Comments[0].Pos() == f.Pos())
+				// no package decl comment to skip
 			}
 		}
 		f.Decls = append(f.Decls, nil)
@@ -156,7 +163,11 @@ func AddNamedImport(fset *token.FileSet, f *ast.File, name, path string) (added 
 	// Clean up parens. impDecl contains at least one spec.
 	if len(impDecl.Specs) == 1 {
 		// Remove unneeded parens.
-		impDecl.Lparen = token.NoPos
+		if needLparm {
+			impDecl.Lparen = impDecl.Specs[0].Pos()
+		} else {
+			impDecl.Lparen = token.NoPos
+		}
 	} else if !impDecl.Lparen.IsValid() {
 		// impDecl needs parens added.
 		impDecl.Lparen = impDecl.Specs[0].Pos()
