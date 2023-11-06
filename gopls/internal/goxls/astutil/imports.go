@@ -161,7 +161,7 @@ func AddNamedImport(fset *token.FileSet, f *ast.File, name, path string) (added 
 	// Clean up parens. impDecl contains at least one spec.
 	if len(impDecl.Specs) == 1 {
 		// Remove unneeded parens.
-		impDecl.Lparen = token.NoPos
+		impDecl.Lparen = impDecl.Specs[0].Pos() //impDecl.Lparen = token.NoPos
 	} else if !impDecl.Lparen.IsValid() {
 		// impDecl needs parens added.
 		impDecl.Lparen = impDecl.Specs[0].Pos()
