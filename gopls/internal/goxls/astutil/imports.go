@@ -113,12 +113,17 @@ func AddNamedImport(fset *token.FileSet, f *ast.File, name, path string) (added 
 			impDecl.TokPos = pos
 			file := fset.File(pos)
 			pkgLine := file.Line(pos)
-			for _, c := range f.Comments {
-				if file.Line(c.Pos()) > pkgLine {
-					break
+			if f.HasPkgDecl() {
+				// if has package decl, skip package decl comment
+				for _, c := range f.Comments {
+					if file.Line(c.Pos()) > pkgLine {
+						break
+					}
+					// +2 for a blank line
+					impDecl.TokPos = c.End() + 2
 				}
-				// +2 for a blank line
-				impDecl.TokPos = c.End() + 2
+			} else {
+				// no package decl comment to skip
 			}
 		}
 		f.Decls = append(f.Decls, nil)
