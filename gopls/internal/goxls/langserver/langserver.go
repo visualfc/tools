@@ -20,7 +20,9 @@ var (
 )
 
 func Initialize() {
-	go Get()
+	if Enable {
+		go Get()
+	}
 }
 
 func Shutdown() {
