@@ -48,3 +48,10 @@ func GenGo(ctx context.Context, pattern ...string) error {
 	}
 	return langserver.GenGo(pattern...)
 }
+
+func Changed(ctx context.Context, files ...string) error {
+	if Enable {
+		return Get().Changed(ctx, files...)
+	}
+	return nil
+}

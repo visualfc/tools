@@ -204,7 +204,7 @@ func addGopFiles(ret *Package, dir string, test bool) {
 			continue
 		}
 		fext := path.Ext(fname)
-		if goputil.FileKind(fext) == 0 {
+		if goputil.FileKind(fext) == goputil.FileUnknown {
 			continue
 		}
 		if !test && strings.HasSuffix(fname[:len(fname)-len(fext)], "_test") {

@@ -24,7 +24,9 @@ func GenGo(patternIn ...string) (patternOut []string, err error) {
 	}
 	pattern, patternOut := buildPattern(patternIn)
 	log.Println("GenGo:", pattern, "in:", patternIn, "out:", patternOut)
-	langserver.GenGo(context.Background(), pattern...)
+	if len(pattern) > 0 {
+		langserver.GenGo(context.Background(), pattern...)
+	}
 	return
 }
 
