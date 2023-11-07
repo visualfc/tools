@@ -180,6 +180,9 @@ func (s *Server) didChangeWatchedFiles(ctx context.Context, params *protocol.Did
 	ctx, done := event.Start(ctx, "lsp.Server.didChangeWatchedFiles")
 	defer done()
 
+	// goxls: Go+
+	var gopFiles []string
+
 	var modifications []source.FileModification
 	for _, change := range params.Changes {
 		uri := change.URI.SpanURI()
@@ -192,7 +195,19 @@ func (s *Server) didChangeWatchedFiles(ctx context.Context, params *protocol.Did
 			Action: action,
 			OnDisk: true,
 		})
+
+		// goxls: Go+
+		file := uri.Filename()
+		if fext := filepath.Ext(file); goputil.FileKind(fext) != goputil.FileUnknown {
+			gopFiles = append(gopFiles, file)
+		}
 	}
+
+	// goxls: Go+
+	if len(gopFiles) > 0 {
+		langserver.Changed(ctx, gopFiles...)
+	}
+
 	return s.didModifyFiles(ctx, modifications, FromDidChangeWatchedFiles)
 }
 
