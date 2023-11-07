@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/tools/gopls/internal/goxls/goputil"
+	"golang.org/x/tools/gopls/internal/goxls/langserver"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
@@ -202,6 +204,13 @@ func (s *Server) didSave(ctx context.Context, params *protocol.DidSaveTextDocume
 	if !uri.IsFile() {
 		return nil
 	}
+
+	// goxls: Go+
+	file := uri.Filename()
+	if fext := filepath.Ext(file); goputil.FileKind(fext) != goputil.FileUnknown {
+		langserver.Changed(ctx, file)
+	}
+
 	c := source.FileModification{
 		URI:    uri,
 		Action: source.Save,
