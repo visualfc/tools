@@ -5,13 +5,13 @@
 package packages
 
 import (
+	"context"
 	"log"
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/gop"
 	"github.com/goplus/gop/env"
-	"github.com/goplus/gop/x/gopprojs"
+	"golang.org/x/tools/gopls/internal/goxls/langserver"
 )
 
 var (
@@ -24,21 +24,7 @@ func GenGo(patternIn ...string) (patternOut []string, err error) {
 	}
 	pattern, patternOut := buildPattern(patternIn)
 	log.Println("GenGo:", pattern, "in:", patternIn, "out:", patternOut)
-	projs, err := gopprojs.ParseAll(pattern...)
-	if err != nil {
-		return
-	}
-	for _, proj := range projs {
-		switch v := proj.(type) {
-		case *gopprojs.DirProj:
-			_, _, err = gop.GenGoEx(v.Dir, nil, true, 0)
-		case *gopprojs.PkgPathProj:
-			if v.Path == "builtin" {
-				continue
-			}
-			_, _, err = gop.GenGoPkgPathEx("", v.Path, nil, true, 0)
-		}
-	}
+	langserver.GenGo(context.Background(), pattern...)
 	return
 }
 
