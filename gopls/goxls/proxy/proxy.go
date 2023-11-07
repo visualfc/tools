@@ -20,9 +20,7 @@ func Main(gopls, goxls string, args ...string) {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-	}()
+	defer cancel()
 
 	home, err := os.UserHomeDir()
 	check(err)
