@@ -19,8 +19,8 @@ import (
 	"golang.org/x/tools/gop/ast/astutil"
 	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/gopls/internal/bug"
-	"golang.org/x/tools/gopls/internal/goxls/analysisinternal"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
+	"golang.org/x/tools/internal/gop/analysisinternal"
 )
 
 func gopExtractVariable(fset *token.FileSet, start, end token.Pos, src []byte, file *ast.File, pkg *types.Package, info *typesutil.Info) (*analysis.SuggestedFix, error) {

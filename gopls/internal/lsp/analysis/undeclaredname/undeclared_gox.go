@@ -18,8 +18,8 @@ import (
 	"golang.org/x/tools/gop/analysis"
 	"golang.org/x/tools/gop/ast/astutil"
 	"golang.org/x/tools/gop/typesutil"
-	"golang.org/x/tools/gopls/internal/goxls/analysisinternal"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
+	"golang.org/x/tools/internal/gop/analysisinternal"
 )
 
 var GopAnalyzer = &analysis.Analyzer{
