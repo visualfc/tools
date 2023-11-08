@@ -10,13 +10,14 @@ import (
 	"strings"
 
 	goplsastutil "golang.org/x/tools/gopls/internal/astutil"
-	"golang.org/x/tools/gopls/internal/goxls"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
 	"github.com/qiniu/x/log"
+	"golang.org/x/tools/gopls/internal/goxls"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
@@ -72,7 +73,7 @@ func ParseGopSrc(ctx context.Context, fset *token.FileSet, uri span.URI, src []b
 		log.SingleStack()
 	}
 
-	file, err := parser.ParseFile(fset, uri.Filename(), src, mode)
+	file, err := parserutil.ParseFile(fset, uri.Filename(), src, mode)
 	var parseErr scanner.ErrorList
 	if err != nil {
 		// We passed a byte slice, so the only possible error is a parse error.
@@ -114,7 +115,7 @@ func ParseGopSrc(ctx context.Context, fset *token.FileSet, uri span.URI, src []b
 				event.Log(ctx, fmt.Sprintf("fixGopSrc loop - last diff:\n%v", unified), tag.File.Of(tok.Name()))
 			}
 
-			newFile, newErr := parser.ParseFile(fset, uri.Filename(), newSrc, mode)
+			newFile, newErr := parserutil.ParseFile(fset, uri.Filename(), newSrc, mode)
 			if newFile == nil {
 				break // no progress
 			}

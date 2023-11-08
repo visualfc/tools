@@ -5,7 +5,12 @@
 package parserutil
 
 import (
+	"path/filepath"
+
+	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
+	"github.com/goplus/gop/token"
+	"golang.org/x/tools/gopls/internal/goxls/goputil"
 )
 
 const (
@@ -18,3 +23,14 @@ const (
 	// be considered.
 	ParseFull = parser.AllErrors | parser.ParseComments
 )
+
+func ParseFile(fset *token.FileSet, filename string, src interface{}, mode parser.Mode) (f *ast.File, err error) {
+	var isClass bool
+	if goputil.FileKind(filepath.Ext(filename)) == goputil.FileGopClass {
+		isClass = true
+		mode |= parser.ParseGoPlusClass
+	}
+	f, err = parser.ParseFile(fset, filename, src, mode)
+	f.IsClass = isClass
+	return
+}

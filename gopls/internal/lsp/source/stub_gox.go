@@ -19,6 +19,7 @@ import (
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/goxls/astutil"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/analysis/stubmethods"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
@@ -197,7 +198,7 @@ func (%s%s%s) %s%s {
 
 	// Re-parse the file.
 	fset := token.NewFileSet()
-	newF, err := parser.ParseFile(fset, declPGF.File.Name.Name, buf.Bytes(), parser.ParseComments)
+	newF, err := parserutil.ParseFile(fset, declPGF.File.Name.Name, buf.Bytes(), parser.ParseComments)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not reparse file: %w", err)
 	}

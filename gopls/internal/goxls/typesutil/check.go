@@ -8,7 +8,6 @@ import (
 	"go/types"
 
 	"github.com/goplus/gop/token"
-	"github.com/goplus/gop/x/c2go"
 	"github.com/goplus/gop/x/typesutil"
 	"github.com/goplus/mod/gopmod"
 )
@@ -43,10 +42,9 @@ func NewChecker(conf *types.Config, opts *Config, goInfo *types.Info, gopInfo *I
 		mod = gopmod.Default
 	}
 	chkOpts := &typesutil.Config{
-		Types:       opts.Types,
-		Fset:        opts.Fset,
-		LookupPub:   c2go.LookupPub(mod),
-		LookupClass: mod.LookupClass,
+		Types: opts.Types,
+		Fset:  opts.Fset,
+		Mod:   mod,
 	}
 	return typesutil.NewChecker(conf, chkOpts, goInfo, gopInfo)
 }
