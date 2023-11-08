@@ -1,5 +1,4 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+# This workflow will build a Go project
 
 name: Go
 
@@ -10,23 +9,44 @@ on:
     branches: [ "goplus" ]
 
 jobs:
-
-  build:
-    runs-on: ubuntu-latest
+  Test:
+    strategy:
+      matrix:
+        go-version: [1.18.x, 1.21.x]
+        os: [ubuntu-latest, macos-11]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
+    - name: Set up Go/Go+
+      uses: goplus/setup-goplus@v1.1.0
       with:
-        go-version: '1.20'
+        go-version: ${{ matrix.go-version }}
+        gop-version: "main"
+        check-latest: true
+        cache: true
 
-    - name: Install
+    - name: Build Go+ tools
+      run: |
+        cd gop
+        go build -v ./..
+
+    - name: Test Go+ tools
+      run: |
+        cd gop
+        go test -v -coverprofile="coverage.txt" -covermode=atomic ./...
+
+    - name: Build Goxls
       run: |
         cd gopls
-        go install -v ./...
+        go build -v ./...
 
-    - name: Test
+    - name: Test Goxls
       run: |
         cd gopls
         go test -v ./...
+
+    - name: Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./gop/coverage.txt
