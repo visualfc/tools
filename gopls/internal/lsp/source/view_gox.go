@@ -116,6 +116,7 @@ func (m *Metadata) GopMod_() *gopmod.Module {
 	return mod
 }
 
+// goxls: TODO - suport gop.mod
 func loadGopMod(mod *packages.Module) *gopmod.Module {
 	if mod != nil {
 		if r := mod.Replace; r != nil {
