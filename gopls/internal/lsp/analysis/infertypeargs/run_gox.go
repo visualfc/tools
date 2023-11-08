@@ -9,7 +9,7 @@ import (
 
 	"github.com/goplus/gop/token"
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/gopls/internal/goxls/inspector"
+	"golang.org/x/tools/gop/ast/inspector"
 )
 
 // GopDiagnoseInferableTypeArgs reports diagnostics describing simplifications to type
