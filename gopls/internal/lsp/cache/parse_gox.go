@@ -7,16 +7,17 @@ package cache
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
-
-	goplsastutil "golang.org/x/tools/gopls/internal/astutil"
-	"golang.org/x/tools/gopls/internal/goxls"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
 	"github.com/qiniu/x/log"
+	goplsastutil "golang.org/x/tools/gopls/internal/astutil"
+	"golang.org/x/tools/gopls/internal/goxls"
+	"golang.org/x/tools/gopls/internal/goxls/goputil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
@@ -72,7 +73,14 @@ func ParseGopSrc(ctx context.Context, fset *token.FileSet, uri span.URI, src []b
 		log.SingleStack()
 	}
 
+	var isClass bool
+	if goputil.FileKind(filepath.Ext(uri.Filename())) == goputil.FileGopClass {
+		isClass = true
+		mode |= parser.ParseGoPlusClass
+	}
 	file, err := parser.ParseFile(fset, uri.Filename(), src, mode)
+	file.IsClass = isClass
+
 	var parseErr scanner.ErrorList
 	if err != nil {
 		// We passed a byte slice, so the only possible error is a parse error.

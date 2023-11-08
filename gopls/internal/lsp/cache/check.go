@@ -1613,7 +1613,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 	// Type checking errors are handled via the config, so ignore them here.
 	// goxls: use Go+
 	// _ = check.Files(files) // 50us-15ms, depending on size of package
-	_ = checkFiles(check, files, pkg.compiledGopFiles)
+	_ = checkFiles(ph.m.GopMod_(), check, files, pkg.compiledGopFiles)
 
 	// If the context was cancelled, we may have returned a ton of transient
 	// errors to the type checker. Swallow them.
