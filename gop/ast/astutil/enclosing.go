@@ -8,11 +8,11 @@ package astutil
 
 import (
 	"fmt"
-	"go/ast"
-	"go/token"
 	"sort"
 
-	"golang.org/x/tools/internal/typeparams"
+	"github.com/goplus/gop/ast"
+	"github.com/goplus/gop/token"
+	"golang.org/x/tools/internal/gop/typeparams"
 )
 
 // PathEnclosingInterval returns the node that encloses the source

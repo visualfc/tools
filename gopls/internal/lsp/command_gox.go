@@ -8,7 +8,7 @@ import (
 	"context"
 	"sort"
 
-	"golang.org/x/tools/gopls/internal/goxls/astutil"
+	"golang.org/x/tools/gop/ast/astutil"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/source"

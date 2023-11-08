@@ -12,7 +12,7 @@ import (
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
 
-	"golang.org/x/tools/gopls/internal/goxls/astutil"
+	"golang.org/x/tools/gop/ast/astutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/internal/event"
 )

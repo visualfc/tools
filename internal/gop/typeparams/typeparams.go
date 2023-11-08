@@ -8,7 +8,7 @@ import (
 	"go/types"
 
 	"github.com/goplus/gop/ast"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
+	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/internal/typeparams"
 )
 

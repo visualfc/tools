@@ -20,8 +20,8 @@ import (
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/printer"
 	"github.com/goplus/gop/token"
+	"golang.org/x/tools/gop/ast/astutil"
 	"golang.org/x/tools/gop/goputil"
-	"golang.org/x/tools/gopls/internal/goxls/astutil"
 	"golang.org/x/tools/internal/event"
 )
 

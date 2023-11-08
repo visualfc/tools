@@ -25,10 +25,10 @@ import (
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/tools/gop/ast/astutil"
+	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/gopls/internal/goxls"
-	"golang.org/x/tools/gopls/internal/goxls/astutil"
-	"golang.org/x/tools/gopls/internal/goxls/typeparams"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
+	goxlsastutil "golang.org/x/tools/gopls/internal/goxls/astutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/snippet"
@@ -36,6 +36,7 @@ import (
 	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/fuzzy"
+	"golang.org/x/tools/internal/gop/typeparams"
 	"golang.org/x/tools/internal/imports"
 )
 
@@ -2399,7 +2400,7 @@ Nodes:
 // quick partial parse. fn is non-nil only for function declarations.
 // The AST position information is garbage.
 func gopForEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ident, fn *ast.FuncDecl)) {
-	purged := astutil.PurgeFuncBodies(content)
+	purged := goxlsastutil.PurgeFuncBodies(content)
 	file, _ := parser.ParseFile(token.NewFileSet(), "", purged, 0)
 	for _, decl := range file.Decls {
 		switch decl := decl.(type) {

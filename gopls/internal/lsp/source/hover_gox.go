@@ -23,15 +23,15 @@ import (
 	"github.com/goplus/gop/token"
 	"golang.org/x/text/unicode/runenames"
 	"golang.org/x/tools/go/types/typeutil"
+	"golang.org/x/tools/gop/ast/astutil"
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/goxls"
-	"golang.org/x/tools/gopls/internal/goxls/astutil"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
-	"golang.org/x/tools/gopls/internal/goxls/typeparams"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/event"
+	"golang.org/x/tools/internal/gop/typeparams"
 	"golang.org/x/tools/internal/tokeninternal"
 )
 

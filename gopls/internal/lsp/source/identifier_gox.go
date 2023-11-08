@@ -9,7 +9,7 @@ import (
 	"log"
 
 	"github.com/goplus/gop/ast"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
+	"golang.org/x/tools/gop/typesutil"
 )
 
 // gopInferredSignature determines the resolved non-generic signature for an
