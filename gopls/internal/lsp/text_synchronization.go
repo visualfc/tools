@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/tools/gopls/internal/goxls/goputil"
-	"golang.org/x/tools/gopls/internal/goxls/langserver"
+	"golang.org/x/tools/gop/goputil"
+	"golang.org/x/tools/gop/langserver"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"

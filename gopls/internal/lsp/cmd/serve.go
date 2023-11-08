@@ -14,7 +14,7 @@ import (
 	"os"
 	"time"
 
-	"golang.org/x/tools/gopls/internal/goxls/langserver"
+	"golang.org/x/tools/gop/langserver"
 	"golang.org/x/tools/gopls/internal/lsp/cache"
 	"golang.org/x/tools/gopls/internal/lsp/debug"
 	"golang.org/x/tools/gopls/internal/lsp/lsprpc"

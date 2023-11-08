@@ -10,9 +10,9 @@ import (
 	"log"
 
 	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/gop/ast/inspector"
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/goxls"
-	"golang.org/x/tools/gopls/internal/goxls/inspector"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/analysis/fillstruct"
 	"golang.org/x/tools/gopls/internal/lsp/analysis/infertypeargs"
