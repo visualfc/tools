@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/google/go-cmp v0.5.9
-	github.com/goplus/gop v1.1.4-0.20231108042700-27423835d1f1
+	github.com/goplus/gop v1.1.4-0.20231108115852-aa0a1b5136de
 	github.com/goplus/mod v0.11.8
 	github.com/jba/printsrc v0.2.2
 	github.com/jba/templatecheck v0.6.0
