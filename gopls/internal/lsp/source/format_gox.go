@@ -16,7 +16,7 @@ import (
 	"github.com/goplus/gop/format"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/token"
-	"golang.org/x/tools/gopls/internal/goxls/goputil"
+	"golang.org/x/tools/gop/goputil"
 	"golang.org/x/tools/gopls/internal/goxls/imports"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"

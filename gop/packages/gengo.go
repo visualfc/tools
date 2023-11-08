@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/goplus/gop/env"
-	"golang.org/x/tools/gopls/internal/goxls/langserver"
+	"golang.org/x/tools/gop/langserver"
 )
 
 var (

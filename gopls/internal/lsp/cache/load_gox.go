@@ -9,7 +9,7 @@
 package cache
 
 import (
-	"golang.org/x/tools/gopls/internal/goxls/packages"
+	"golang.org/x/tools/gop/packages"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 )
 

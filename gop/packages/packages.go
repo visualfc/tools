@@ -15,10 +15,9 @@ import (
 	"github.com/goplus/gop/token"
 
 	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/gop/goputil"
+	"golang.org/x/tools/internal/gop/packagesinternal"
 	internal "golang.org/x/tools/internal/packagesinternal"
-
-	"golang.org/x/tools/gopls/internal/goxls/goputil"
-	"golang.org/x/tools/gopls/internal/goxls/packagesinternal"
 )
 
 // An Error describes a problem with a package's metadata, syntax, or types.

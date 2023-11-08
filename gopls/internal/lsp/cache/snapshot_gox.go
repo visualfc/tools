@@ -9,8 +9,8 @@ import (
 	"go/token"
 
 	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/gop/goputil"
 	"golang.org/x/tools/gopls/internal/bug"
-	"golang.org/x/tools/gopls/internal/goxls/goputil"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 )
