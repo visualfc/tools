@@ -11,7 +11,7 @@ import (
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
+	"golang.org/x/tools/gop/typesutil"
 )
 
 func ZeroValue(f *ast.File, pkg *types.Package, typ types.Type) ast.Expr {

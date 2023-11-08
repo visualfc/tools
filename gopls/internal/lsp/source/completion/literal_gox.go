@@ -10,11 +10,11 @@ import (
 	"go/types"
 	"strings"
 
-	"golang.org/x/tools/gopls/internal/goxls/typeparams"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/snippet"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/internal/event"
+	"golang.org/x/tools/internal/gop/typeparams"
 )
 
 // literal generates composite literal, function literal, and make()

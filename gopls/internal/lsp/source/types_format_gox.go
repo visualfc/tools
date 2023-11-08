@@ -10,7 +10,7 @@ import (
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
 	"golang.org/x/tools/gopls/internal/bug"
-	"golang.org/x/tools/gopls/internal/goxls/typeparams"
+	"golang.org/x/tools/internal/gop/typeparams"
 )
 
 func gopFormatVarType(

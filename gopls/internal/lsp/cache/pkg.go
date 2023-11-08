@@ -13,7 +13,7 @@ import (
 	"go/types"
 	"sync"
 
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
+	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/lsp/source/methodsets"
 	"golang.org/x/tools/gopls/internal/lsp/source/xrefs"

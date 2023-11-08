@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
+	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 	"golang.org/x/tools/gopls/internal/span"
 )

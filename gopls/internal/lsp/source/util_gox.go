@@ -13,10 +13,10 @@ import (
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/printer"
 	"github.com/goplus/gop/token"
+	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/gopls/internal/bug"
-	"golang.org/x/tools/gopls/internal/goxls/typeparams"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 	"golang.org/x/tools/gopls/internal/span"
+	"golang.org/x/tools/internal/gop/typeparams"
 	"golang.org/x/tools/internal/tokeninternal"
 )
 

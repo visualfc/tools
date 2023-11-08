@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/goplus/gop/ast"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
+	"golang.org/x/tools/gop/typesutil"
 )
 
 // gopPrintfArgKind returns the expected objKind when completing a

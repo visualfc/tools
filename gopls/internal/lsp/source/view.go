@@ -20,8 +20,8 @@ import (
 
 	goxparser "github.com/goplus/gop/parser"
 	"github.com/goplus/mod/gopmod"
+	"golang.org/x/tools/gop/typesutil"
 	goximports "golang.org/x/tools/gopls/internal/goxls/imports"
-	"golang.org/x/tools/gopls/internal/goxls/typesutil"
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/analysis"
