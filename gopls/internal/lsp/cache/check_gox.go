@@ -31,7 +31,7 @@ func newGopTypeInfo() *typesutil.Info {
 
 func checkFiles(mod *gopmod.Module, check *typesutil.Checker, goFiles []*goast.File, compiledGopFiles []*source.ParsedGopFile) error {
 	var classKind func(fname string) (isProj bool, ok bool)
-	if mod != nil && mod.ClassKind != nil {
+	if mod != nil {
 		classKind = mod.ClassKind
 	} else {
 		classKind = defaultClassKind
