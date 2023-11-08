@@ -28,7 +28,6 @@ jobs:
 
     - name: Build Go+ tools
       run: |
-        cd gop
         go build -v ./..
 
     - name: Test Go+ tools
