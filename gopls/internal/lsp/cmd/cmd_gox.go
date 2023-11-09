@@ -25,7 +25,7 @@ type GopApplication struct {
 // GopNew returns a new Application ready to run.
 func GopNew(name, wd string, env []string, options func(*source.Options)) *GopApplication {
 	app := New(name, wd, env, options)
-	return &GopApplication{*app}
+	return &GopApplication{Application: *app}
 }
 
 // DetailedHelp implements tool.Application returning the main binary help.
