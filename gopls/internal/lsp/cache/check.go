@@ -19,10 +19,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/goplus/gop/x/typesutil"
 	"golang.org/x/mod/module"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/filecache"
