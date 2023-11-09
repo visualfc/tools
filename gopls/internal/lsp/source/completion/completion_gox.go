@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/goplus/gop/ast"
-	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/printer"
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
@@ -29,6 +28,7 @@ import (
 	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/gopls/internal/goxls"
 	goxlsastutil "golang.org/x/tools/gopls/internal/goxls/astutil"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/snippet"
@@ -2401,7 +2401,7 @@ Nodes:
 // The AST position information is garbage.
 func gopForEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ident, fn *ast.FuncDecl)) {
 	purged := goxlsastutil.PurgeFuncBodies(content)
-	file, _ := parser.ParseFile(token.NewFileSet(), "", purged, 0)
+	file, _ := parserutil.ParseFile(token.NewFileSet(), "", purged, 0)
 	for _, decl := range file.Decls {
 		switch decl := decl.(type) {
 		case *ast.GenDecl:

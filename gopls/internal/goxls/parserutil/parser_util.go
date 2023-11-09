@@ -5,7 +5,9 @@
 package parserutil
 
 import (
+	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
+	"github.com/goplus/gop/token"
 )
 
 const (
@@ -18,3 +20,12 @@ const (
 	// be considered.
 	ParseFull = parser.AllErrors | parser.ParseComments
 )
+
+func ParseFile(fset *token.FileSet, filename string, src interface{}, mode parser.Mode) (f *ast.File, err error) {
+	if filename != "" {
+		f, err = parser.ParseEntry(fset, filename, src, parser.Config{Mode: mode})
+	} else {
+		f, err = parser.ParseFile(fset, filename, src, mode)
+	}
+	return
+}

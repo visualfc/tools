@@ -14,6 +14,7 @@ import (
 	"time"
 
 	gopparser "github.com/goplus/gop/parser"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/imports"
 )
@@ -41,7 +42,7 @@ func KnownPackagePaths(ctx context.Context, snapshot Snapshot, fh FileHandle) ([
 	}
 	imported := make(map[PackagePath]bool)
 	if kind := snapshot.View().FileKind(fh); kind == Gop { // goxls: Go+
-		file, err := gopparser.ParseFile(token.NewFileSet(), fh.URI().Filename(), src, gopparser.ImportsOnly)
+		file, err := parserutil.ParseFile(token.NewFileSet(), fh.URI().Filename(), src, gopparser.ImportsOnly)
 		if err != nil {
 			return nil, err
 		}

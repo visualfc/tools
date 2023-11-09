@@ -207,7 +207,7 @@ func gopComputeFixEdits(snapshot Snapshot, pgf *ParsedGopFile, options *imports.
 func gopImportPrefix(src []byte) (string, error) {
 	fset := token.NewFileSet()
 	// do as little parsing as possible
-	f, err := parser.ParseFile(fset, "", src, parser.ImportsOnly|parser.ParseComments)
+	f, err := parserutil.ParseFile(fset, "", src, parser.ImportsOnly|parser.ParseComments)
 	if err != nil { // This can happen if 'package' is misspelled
 		return "", fmt.Errorf("gopImportPrefix: failed to parse: %s", err)
 	}
