@@ -5,14 +5,21 @@
 package packages
 
 import (
+	"context"
+	"go/types"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
+	"sync"
 
+	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
+	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
+	"github.com/goplus/gop/x/typesutil"
+	"github.com/goplus/mod/gopmod"
 
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/gop/goputil"
@@ -89,6 +96,31 @@ const (
 	NeedEmbedPatterns = packages.NeedEmbedPatterns
 )
 
+const (
+	// Deprecated: LoadFiles exists for historical compatibility
+	// and should not be used. Please directly specify the needed fields using the Need values.
+	LoadFiles = packages.LoadFiles
+
+	// Deprecated: LoadImports exists for historical compatibility
+	// and should not be used. Please directly specify the needed fields using the Need values.
+	LoadImports = packages.LoadImports
+
+	// Deprecated: LoadTypes exists for historical compatibility
+	// and should not be used. Please directly specify the needed fields using the Need values.
+	LoadTypes = packages.LoadTypes
+
+	// Deprecated: LoadSyntax exists for historical compatibility
+	// and should not be used. Please directly specify the needed fields using the Need values.
+	LoadSyntax = packages.LoadSyntax
+
+	// Deprecated: LoadAllSyntax exists for historical compatibility
+	// and should not be used. Please directly specify the needed fields using the Need values.
+	LoadAllSyntax = packages.LoadAllSyntax
+
+	// Deprecated: NeedExportsFile is a historical misspelling of NeedExportFile.
+	NeedExportsFile = packages.NeedExportsFile
+)
+
 // A Config specifies details about how packages should be loaded.
 // The zero value is a valid configuration.
 // Calls to Load do not modify this struct.
@@ -109,19 +141,47 @@ type Package struct {
 	// This may differ from GoFiles if files are processed before compilation.
 	CompiledGopFiles []string
 
-	// Imports maps import paths appearing in the package's Go source files
+	// Imports maps import paths appearing in the package's Go/Go+ source files
 	// to corresponding loaded Packages.
 	Imports map[string]*Package
 
-	// TypesInfo provides type information about the package's syntax trees.
-	// It is set only when Syntax is set.
-	// GopTypesInfo *typesutil.Info
+	// GopSyntax is the package's syntax trees, for the files listed in CompiledGopFiles.
+	//
+	// The NeedSyntax LoadMode bit populates this field for packages matching the patterns.
+	// If NeedDeps and NeedImports are also set, this field will also be populated
+	// for dependencies.
+	//
+	// GopSyntax is kept in the same order as CompiledGopFiles, with the caveat that nils are
+	// removed. If parsing returned nil, GopSyntax may be shorter than CompiledGopFiles.
+	GopSyntax []*ast.File
+
+	// GopTypesInfo provides type information about the package's syntax trees.
+	// It is set only when GopSyntax is set.
+	GopTypesInfo *typesutil.Info
 }
 
-// Module provides module information for a package.
-type Module = packages.Module
+// A GopConfig specifies details about how Go+ packages should be loaded.
+type GopConfig struct {
+	// ParseFile is called to read and parse each file
+	// when preparing a package's type-checked syntax tree.
+	// It must be safe to call ParseFile simultaneously from multiple goroutines.
+	// If ParseFile is nil, the loader will uses parser.ParseFile.
+	//
+	// ParseFile should parse the source from src and use filename only for
+	// recording position information.
+	//
+	// An application may supply a custom implementation of ParseFile
+	// to change the effective file contents or the behavior of the parser,
+	// or to modify the syntax tree. For example, selectively eliminating
+	// unwanted function bodies can significantly accelerate type checking.
+	ParseFile func(fset *token.FileSet, filename string, src any, cfg parser.Config) (*ast.File, error)
 
-// Load loads and returns the Go packages named by the given patterns.
+	// Context is an opaque packages.Load context.
+	// Contexts are safe for concurrent use.
+	Context *Context
+}
+
+// Load loads and returns the Go/Go+ packages named by the given patterns.
 //
 // Config specifies loading options;
 // nil behaves the same as an empty Config.
@@ -136,39 +196,89 @@ type Module = packages.Module
 // proceeding with further analysis. The PrintErrors function is
 // provided for convenient display of all errors.
 func Load(cfg *Config, patterns ...string) ([]*Package, error) {
+	return LoadEx(nil, cfg, patterns...)
+}
+
+// LoadEx loads and returns the Go/Go+ packages named by the given patterns.
+//
+// Config specifies loading options;
+// nil behaves the same as an empty Config.
+//
+// LoadEx returns an error if any of the patterns was invalid
+// as defined by the underlying build system.
+// It may return an empty list of packages without an error,
+// for instance for an empty expansion of a valid wildcard.
+// Errors associated with a particular package are recorded in the
+// corresponding Package's Errors list, and do not cause Load to
+// return an error. Clients may need to handle such errors before
+// proceeding with further analysis. The PrintErrors function is
+// provided for convenient display of all errors.
+func LoadEx(gop *GopConfig, cfg *Config, patterns ...string) ([]*Package, error) {
 	patterns, _ = GenGo(patterns...)
-	pkgs, err := packages.Load(cfg, patterns...)
+
+	var conf Config
+	if cfg != nil {
+		conf = *cfg
+	}
+	if conf.Fset == nil {
+		conf.Fset = token.NewFileSet()
+	}
+	if conf.Mode == 0 {
+		conf.Mode = NeedName | NeedFiles | NeedCompiledGoFiles
+	}
+	pkgs, err := packages.Load(&conf, patterns...)
 	if err != nil {
 		return nil, err
 	}
+
 	pkgMap := make(map[*packages.Package]*Package)
 	ret := make([]*Package, len(pkgs))
+
+	var ld *loader
+	if conf.Mode&(NeedSyntax|NeedTypes|NeedTypesInfo) != 0 {
+		if conf.Context == nil {
+			conf.Context = context.Background()
+		}
+		if gop == nil {
+			gop = new(GopConfig)
+		}
+		ctx := gop.Context
+		if ctx == nil {
+			ctx = Default
+		}
+		parse := gop.ParseFile
+		if parse == nil {
+			parse = parser.ParseEntry
+		}
+		ld = &loader{conf.Fset, ctx, gop.ParseFile, conf.Mode, conf.Overlay, conf.Context}
+	}
+
 	for i, pkg := range pkgs {
-		ret[i] = pkgOf(pkgMap, pkg)
+		ret[i] = pkgOf(pkgMap, pkg, ld)
 	}
 	return ret, nil
 }
 
-func importPkgs(pkgMap map[*packages.Package]*Package, pkgs map[string]*packages.Package) map[string]*Package {
+func importPkgs(pkgMap map[*packages.Package]*Package, pkgs map[string]*packages.Package, ld *loader) map[string]*Package {
 	if len(pkgs) == 0 {
 		return nil
 	}
 	ret := make(map[string]*Package, len(pkgs))
 	for path, pkg := range pkgs {
-		ret[path] = pkgOf(pkgMap, pkg)
+		ret[path] = pkgOf(pkgMap, pkg, ld)
 	}
 	return ret
 }
 
-func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package) *Package {
+func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package, ld *loader) *Package {
 	if ret, ok := pkgMap[pkg]; ok {
 		return ret
 	}
-	ret := &Package{Package: *pkg, Imports: importPkgs(pkgMap, pkg.Imports)}
+	ret := &Package{Package: *pkg, Imports: importPkgs(pkgMap, pkg.Imports, ld)}
 	for i, file := range pkg.CompiledGoFiles {
 		dir, fname := filepath.Split(file)
 		if strings.HasPrefix(fname, "gop_autogen") { // has Go+ files
-			addGopFiles(ret, dir, isGoTestFile(fname) || hasGoTestFile(pkg.CompiledGoFiles[i+1:]))
+			addGopFiles(ret, ld, dir, isGoTestFile(fname) || hasGoTestFile(pkg.CompiledGoFiles[i+1:]))
 			break
 		}
 	}
@@ -190,7 +300,7 @@ func isGoTestFile(fname string) bool {
 	return strings.HasSuffix(fname, "_test.go")
 }
 
-func addGopFiles(ret *Package, dir string, test bool) {
+func addGopFiles(ret *Package, ld *loader, dir string, test bool) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -217,39 +327,187 @@ func addGopFiles(ret *Package, dir string, test bool) {
 			// goxls: todo - condition
 		}
 	}
+	if ld != nil && len(ret.CompiledGopFiles) > 0 {
+		ctx := ld.Context
+		mod := ctx.LoadMod(ret.Module)
+		ret.GopSyntax = ld.parseFiles(ret, mod, ret.CompiledGopFiles)
+		if ld.Mode&(NeedTypes|NeedTypesInfo) != 0 {
+			ret.GopTypesInfo = &typesutil.Info{
+				Types:      make(map[ast.Expr]types.TypeAndValue),
+				Defs:       make(map[*ast.Ident]types.Object),
+				Uses:       make(map[*ast.Ident]types.Object),
+				Implicits:  make(map[ast.Node]types.Object),
+				Scopes:     make(map[ast.Node]*types.Scope),
+				Selections: make(map[*ast.SelectorExpr]*types.Selection),
+				Instances:  make(map[*ast.Ident]types.Instance),
+			}
+			cfg := &types.Config{
+				Context: ctx.Types,
+				Error: func(err error) {
+					appendError(ret, err)
+				},
+			}
+			opts := &typesutil.Config{
+				Types: ret.Types,
+				Fset:  ld.Fset,
+				Mod:   mod,
+			}
+			c := typesutil.NewChecker(cfg, opts, nil, ret.GopTypesInfo)
+			c.Files(nil, ret.GopSyntax)
+		}
+	}
 }
 
-// Visit visits all the packages in the import graph whose roots are
-// pkgs, calling the optional pre function the first time each package
-// is encountered (preorder), and the optional post function after a
-// package's dependencies have been visited (postorder).
-// The boolean result of pre(pkg) determines whether
-// the imports of package pkg are visited.
-func Visit(pkgs []*Package, pre func(*Package) bool, post func(*Package)) {
-	seen := make(map[*Package]bool)
-	var visit func(*Package)
-	visit = func(pkg *Package) {
-		if !seen[pkg] {
-			seen[pkg] = true
+type loader struct {
+	Fset      *token.FileSet
+	Context   *Context
+	ParseFile func(fset *token.FileSet, filename string, src any, cfg parser.Config) (*ast.File, error)
+	Mode      LoadMode
 
-			if pre == nil || pre(pkg) {
-				paths := make([]string, 0, len(pkg.Imports))
-				for path := range pkg.Imports {
-					paths = append(paths, path)
-				}
-				sort.Strings(paths) // Imports is a map, this makes visit stable
-				for _, path := range paths {
-					visit(pkg.Imports[path])
-				}
-			}
+	// Overlay provides a mapping of absolute file paths to file contents.
+	// If the file with the given path already exists, the parser will use the
+	// alternative file contents provided by the map.
+	//
+	// Overlays provide incomplete support for when a given file doesn't
+	// already exist on disk. See the package doc above for more details.
+	Overlay map[string][]byte
 
-			if post != nil {
-				post(pkg)
+	ctx context.Context
+}
+
+// parseFiles reads and parses the Go+ source files and returns the ASTs
+// of the ones that could be at least partially parsed, along with a
+// list of I/O and parse errors encountered.
+//
+// Because files are scanned in parallel, the token.Pos
+// positions of the resulting ast.Files are not ordered.
+func (ld *loader) parseFiles(ret *Package, mod *gopmod.Module, filenames []string) []*ast.File {
+	var wg sync.WaitGroup
+	n := len(filenames)
+	ctx := ld.ctx
+	parsed := make([]*ast.File, n)
+	errors := make([]error, n)
+	for i, file := range filenames {
+		if ctx.Err() != nil {
+			parsed[i] = nil
+			errors[i] = ctx.Err()
+			continue
+		}
+		wg.Add(1)
+		go func(i int, filename string) {
+			defer wg.Done()
+			parsed[i], errors[i] = ld.parseFile(filename, mod)
+		}(i, file)
+	}
+	wg.Wait()
+
+	for _, err := range errors {
+		if err != nil {
+			appendError(ret, err)
+		}
+	}
+
+	// Eliminate nils, preserving order.
+	var o int
+	for _, f := range parsed {
+		if f != nil {
+			parsed[o] = f
+			o++
+		}
+	}
+	return parsed[:o]
+}
+
+// We use a counting semaphore to limit
+// the number of parallel I/O calls per process.
+var ioLimit = make(chan bool, 20)
+
+func (ld *loader) parseFile(filename string, mod *gopmod.Module) (f *ast.File, err error) {
+	var src []byte
+	for f, contents := range ld.Overlay {
+		if sameFile(f, filename) {
+			src = contents
+		}
+	}
+	if src == nil {
+		ioLimit <- true // wait
+		src, err = os.ReadFile(filename)
+		<-ioLimit // signal
+	}
+	if err != nil {
+		return
+	}
+	return ld.ParseFile(ld.Fset, filename, src, parser.Config{
+		Mode:      parser.AllErrors | parser.ParseComments,
+		ClassKind: mod.ClassKind,
+	})
+}
+
+// sameFile returns true if x and y have the same basename and denote
+// the same file.
+func sameFile(x, y string) bool {
+	if x == y {
+		// It could be the case that y doesn't exist.
+		// For instance, it may be an overlay file that
+		// hasn't been written to disk. To handle that case
+		// let x == y through. (We added the exact absolute path
+		// string to the CompiledGoFiles list, so the unwritten
+		// overlay case implies x==y.)
+		return true
+	}
+	if strings.EqualFold(filepath.Base(x), filepath.Base(y)) { // (optimisation)
+		if xi, err := os.Stat(x); err == nil {
+			if yi, err := os.Stat(y); err == nil {
+				return os.SameFile(xi, yi)
 			}
 		}
 	}
-	for _, pkg := range pkgs {
-		visit(pkg)
+	return false
+}
+
+func appendError(ret *Package, err error) {
+	switch err := err.(type) {
+	case Error:
+		// from driver
+		ret.Errors = append(ret.Errors, err)
+
+	case *os.PathError:
+		// from parser
+		ret.Errors = append(ret.Errors, Error{
+			Pos:  err.Path + ":1",
+			Msg:  err.Err.Error(),
+			Kind: ParseError,
+		})
+
+	case scanner.ErrorList:
+		// from parser
+		for _, err := range err {
+			ret.Errors = append(ret.Errors, Error{
+				Pos:  err.Pos.String(),
+				Msg:  err.Msg,
+				Kind: ParseError,
+			})
+		}
+
+	case types.Error:
+		// from type checker
+		ret.TypeErrors = append(ret.TypeErrors, err)
+		ret.Errors = append(ret.Errors, Error{
+			Pos:  err.Fset.Position(err.Pos).String(),
+			Msg:  err.Msg,
+			Kind: TypeError,
+		})
+
+	default:
+		// unexpected impoverished error from parser?
+		ret.Errors = append(ret.Errors, Error{
+			Pos:  "-",
+			Msg:  err.Error(),
+			Kind: UnknownError,
+		})
+
+		// If you see this error message, please file a bug.
+		log.Printf("internal error: error %q (%T) without position", err, err)
 	}
 }
 
