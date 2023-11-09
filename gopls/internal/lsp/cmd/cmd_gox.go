@@ -8,6 +8,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"reflect"
+	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"golang.org/x/tools/gopls/internal/lsp/debug"
@@ -55,7 +58,62 @@ Command:
 		fmt.Fprintf(w, "  %s\t%s\n", c.Name(), c.ShortHelp())
 	}
 	fmt.Fprint(w, "\nflags:\n")
-	printFlagDefaults(f)
+	gopPrintFlagDefaults(f)
+}
+
+// this is a slightly modified version of flag.PrintDefaults to give us control
+func gopPrintFlagDefaults(s *flag.FlagSet) {
+	var flags [][]*flag.Flag
+	seen := map[flag.Value]int{}
+	s.VisitAll(func(f *flag.Flag) {
+		if i, ok := seen[f.Value]; !ok {
+			seen[f.Value] = len(flags)
+			flags = append(flags, []*flag.Flag{f})
+		} else {
+			flags[i] = append(flags[i], f)
+		}
+	})
+	for _, entry := range flags {
+		sort.SliceStable(entry, func(i, j int) bool {
+			return len(entry[i].Name) < len(entry[j].Name)
+		})
+		var b strings.Builder
+		for i, f := range entry {
+			switch i {
+			case 0:
+				b.WriteString("  -")
+			default:
+				b.WriteString(",-")
+			}
+			b.WriteString(f.Name)
+		}
+
+		f := entry[0]
+		name, usage := flag.UnquoteUsage(f)
+		if len(name) > 0 {
+			b.WriteString("=")
+			b.WriteString(name)
+		}
+		// Boolean flags of one ASCII letter are so common we
+		// treat them specially, putting their usage on the same line.
+		if b.Len() <= 4 { // space, space, '-', 'x'.
+			b.WriteString("\t")
+		} else {
+			// Four spaces before the tab triggers good alignment
+			// for both 4- and 8-space tab stops.
+			b.WriteString("\n    \t")
+		}
+		usage = strings.ReplaceAll(usage, "gopls", "goxls")
+		b.WriteString(strings.ReplaceAll(usage, "\n", "\n    \t"))
+		if !isZeroValue(f, f.DefValue) {
+			if reflect.TypeOf(f.Value).Elem().Name() == "stringValue" {
+				fmt.Fprintf(&b, " (default %q)", f.DefValue)
+			} else {
+				fmt.Fprintf(&b, " (default %v)", f.DefValue)
+			}
+		}
+		fmt.Fprint(s.Output(), b.String(), "\n")
+	}
 }
 
 // Run takes the args after top level flag processing, and invokes the correct
@@ -96,7 +154,7 @@ func (app *GopApplication) Commands() []tool.Application {
 func (app *GopApplication) mainCommands() []tool.Application {
 	goApp := &app.Application
 	return []tool.Application{
-		&app.Serve,
+		newGopServe(app),
 		newGopVersion(app),
 		newGopBug(app),
 		newGopHelp(app),
