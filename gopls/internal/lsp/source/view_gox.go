@@ -15,7 +15,7 @@ import (
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
 	"github.com/goplus/mod/gopmod"
-	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/gop/packages"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/span"
@@ -111,27 +111,9 @@ func (pgf *ParsedGopFile) PosRange(start, end token.Pos) (protocol.Range, error)
 func (m *Metadata) GopMod_() *gopmod.Module {
 	mod := m.gopMod_
 	if mod == nil {
-		mod = loadGopMod(m.Module)
+		mod = packages.Default.LoadMod(m.Module)
 	}
 	return mod
-}
-
-// goxls: TODO - suport gop.mod
-func loadGopMod(mod *packages.Module) *gopmod.Module {
-	if mod != nil {
-		if r := mod.Replace; r != nil {
-			mod = r
-		}
-		if gomod := mod.GoMod; gomod != "" {
-			if dir, file := filepath.Split(gomod); file == "go.mod" {
-				if ret, err := gopmod.Load(dir, 0); err == nil {
-					ret.ImportClasses()
-					return ret
-				}
-			}
-		}
-	}
-	return gopmod.Default
 }
 
 // NarrowestPackageForGopFile is a convenience function that selects the

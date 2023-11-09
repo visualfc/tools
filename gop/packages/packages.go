@@ -217,7 +217,7 @@ func LoadEx(gop *GopConfig, cfg *Config, patterns ...string) ([]*Package, error)
 	patterns, _ = GenGo(patterns...)
 
 	var conf Config
-	if cfg == nil {
+	if cfg != nil {
 		conf = *cfg
 	}
 	if conf.Fset == nil {
@@ -244,7 +244,7 @@ func LoadEx(gop *GopConfig, cfg *Config, patterns ...string) ([]*Package, error)
 		}
 		ctx := gop.Context
 		if ctx == nil {
-			ctx = NewContext(nil)
+			ctx = Default
 		}
 		parse := gop.ParseFile
 		if parse == nil {
