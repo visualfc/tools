@@ -39,6 +39,10 @@ func NewContext(ctx *types.Context) *Context {
 	return &Context{Types: ctx, mods: mods}
 }
 
+var (
+	Default = NewContext(types.NewContext())
+)
+
 // LoadModFrom loads a Go+ module from gop.mod or go.mod file.
 func (p *Context) LoadModFrom(gomod string) (ret *gopmod.Module, err error) {
 	p.mutex.Lock()
