@@ -11,9 +11,9 @@ import (
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
+	"github.com/goplus/gop/x/typesutil"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/gop/ast/astutil"
-	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 )
 
