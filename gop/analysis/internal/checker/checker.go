@@ -742,11 +742,11 @@ func (act *action) execOnce() {
 	pass := &analysis.Pass{
 		Analyzer:     act.a,
 		Fset:         act.pkg.Fset,
-		Files:        act.pkg.Syntax,
+		Files:        act.pkg.GopSyntax,
 		OtherFiles:   act.pkg.OtherFiles,
 		IgnoredFiles: act.pkg.IgnoredFiles,
 		Pkg:          act.pkg.Types,
-		TypesInfo:    act.pkg.TypesInfo,
+		TypesInfo:    act.pkg.GopTypesInfo,
 		TypesSizes:   act.pkg.TypesSizes,
 		TypeErrors:   act.pkg.TypeErrors,
 
