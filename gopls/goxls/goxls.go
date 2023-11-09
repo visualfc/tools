@@ -30,5 +30,5 @@ func Main() {
 		return ctx
 	})
 	goxls.SetDebug(goxls.DbgFlagDefault)
-	tool.Main(ctx, cmd.New("goxls", "", nil, hooks.Options), os.Args[1:])
+	tool.Main(ctx, cmd.GopNew("goxls", "", nil, hooks.Options), os.Args[1:])
 }
