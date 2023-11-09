@@ -13,12 +13,12 @@ import (
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/format"
-	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/token"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/gop/ast/astutil"
 	"golang.org/x/tools/gop/typesutil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/internal/gop/analysisinternal"
 )
@@ -507,7 +507,7 @@ func gopVarOverridden(info *typesutil.Info, firstUse *ast.Ident, obj types.Objec
 // file that represents the text.
 func gopParseBlockStmt(fset *token.FileSet, src []byte) (*ast.BlockStmt, error) {
 	text := "package main\nfunc _() { " + string(src) + " }"
-	extract, err := parser.ParseFile(fset, "", text, 0)
+	extract, err := parserutil.ParseFile(fset, "", text, 0)
 	if err != nil {
 		return nil, err
 	}

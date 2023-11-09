@@ -26,6 +26,7 @@ import (
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/token"
 	"golang.org/x/tools/gop/ast/astutil"
+	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/internal/event"
 	"golang.org/x/tools/internal/gocommand"
 	"golang.org/x/tools/internal/gopathwalk"
@@ -118,7 +119,7 @@ func parseOtherFiles(fset *token.FileSet, srcDir, filename string) []*ast.File {
 			continue
 		}
 
-		f, err := parser.ParseFile(fset, filepath.Join(srcDir, fi.Name()), nil, 0)
+		f, err := parserutil.ParseFile(fset, filepath.Join(srcDir, fi.Name()), nil, 0)
 		if err != nil {
 			continue
 		}
@@ -1273,7 +1274,7 @@ func packageDirToName(dir string) (packageName string, err error) {
 		fullFile := filepath.Join(dir, name)
 
 		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, fullFile, nil, parser.PackageClauseOnly)
+		f, err := parserutil.ParseFile(fset, fullFile, nil, parser.PackageClauseOnly)
 		if err != nil {
 			lastErr = err
 			continue
@@ -1501,7 +1502,7 @@ func loadExportsFromFiles(ctx context.Context, env *ProcessEnv, dir string, incl
 		}
 
 		fullFile := filepath.Join(dir, fi.Name())
-		f, err := parser.ParseFile(fset, fullFile, nil, 0)
+		f, err := parserutil.ParseFile(fset, fullFile, nil, 0)
 		if err != nil {
 			if env.Logf != nil {
 				env.Logf("error parsing %v: %v", fullFile, err)
