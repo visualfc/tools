@@ -787,6 +787,11 @@ var GeneratedAPIJSON = &APIJSON{
 			ArgDoc:  "{\n\t\"ViewID\": string,\n\t\"InitFirst\": bool,\n\t\"Args\": []string,\n}",
 		},
 		{
+			Command: "gopls.run_gop_command",
+			Title:   "run `gop <command> [args...]`",
+			ArgDoc:  "{\n\t// URI for the directory to gop command\n\t\"URI\": string,\n\t// Command for gop command\n\t\"Command\": string,\n\t// Args for gop command arguments\n\t\"Args\": []string,\n}",
+		},
+		{
 			Command:   "gopls.run_govulncheck",
 			Title:     "Run govulncheck.",
 			Doc:       "Run vulnerability check (`govulncheck`).",

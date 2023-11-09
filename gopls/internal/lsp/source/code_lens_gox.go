@@ -8,22 +8,26 @@ import (
 	"context"
 	"go/types"
 	"log"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/goplus/gop/ast"
+	"github.com/goplus/gop/parser"
 	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
+	"golang.org/x/tools/gopls/internal/span"
 )
 
 // GopLensFuncs returns the supported lensFuncs for Go+ files.
 func GopLensFuncs() map[command.Command]LensFunc {
 	return map[command.Command]LensFunc{
-		command.Generate:  gopGenerateCodeLens,
-		command.Test:      gopRunTestCodeLens,
-		command.GCDetails: gopToggleDetailsCodeLens,
+		command.Generate:      gopGenerateCodeLens,
+		command.Test:          gopRunTestCodeLens,
+		command.GCDetails:     gopToggleDetailsCodeLens,
+		command.RunGopCommand: gopCommandCodeLens,
 	}
 }
 
@@ -174,4 +178,27 @@ func gopToggleDetailsCodeLens(ctx context.Context, snapshot Snapshot, fh FileHan
 		return nil, err
 	}
 	return []protocol.CodeLens{{Range: rng, Command: &cmd}}, nil
+}
+
+func gopCommandCodeLens(ctx context.Context, snapshot Snapshot, fh FileHandle) ([]protocol.CodeLens, error) {
+	pgf, err := snapshot.ParseGop(ctx, fh, parser.PackageClauseOnly)
+	if err != nil {
+		return nil, err
+	}
+	if pgf.File.Name.Name == "main" {
+		rng, err := pgf.PosRange(pgf.File.Pos(), pgf.File.Pos())
+		if err != nil {
+			return nil, err
+		}
+		dir := protocol.URIFromSpanURI(span.URIFromPath(filepath.Dir(fh.URI().Filename())))
+		args := command.RunGopCommandArgs{URI: dir, Command: "run"}
+		cmd, err := command.NewRunGopCommandCommand("run main package", args)
+		if err != nil {
+			return nil, err
+		}
+		return []protocol.CodeLens{
+			{Range: rng, Command: &cmd},
+		}, nil
+	}
+	return nil, nil
 }

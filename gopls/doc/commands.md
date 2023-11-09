@@ -307,6 +307,24 @@ Args:
 }
 ```
 
+### **run `gop <command> [args...]`**
+Identifier: `gopls.run_gop_command`
+
+
+
+Args:
+
+```
+{
+	// URI for the directory to gop command
+	"URI": string,
+	// Command for gop command
+	"Command": string,
+	// Args for gop command arguments
+	"Args": []string,
+}
+```
+
 ### **Run govulncheck.**
 Identifier: `gopls.run_govulncheck`
 
