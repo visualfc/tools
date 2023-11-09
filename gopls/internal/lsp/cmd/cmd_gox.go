@@ -23,12 +23,13 @@ import (
 // It handles the main command line parsing and dispatch to the sub commands.
 type GopApplication struct {
 	Application
+	serve gopServe
 }
 
 // GopNew returns a new Application ready to run.
 func GopNew(name, wd string, env []string, options func(*source.Options)) *GopApplication {
 	app := New(name, wd, env, options)
-	return &GopApplication{Application: *app}
+	return &GopApplication{*app, newGopServe(app)}
 }
 
 // DetailedHelp implements tool.Application returning the main binary help.
@@ -129,7 +130,7 @@ func (app *GopApplication) Run(ctx context.Context, args ...string) error {
 	ctx = debug.WithInstance(ctx, app.wd, app.OCAgent)
 	if len(args) == 0 {
 		s := flag.NewFlagSet(app.Name(), flag.ExitOnError)
-		return tool.Run(ctx, s, &app.Serve, args)
+		return tool.Run(ctx, s, &app.serve, args)
 	}
 	command, args := args[0], args[1:]
 	for _, c := range app.Commands() {
@@ -154,7 +155,7 @@ func (app *GopApplication) Commands() []tool.Application {
 func (app *GopApplication) mainCommands() []tool.Application {
 	goApp := &app.Application
 	return []tool.Application{
-		newGopServe(app),
+		&app.serve,
 		newGopVersion(app),
 		newGopBug(app),
 		newGopHelp(app),
