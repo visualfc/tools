@@ -6,6 +6,8 @@ package goxls
 
 import (
 	"context"
+	"io"
+	"log"
 	"os"
 	"sync"
 
@@ -24,11 +26,15 @@ func Main() {
 	goxls.SetDebug(goxls.DbgFlagDefault)
 	if os.Getenv("GOXLS_LOG_EVENT") != "" {
 		var printer export.Printer
+		var logw io.Writer
 		var mutex sync.Mutex
 		event.SetExporter(func(ctx context.Context, e core.Event, m label.Map) context.Context {
 			mutex.Lock()
 			defer mutex.Unlock()
-			printer.WriteEvent(os.Stderr, e, m)
+			if logw == nil {
+				logw = log.Writer()
+			}
+			printer.WriteEvent(logw, e, m)
 			return ctx
 		})
 	}

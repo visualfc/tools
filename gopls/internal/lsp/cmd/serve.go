@@ -14,7 +14,6 @@ import (
 	"os"
 	"time"
 
-	"golang.org/x/tools/gop/langserver"
 	"golang.org/x/tools/gopls/internal/lsp/cache"
 	"golang.org/x/tools/gopls/internal/lsp/debug"
 	"golang.org/x/tools/gopls/internal/lsp/lsprpc"
@@ -81,9 +80,6 @@ func (s *Serve) Run(ctx context.Context, args ...string) error {
 	if len(args) > 0 {
 		return tool.CommandLineErrorf("server does not take arguments, got %v", args)
 	}
-
-	langserver.Initialize()
-	defer langserver.Shutdown()
 
 	di := debug.GetInstance(ctx)
 	isDaemon := s.Address != "" || s.Port != 0
