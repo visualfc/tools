@@ -636,7 +636,7 @@ var GeneratedAPIJSON = &APIJSON{
 						},
 					},
 				},
-				Default:   "{\"gc_details\":false,\"generate\":true,\"regenerate_cgo\":true,\"tidy\":true,\"upgrade_dependency\":true,\"vendor\":true}",
+				Default:   "{\"gc_details\":false,\"generate\":true,\"regenerate_cgo\":true,\"run_gop_command\":true,\"tidy\":true,\"upgrade_dependency\":true,\"vendor\":true}",
 				Hierarchy: "ui",
 			},
 			{
