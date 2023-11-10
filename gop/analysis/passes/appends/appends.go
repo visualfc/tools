@@ -11,6 +11,7 @@ import (
 	"go/types"
 
 	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/go/analysis/passes/appends"
 	"golang.org/x/tools/gop/analysis"
 	"golang.org/x/tools/gop/analysis/passes/inspect"
 	"golang.org/x/tools/gop/analysis/passes/internal/analysisutil"
@@ -29,6 +30,8 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
+	appends.Analyzer.Run(&pass.GoPass)
+
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	nodeFilter := []ast.Node{
@@ -37,7 +40,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	inspect.Preorder(nodeFilter, func(n ast.Node) {
 		call := n.(*ast.CallExpr)
 		if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == "append" {
-			if _, ok := pass.TypesInfo.Uses[ident].(*types.Builtin); ok {
+			if _, ok := pass.GopTypesInfo.Uses[ident].(*types.Builtin); ok {
 				if len(call.Args) == 1 {
 					pass.ReportRangef(call, "append with no values")
 				}
