@@ -23,15 +23,14 @@ import (
 )
 
 var GopAnalyzer = &analysis.Analyzer{
-	Name:             "undeclaredname",
+	Name:             "gopUndeclaredname",
 	Doc:              Doc,
-	Requires:         []*analysis.Analyzer{},
+	Requires:         []analysis.IAnalyzer{Analyzer},
 	Run:              gopRun,
 	RunDespiteErrors: true,
 }
 
 func gopRun(pass *analysis.Pass) (interface{}, error) {
-	run(&pass.GoPass)
 	for _, err := range pass.TypeErrors {
 		gopRunForError(pass, err)
 	}
