@@ -7,11 +7,9 @@ package analysis
 import (
 	"flag"
 	"fmt"
-	"go/types"
 	"reflect"
 
 	"github.com/goplus/gop/ast"
-	"github.com/goplus/gop/token"
 	"github.com/goplus/gop/x/typesutil"
 	"golang.org/x/tools/go/analysis"
 )
@@ -48,7 +46,7 @@ type Analyzer struct {
 	// To pass analysis results between packages (and thus
 	// potentially between address spaces), use Facts, which are
 	// serializable.
-	Run func(*Pass) (interface{}, error)
+	Run func(*Pass) (any, error)
 
 	// RunDespiteErrors allows the driver to invoke
 	// the Run method of this analyzer even on a
@@ -81,6 +79,10 @@ type Analyzer struct {
 
 func (a *Analyzer) String() string { return a.Name }
 
+// A GoPass provides information to the Run function that
+// applies a specific analyzer to a single Go package.
+type GoPass = analysis.Pass
+
 // A Pass provides information to the Run function that
 // applies a specific analyzer to a single Go package.
 //
@@ -91,66 +93,32 @@ func (a *Analyzer) String() string { return a.Name }
 //
 // The Run function should not call any of the Pass functions concurrently.
 type Pass struct {
-	Analyzer *Analyzer // the identity of the current analyzer
+	GoPass
 
-	// syntax and type information
-	Fset         *token.FileSet  // file position information
-	Files        []*ast.File     // the abstract syntax tree of each file
-	OtherFiles   []string        // names of non-Go files of this package
-	IgnoredFiles []string        // names of ignored source files in this package
-	Pkg          *types.Package  // type information about the package
-	TypesInfo    *typesutil.Info // type information about the syntax trees
-	TypesSizes   types.Sizes     // function for computing sizes of types
-	TypeErrors   []types.Error   // type errors (only if Analyzer.RunDespiteErrors)
-
-	// Report reports a Diagnostic, a finding about a specific location
-	// in the analyzed source code such as a potential mistake.
-	// It may be called by the Run function.
-	Report func(Diagnostic)
+	// Analyzer is the identity of the current analyzer
+	Analyzer *Analyzer
 
 	// ResultOf provides the inputs to this analysis pass, which are
 	// the corresponding results of its prerequisite analyzers.
 	// The map keys are the elements of Analysis.Required,
 	// and the type of each corresponding value is the required
 	// analysis's ResultType.
-	ResultOf map[*Analyzer]interface{}
+	ResultOf map[*Analyzer]any
 
-	// -- facts --
+	// goxls: Go+
+	GopFiles     []*ast.File     // the abstract syntax tree of each file
+	GopTypesInfo *typesutil.Info // type information about the syntax trees
+}
 
-	// ImportObjectFact retrieves a fact associated with obj.
-	// Given a value ptr of type *T, where *T satisfies Fact,
-	// ImportObjectFact copies the value to *ptr.
-	//
-	// ImportObjectFact panics if called after the pass is complete.
-	// ImportObjectFact is not concurrency-safe.
-	ImportObjectFact func(obj types.Object, fact Fact) bool
-
-	// ImportPackageFact retrieves a fact associated with package pkg,
-	// which must be this package or one of its dependencies.
-	// See comments for ImportObjectFact.
-	ImportPackageFact func(pkg *types.Package, fact Fact) bool
-
-	// ExportObjectFact associates a fact of type *T with the obj,
-	// replacing any previous fact of that type.
-	//
-	// ExportObjectFact panics if it is called after the pass is
-	// complete, or if obj does not belong to the package being analyzed.
-	// ExportObjectFact is not concurrency-safe.
-	ExportObjectFact func(obj types.Object, fact Fact)
-
-	// ExportPackageFact associates a fact with the current package.
-	// See comments for ExportObjectFact.
-	ExportPackageFact func(fact Fact)
-
-	// AllPackageFacts returns a new slice containing all package
-	// facts of the analysis's FactTypes in unspecified order.
-	AllPackageFacts func() []PackageFact
-
-	// AllObjectFacts returns a new slice containing all object
-	// facts of the analysis's FactTypes in unspecified order.
-	AllObjectFacts func() []ObjectFact
-
-	/* Further fields may be added in future. */
+func (pass *Pass) SetGoResult(a *analysis.Analyzer, v any) {
+	goPass := pass.GoPass
+	result := goPass.ResultOf
+	if result == nil {
+		result = make(map[*analysis.Analyzer]any)
+		goPass.ResultOf = result
+	}
+	goPass.Analyzer = a
+	result[a] = v
 }
 
 // PackageFact is a package together with an associated fact.
@@ -159,24 +127,9 @@ type PackageFact = analysis.PackageFact
 // ObjectFact is an object together with an associated fact.
 type ObjectFact = analysis.ObjectFact
 
-// Reportf is a helper function that reports a Diagnostic using the
-// specified position and formatted error message.
-func (pass *Pass) Reportf(pos token.Pos, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	pass.Report(Diagnostic{Pos: pos, Message: msg})
-}
-
 // The Range interface provides a range. It's equivalent to and satisfied by
 // ast.Node.
 type Range = analysis.Range
-
-// ReportRangef is a helper function that reports a Diagnostic using the
-// range provided. ast.Node values can be passed in as the range because
-// they satisfy the Range interface.
-func (pass *Pass) ReportRangef(rng Range, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	pass.Report(Diagnostic{Pos: rng.Pos(), End: rng.End(), Message: msg})
-}
 
 func (pass *Pass) String() string {
 	return fmt.Sprintf("%s@%s", pass.Analyzer.Name, pass.Pkg.Path())

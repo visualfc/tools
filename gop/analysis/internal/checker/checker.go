@@ -740,24 +740,28 @@ func (act *action) execOnce() {
 
 	// Run the analysis.
 	pass := &analysis.Pass{
-		Analyzer:     act.a,
-		Fset:         act.pkg.Fset,
-		Files:        act.pkg.GopSyntax,
-		OtherFiles:   act.pkg.OtherFiles,
-		IgnoredFiles: act.pkg.IgnoredFiles,
-		Pkg:          act.pkg.Types,
-		TypesInfo:    act.pkg.GopTypesInfo,
-		TypesSizes:   act.pkg.TypesSizes,
-		TypeErrors:   act.pkg.TypeErrors,
+		GoPass: analysis.GoPass{
+			Fset:         act.pkg.Fset,
+			Files:        act.pkg.Syntax,
+			OtherFiles:   act.pkg.OtherFiles,
+			IgnoredFiles: act.pkg.IgnoredFiles,
+			Pkg:          act.pkg.Types,
+			TypesInfo:    act.pkg.TypesInfo,
+			TypesSizes:   act.pkg.TypesSizes,
+			TypeErrors:   act.pkg.TypeErrors,
 
-		ResultOf:          inputs,
-		Report:            func(d analysis.Diagnostic) { act.diagnostics = append(act.diagnostics, d) },
-		ImportObjectFact:  act.importObjectFact,
-		ExportObjectFact:  act.exportObjectFact,
-		ImportPackageFact: act.importPackageFact,
-		ExportPackageFact: act.exportPackageFact,
-		AllObjectFacts:    act.allObjectFacts,
-		AllPackageFacts:   act.allPackageFacts,
+			Report:            func(d analysis.Diagnostic) { act.diagnostics = append(act.diagnostics, d) },
+			ImportObjectFact:  act.importObjectFact,
+			ExportObjectFact:  act.exportObjectFact,
+			ImportPackageFact: act.importPackageFact,
+			ExportPackageFact: act.exportPackageFact,
+			AllObjectFacts:    act.allObjectFacts,
+			AllPackageFacts:   act.allPackageFacts,
+		},
+		Analyzer:     act.a,
+		ResultOf:     inputs,
+		GopFiles:     act.pkg.GopSyntax,
+		GopTypesInfo: act.pass.GopTypesInfo,
 	}
 	act.pass = pass
 
