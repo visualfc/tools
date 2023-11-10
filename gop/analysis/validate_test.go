@@ -57,30 +57,30 @@ func TestValidate(t *testing.T) {
 	pointsToCycle.Requires = append(pointsToCycle.Requires, inCycleA)
 	notInCycleA.Requires = append(notInCycleA.Requires, notInCycleB, notInCycleC)
 	notInCycleB.Requires = append(notInCycleB.Requires, notInCycleC)
-	notInCycleC.Requires = []*Analyzer{}
+	notInCycleC.Requires = []IAnalyzer{}
 
 	cases := []struct {
-		analyzers        []*Analyzer
+		analyzers        []IAnalyzer
 		wantErr          bool
 		analyzersInCycle map[string]bool
 	}{
 		{
-			[]*Analyzer{dependsOnSelf},
+			[]IAnalyzer{dependsOnSelf},
 			true,
 			map[string]bool{"dependsOnSelf": true},
 		},
 		{
-			[]*Analyzer{inCycleA, inCycleB},
+			[]IAnalyzer{inCycleA, inCycleB},
 			true,
 			map[string]bool{"inCycleA": true, "inCycleB": true},
 		},
 		{
-			[]*Analyzer{pointsToCycle},
+			[]IAnalyzer{pointsToCycle},
 			true,
 			map[string]bool{"inCycleA": true, "inCycleB": true},
 		},
 		{
-			[]*Analyzer{notInCycleA},
+			[]IAnalyzer{notInCycleA},
 			false,
 			map[string]bool{},
 		},
@@ -134,7 +134,7 @@ func TestValidateEmptyDoc(t *testing.T) {
 			return nil, nil
 		},
 	}
-	err := Validate([]*Analyzer{withoutDoc})
+	err := Validate([]IAnalyzer{withoutDoc})
 	if err == nil || !strings.Contains(err.Error(), "is undocumented") {
 		t.Errorf("got unexpected error while validating analyzers withoutDoc: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestValidateNoRun(t *testing.T) {
 		Name: "withoutRun",
 		Doc:  "this analyzer has no Run",
 	}
-	err := Validate([]*Analyzer{withoutRun})
+	err := Validate([]IAnalyzer{withoutRun})
 	if err == nil || !strings.Contains(err.Error(), "has nil Run") {
 		t.Errorf("got unexpected error while validating analyzers withoutRun: %v", err)
 	}

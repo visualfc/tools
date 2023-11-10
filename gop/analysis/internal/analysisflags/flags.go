@@ -40,25 +40,26 @@ var (
 // registered from run to run, Parse itself gob.Registers all the facts
 // only reachable from dropped analyzers.
 // This is not a particularly elegant API, but this is an internal package.
-func Parse(analyzers []*analysis.Analyzer, multi bool) []*analysis.Analyzer {
+func Parse(analyzers []analysis.IAnalyzer, multi bool) []analysis.IAnalyzer {
 	// Connect each analysis flag to the command line as -analysis.flag.
-	enabled := make(map[*analysis.Analyzer]*triState)
+	enabled := make(map[analysis.IAnalyzer]*triState)
 	for _, a := range analyzers {
 		var prefix string
 
 		// Add -NAME flag to enable it.
 		if multi {
-			prefix = a.Name + "."
+			aName := analysis.Name(a)
+			prefix = aName + "."
 
 			enable := new(triState)
-			enableUsage := "enable " + a.Name + " analysis"
-			flag.Var(enable, a.Name, enableUsage)
+			enableUsage := "enable " + aName + " analysis"
+			flag.Var(enable, aName, enableUsage)
 			enabled[a] = enable
 		}
 
-		a.Flags.VisitAll(func(f *flag.Flag) {
+		analysis.Flags(a).VisitAll(func(f *flag.Flag) {
 			if !multi && flag.Lookup(f.Name) != nil {
-				log.Printf("%s flag -%s would conflict with driver; skipping", a.Name, f.Name)
+				log.Printf("%s flag -%s would conflict with driver; skipping", analysis.Name(a), f.Name)
 				return
 			}
 
@@ -111,7 +112,7 @@ func Parse(analyzers []*analysis.Analyzer, multi bool) []*analysis.Analyzer {
 			}
 		}
 
-		var keep []*analysis.Analyzer
+		var keep []analysis.IAnalyzer
 		if hasTrue {
 			for _, a := range analyzers {
 				if *enabled[a] == setTrue {
@@ -134,7 +135,7 @@ func Parse(analyzers []*analysis.Analyzer, multi bool) []*analysis.Analyzer {
 	kept := expand(analyzers)
 	for a := range everything {
 		if !kept[a] {
-			for _, f := range a.FactTypes {
+			for _, f := range analysis.FactTypes(a) {
 				gob.Register(f)
 			}
 		}
@@ -143,14 +144,14 @@ func Parse(analyzers []*analysis.Analyzer, multi bool) []*analysis.Analyzer {
 	return analyzers
 }
 
-func expand(analyzers []*analysis.Analyzer) map[*analysis.Analyzer]bool {
-	seen := make(map[*analysis.Analyzer]bool)
-	var visitAll func([]*analysis.Analyzer)
-	visitAll = func(analyzers []*analysis.Analyzer) {
+func expand(analyzers []analysis.IAnalyzer) map[analysis.IAnalyzer]bool {
+	seen := make(map[analysis.IAnalyzer]bool)
+	var visitAll func([]analysis.IAnalyzer)
+	visitAll = func(analyzers []analysis.IAnalyzer) {
 		for _, a := range analyzers {
 			if !seen[a] {
 				seen[a] = true
-				visitAll(a.Requires)
+				visitAll(analysis.Requires(a))
 			}
 		}
 	}

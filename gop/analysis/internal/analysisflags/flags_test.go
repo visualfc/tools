@@ -17,10 +17,10 @@ import (
 )
 
 func main() {
-	fmt.Println(analysisflags.Parse([]*analysis.Analyzer{
-		{Name: "a1", Doc: "a1"},
-		{Name: "a2", Doc: "a2"},
-		{Name: "a3", Doc: "a3"},
+	fmt.Println(analysisflags.Parse([]analysis.IAnalyzer{
+		&analysis.Analyzer{Name: "a1", Doc: "a1"},
+		&analysis.Analyzer{Name: "a2", Doc: "a2"},
+		&analysis.Analyzer{Name: "a3", Doc: "a3"},
 	}, true))
 	os.Exit(0)
 }

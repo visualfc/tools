@@ -14,6 +14,107 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
+// A GoAnalyzer describes a Go analyzer.
+type GoAnalyzer = analysis.Analyzer
+
+// A IAnalyzer abstracts a Go/Go+ analyzer.
+type IAnalyzer interface {
+	String() string
+}
+
+// Name returns analyzer name.
+func Name(a IAnalyzer) string {
+	return a.String()
+}
+
+// Doc returns analyzer Doc.
+func Doc(a IAnalyzer) string {
+	if i, ok := a.(*Analyzer); ok {
+		return i.Doc
+	}
+	return a.(*GoAnalyzer).Doc
+}
+
+// URL returns analyzer URL.
+func URL(a IAnalyzer) string {
+	if i, ok := a.(*Analyzer); ok {
+		return i.URL
+	}
+	return a.(*GoAnalyzer).URL
+}
+
+// Flags returns analyzer Flags.
+func Flags(a IAnalyzer) *flag.FlagSet {
+	if i, ok := a.(*Analyzer); ok {
+		return &i.Flags
+	}
+	return &a.(*GoAnalyzer).Flags
+}
+
+// RunIsNil returns if analyzer's Run is nil or not.
+func RunIsNil(a IAnalyzer) bool {
+	if i, ok := a.(*Analyzer); ok {
+		return i.Run == nil
+	}
+	return a.(*GoAnalyzer).Run == nil
+}
+
+// RunDespiteErrors returns analyzer RunDespiteErrors.
+func RunDespiteErrors(a IAnalyzer) bool {
+	if i, ok := a.(*Analyzer); ok {
+		return i.RunDespiteErrors
+	}
+	return a.(*GoAnalyzer).RunDespiteErrors
+}
+
+// FactTypes returns analyzer FactTypes.
+func FactTypes(a IAnalyzer) []Fact {
+	if i, ok := a.(*Analyzer); ok {
+		return i.FactTypes
+	}
+	return a.(*GoAnalyzer).FactTypes
+}
+
+// Requires returns analyzer Requires.
+func Requires(a IAnalyzer) []IAnalyzer {
+	if i, ok := a.(*Analyzer); ok {
+		return i.Requires
+	}
+	reqs := a.(*GoAnalyzer).Requires
+	ret := make([]IAnalyzer, len(reqs))
+	for i, req := range reqs {
+		ret[i] = req
+	}
+	return ret
+}
+
+// ForRequires visits Requires to call f(req) and stops if an error occurs.
+func ForRequires(a IAnalyzer, f func(req IAnalyzer) error) error {
+	if i, ok := a.(*Analyzer); ok {
+		for _, req := range i.Requires {
+			if e := f(req); e != nil {
+				return e
+			}
+		}
+	} else {
+		for _, req := range a.(*GoAnalyzer).Requires {
+			if e := f(req); e != nil {
+				return e
+			}
+		}
+	}
+	return nil
+}
+
+// SetResult sets an analyzer result.
+func SetResult(gopRet map[*Analyzer]any, goRet map[*GoAnalyzer]any, a IAnalyzer, v any) {
+	if i, ok := a.(*Analyzer); ok {
+		gopRet[i] = v
+		return
+	}
+	goRet[a.(*GoAnalyzer)] = v
+}
+
 // An Analyzer describes an analysis function and its options.
 type Analyzer struct {
 	// The Name of the analyzer must be a valid Go identifier
@@ -54,14 +155,14 @@ type Analyzer struct {
 	// The Pass.TypeErrors field may consequently be non-empty.
 	RunDespiteErrors bool
 
-	// Requires is a set of analyzers that must run successfully
+	// Requires is a set of Go/Go+ analyzers that must run successfully
 	// before this one on a given package. This analyzer may inspect
 	// the outputs produced by each analyzer in Requires.
 	// The graph over analyzers implied by Requires edges must be acyclic.
 	//
 	// Requires establishes a "horizontal" dependency between
 	// analysis passes (different analyzers, same package).
-	Requires []*Analyzer
+	Requires []IAnalyzer
 
 	// ResultType is the type of the optional result of the Run function.
 	ResultType reflect.Type
@@ -110,17 +211,6 @@ type Pass struct {
 	GopTypesInfo *typesutil.Info // type information about the syntax trees
 }
 
-func (pass *Pass) SetGoResult(a *analysis.Analyzer, v any) {
-	goPass := pass.GoPass
-	result := goPass.ResultOf
-	if result == nil {
-		result = make(map[*analysis.Analyzer]any)
-		goPass.ResultOf = result
-	}
-	goPass.Analyzer = a
-	result[a] = v
-}
-
 // PackageFact is a package together with an associated fact.
 type PackageFact = analysis.PackageFact
 
@@ -133,6 +223,15 @@ type Range = analysis.Range
 
 func (pass *Pass) String() string {
 	return fmt.Sprintf("%s@%s", pass.Analyzer.Name, pass.Pkg.Path())
+}
+
+// SetAnalyzer sets Analyzer of this pass.
+func (pass *Pass) SetAnalyzer(a IAnalyzer) {
+	if i, ok := a.(*Analyzer); ok {
+		pass.Analyzer = i
+		return
+	}
+	pass.GoPass.Analyzer = a.(*GoAnalyzer)
 }
 
 // A Fact is an intermediate fact produced during analysis.

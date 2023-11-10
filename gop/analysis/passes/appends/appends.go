@@ -22,16 +22,14 @@ import (
 var doc string
 
 var Analyzer = &analysis.Analyzer{
-	Name:     "appends",
+	Name:     "gopAppends",
 	Doc:      analysisutil.MustExtractDoc(doc, "appends"),
 	URL:      "https://pkg.go.dev/golang.org/x/tools/gop/analysis/passes/appends",
-	Requires: []*analysis.Analyzer{inspect.Analyzer},
+	Requires: []analysis.IAnalyzer{appends.Analyzer, inspect.Analyzer},
 	Run:      run,
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
-	appends.Analyzer.Run(&pass.GoPass)
-
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	nodeFilter := []ast.Node{

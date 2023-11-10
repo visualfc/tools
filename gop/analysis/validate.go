@@ -19,9 +19,9 @@ import (
 // that the Requires graph is acyclic;
 // that analyzer fact types are unique;
 // that each fact type is a pointer.
-func Validate(analyzers []*Analyzer) error {
+func Validate(analyzers []IAnalyzer) error {
 	// Map each fact type to its sole generating analyzer.
-	factTypes := make(map[reflect.Type]*Analyzer)
+	factTypes := make(map[reflect.Type]IAnalyzer)
 
 	// Traverse the Requires graph, depth first.
 	const (
@@ -30,9 +30,9 @@ func Validate(analyzers []*Analyzer) error {
 		black
 		finished
 	)
-	color := make(map[*Analyzer]uint8)
-	var visit func(a *Analyzer) error
-	visit = func(a *Analyzer) error {
+	color := make(map[IAnalyzer]uint8)
+	var visit func(a IAnalyzer) error
+	visit = func(a IAnalyzer) error {
 		if a == nil {
 			return fmt.Errorf("nil *Analyzer")
 		}
@@ -40,19 +40,19 @@ func Validate(analyzers []*Analyzer) error {
 			color[a] = grey
 
 			// names
-			if !validIdent(a.Name) {
+			if !validIdent(Name(a)) {
 				return fmt.Errorf("invalid analyzer name %q", a)
 			}
 
-			if a.Doc == "" {
+			if Doc(a) == "" {
 				return fmt.Errorf("analyzer %q is undocumented", a)
 			}
 
-			if a.Run == nil {
+			if RunIsNil(a) {
 				return fmt.Errorf("analyzer %q has nil Run", a)
 			}
 			// fact types
-			for _, f := range a.FactTypes {
+			for _, f := range FactTypes(a) {
 				if f == nil {
 					return fmt.Errorf("analyzer %s has nil FactType", a)
 				}
@@ -68,23 +68,21 @@ func Validate(analyzers []*Analyzer) error {
 			}
 
 			// recursion
-			for _, req := range a.Requires {
-				if err := visit(req); err != nil {
-					return err
-				}
+			if err := ForRequires(a, visit); err != nil {
+				return err
 			}
 			color[a] = black
 		}
 
 		if color[a] == grey {
-			stack := []*Analyzer{a}
+			stack := []IAnalyzer{a}
 			inCycle := map[string]bool{}
 			for len(stack) > 0 {
 				current := stack[len(stack)-1]
 				stack = stack[:len(stack)-1]
-				if color[current] == grey && !inCycle[current.Name] {
-					inCycle[current.Name] = true
-					stack = append(stack, current.Requires...)
+				if color[current] == grey && !inCycle[Name(current)] {
+					inCycle[Name(current)] = true
+					stack = append(stack, Requires(current)...)
 				}
 			}
 			return &CycleInRequiresGraphError{AnalyzerNames: inCycle}
@@ -103,7 +101,7 @@ func Validate(analyzers []*Analyzer) error {
 	// Postcondition: color[a] == finished.
 	for _, a := range analyzers {
 		if color[a] == finished {
-			return fmt.Errorf("duplicate analyzer: %s", a.Name)
+			return fmt.Errorf("duplicate analyzer: %s", Name(a))
 		}
 		color[a] = finished
 	}

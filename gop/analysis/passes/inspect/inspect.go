@@ -31,13 +31,12 @@ package inspect
 import (
 	"reflect"
 
-	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/gop/analysis"
 	"golang.org/x/tools/gop/ast/inspector"
 )
 
 var Analyzer = &analysis.Analyzer{
-	Name:             "inspect",
+	Name:             "gopInspect",
 	Doc:              "optimize AST traversal for later passes",
 	URL:              "https://pkg.go.dev/golang.org/x/tools/gop/analysis/passes/inspect",
 	Run:              run,
@@ -46,7 +45,5 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
-	ret, _ := inspect.Analyzer.Run(&pass.GoPass)
-	pass.SetGoResult(inspect.Analyzer, ret)
 	return inspector.New(pass.GopFiles), nil
 }

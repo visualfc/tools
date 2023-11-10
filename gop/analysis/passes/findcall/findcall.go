@@ -12,9 +12,10 @@ package findcall
 
 import (
 	"fmt"
-	"go/ast"
 	"go/types"
 
+	"github.com/goplus/gop/ast"
+	"golang.org/x/tools/go/analysis/passes/findcall"
 	"golang.org/x/tools/gop/analysis"
 )
 
@@ -24,12 +25,13 @@ The findcall analysis reports calls to functions or methods
 of a particular name.`
 
 var Analyzer = &analysis.Analyzer{
-	Name:             "findcall",
+	Name:             "gopFindcall",
 	Doc:              Doc,
 	URL:              "https://pkg.go.dev/golang.org/x/tools/gop/analysis/passes/findcall",
 	Run:              run,
 	RunDespiteErrors: true,
 	FactTypes:        []analysis.Fact{new(foundFact)},
+	Requires:         []analysis.IAnalyzer{findcall.Analyzer},
 }
 
 var name string // -name flag
@@ -39,7 +41,7 @@ func init() {
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
-	for _, f := range pass.Files {
+	for _, f := range pass.GopFiles {
 		ast.Inspect(f, func(n ast.Node) bool {
 			if call, ok := n.(*ast.CallExpr); ok {
 				var id *ast.Ident
@@ -49,12 +51,12 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				case *ast.SelectorExpr:
 					id = fun.Sel
 				}
-				if id != nil && !pass.TypesInfo.Types[id].IsType() && id.Name == name {
+				if id != nil && !pass.GopTypesInfo.Types[id].IsType() && id.Name == name {
 					pass.Report(analysis.Diagnostic{
 						Pos:     call.Lparen,
 						Message: fmt.Sprintf("call of %s(...)", id.Name),
 						SuggestedFixes: []analysis.SuggestedFix{{
-							Message: fmt.Sprintf("Add '_TEST_'"),
+							Message: "Add '_TEST_'",
 							TextEdits: []analysis.TextEdit{{
 								Pos:     call.Lparen,
 								End:     call.Lparen,
@@ -74,10 +76,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	// infrastructure in the analysistest package.
 	// They are not consumed by the findcall Analyzer
 	// itself, as would happen in a more realistic example.
-	for _, f := range pass.Files {
+	for _, f := range pass.GopFiles {
 		for _, decl := range f.Decls {
 			if decl, ok := decl.(*ast.FuncDecl); ok && decl.Name.Name == name {
-				if obj, ok := pass.TypesInfo.Defs[decl.Name].(*types.Func); ok {
+				if obj, ok := pass.GopTypesInfo.Defs[decl.Name].(*types.Func); ok {
 					pass.ExportObjectFact(obj, new(foundFact))
 				}
 			}
