@@ -31,6 +31,7 @@ var GopAnalyzer = &analysis.Analyzer{
 }
 
 func gopRun(pass *analysis.Pass) (interface{}, error) {
+	run(&pass.GoPass)
 	for _, err := range pass.TypeErrors {
 		gopRunForError(pass, err)
 	}
@@ -49,7 +50,7 @@ func gopRunForError(pass *analysis.Pass, err types.Error) {
 		return
 	}
 	var file *ast.File
-	for _, f := range pass.Files {
+	for _, f := range pass.GopFiles {
 		if f.Pos() <= err.Pos && err.Pos < f.End() {
 			file = f
 			break
