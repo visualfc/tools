@@ -12,16 +12,18 @@ import (
 	"golang.org/x/tools/internal/tool"
 )
 
+type HelpBase = help
+
 // gopHelp implements the help command.
 type gopHelp struct {
-	help
+	HelpBase
 	app *GopApplication
 }
 
 func newGopHelp(app *GopApplication) *gopHelp {
 	return &gopHelp{
-		help: help{app: &app.Application},
-		app:  app,
+		HelpBase: help{app: &app.Application},
+		app:      app,
 	}
 }
 
@@ -53,45 +55,51 @@ func (h *gopHelp) Run(ctx context.Context, args ...string) error {
 	return tool.Run(ctx, fs, h.app, append(args[:len(args):len(args)], "-h"))
 }
 
+type VersionBase = version
+
 // gopVersion implements the version command.
 type gopVersion struct {
-	version
+	VersionBase
 	app *GopApplication
 }
 
 func newGopVersion(app *GopApplication) *gopVersion {
 	return &gopVersion{
-		version: version{app: &app.Application},
-		app:     app,
+		VersionBase: version{app: &app.Application},
+		app:         app,
 	}
 }
 
 func (v *gopVersion) ShortHelp() string { return "print the goxls version information" }
 
+type BugBase = bug
+
 // gopBug implements the bug command.
 type gopBug struct {
-	bug
+	BugBase
 	app *GopApplication
 }
 
 func newGopBug(app *GopApplication) *gopBug {
 	return &gopBug{
-		bug: bug{app: &app.Application},
-		app: app,
+		BugBase: bug{app: &app.Application},
+		app:     app,
 	}
 }
 
 func (b *gopBug) ShortHelp() string { return "report a bug in goxls" }
 
+type ApiJSONBase = apiJSON
+
 type gopApiJSON struct {
-	apiJSON
+	ApiJSONBase
 	app *GopApplication
 }
 
 func newGopApiJSON(app *GopApplication) *gopApiJSON {
 	return &gopApiJSON{
-		apiJSON: apiJSON{app: &app.Application},
-		app:     app,
+		ApiJSONBase: apiJSON{app: &app.Application},
+		app:         app,
 	}
 }
 
