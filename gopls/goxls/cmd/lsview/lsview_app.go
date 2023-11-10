@@ -12,7 +12,7 @@ import (
 
 const (
 	gopls = "gopls.origin"
-	goxls = "goxls"
+	goxls = "goxls.origin"
 )
 
 func main() {

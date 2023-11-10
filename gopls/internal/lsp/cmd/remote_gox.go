@@ -4,14 +4,16 @@
 
 package cmd
 
+type RemoteBase = remote
+
 type gopRemote struct {
-	remote
+	RemoteBase
 	app *GopApplication
 }
 
 func newGopRemote(app *GopApplication, alias string) *gopRemote {
 	remote := newRemote(&app.Application, alias)
-	return &gopRemote{remote: *remote, app: app}
+	return &gopRemote{RemoteBase: *remote, app: app}
 }
 
 func (r *gopRemote) ShortHelp() string {
