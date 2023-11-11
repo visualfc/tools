@@ -27,6 +27,22 @@ import (
 	internal "golang.org/x/tools/internal/packagesinternal"
 )
 
+type dbgFlags int
+
+const (
+	DbgFlagVerbose dbgFlags = 1 << iota
+	DbgFlagAll              = DbgFlagVerbose
+)
+
+var (
+	debugVerbose bool
+)
+
+// SetDebug sets debug flags.
+func SetDebug(flags dbgFlags) {
+	debugVerbose = (flags & DbgFlagVerbose) != 0
+}
+
 // An Error describes a problem with a package's metadata, syntax, or types.
 type Error = packages.Error
 
@@ -250,7 +266,7 @@ func LoadEx(gop *GopConfig, cfg *Config, patterns ...string) ([]*Package, error)
 		if parse == nil {
 			parse = parser.ParseEntry
 		}
-		ld = &loader{conf.Fset, ctx, gop.ParseFile, conf.Mode, conf.Overlay, conf.Context}
+		ld = &loader{conf.Fset, ctx, parse, conf.Mode, conf.Overlay, conf.Context}
 	}
 
 	for i, pkg := range pkgs {
@@ -301,6 +317,9 @@ func isGoTestFile(fname string) bool {
 }
 
 func addGopFiles(ret *Package, ld *loader, dir string, test bool) {
+	if debugVerbose {
+		log.Println("==> addGopFiles:", dir, test)
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -401,6 +420,10 @@ func (ld *loader) parseFiles(ret *Package, mod *gopmod.Module, filenames []strin
 	}
 	wg.Wait()
 
+	if debugVerbose {
+		log.Println("==> parseFiles done:", filenames)
+	}
+
 	for _, err := range errors {
 		if err != nil {
 			appendError(ret, err)
@@ -436,6 +459,9 @@ func (ld *loader) parseFile(filename string, mod *gopmod.Module) (f *ast.File, e
 	}
 	if err != nil {
 		return
+	}
+	if debugVerbose {
+		log.Println("==> ld.parseFile:", filename, "fset:", ld.Fset != nil, "ld.ParseFile:", ld.ParseFile != nil)
 	}
 	return ld.ParseFile(ld.Fset, filename, src, parser.Config{
 		Mode:      parser.AllErrors | parser.ParseComments,

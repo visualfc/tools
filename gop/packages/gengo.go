@@ -23,7 +23,9 @@ func GenGo(patternIn ...string) (patternOut []string, err error) {
 		return patternIn, nil
 	}
 	pattern, patternOut := buildPattern(patternIn)
-	log.Println("GenGo:", pattern, "in:", patternIn, "out:", patternOut)
+	if debugVerbose {
+		log.Println("GenGo:", pattern, "in:", patternIn, "out:", patternOut)
+	}
 	if len(pattern) > 0 {
 		langserver.GenGo(context.Background(), pattern...)
 	}
@@ -36,9 +38,11 @@ func buildPattern(pattern []string) (gopPattern []string, allPattern []string) {
 	const filePrefix = "file="
 	gopPattern = make([]string, 0, len(pattern))
 	allPattern = make([]string, 0, len(pattern))
+	fileMode := false
 	dirs := make(map[string]none)
 	for _, v := range pattern {
 		if strings.HasPrefix(v, filePrefix) {
+			fileMode = true
 			file := v[len(filePrefix):]
 			dir := filepath.Dir(file)
 			if strings.HasSuffix(file, ".go") { // skip go file
@@ -61,7 +65,11 @@ func buildPattern(pattern []string) (gopPattern []string, allPattern []string) {
 	}
 	for dir := range dirs {
 		gopPattern = append(gopPattern, dir)
-		allPattern = append(allPattern, dir)
+		if fileMode {
+			allPattern = append(allPattern, filePrefix+dir+"/gop_autogen.go")
+		} else {
+			allPattern = append(allPattern, dir)
+		}
 	}
 	return
 }
