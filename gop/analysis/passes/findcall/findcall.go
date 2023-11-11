@@ -13,6 +13,7 @@ package findcall
 import (
 	"fmt"
 	"go/types"
+	"log"
 
 	"github.com/goplus/gop/ast"
 	"golang.org/x/tools/go/analysis/passes/findcall"
@@ -41,6 +42,12 @@ func init() {
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
+	if len(pass.GopFiles) == 0 {
+		return nil, nil
+	}
+
+	log.Println("==> gopFindcall:", pass.Pkg.Path())
+
 	noFacts := len(pass.AllObjectFacts()) == 0
 
 	for _, f := range pass.GopFiles {

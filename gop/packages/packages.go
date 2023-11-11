@@ -285,22 +285,22 @@ func LoadEx(gop *GopConfig, cfg *Config, patterns ...string) ([]*Package, error)
 		if parse == nil {
 			parse = parser.ParseEntry
 		}
-		ld = &loader{conf.Fset, ctx, parse, conf.Mode, conf.Overlay, conf.Context}
+		ld = &loader{conf.Fset, ctx, parse, conf.Overlay, conf.Context}
 	}
 
 	for i, pkg := range pkgs {
-		ret[i] = pkgOf(pkgMap, pkg, ld)
+		ret[i] = pkgOf(pkgMap, pkg, ld, conf.Mode)
 	}
 	return ret, nil
 }
 
-func importPkgs(pkgMap map[*packages.Package]*Package, pkgs map[string]*packages.Package, ld *loader) map[string]*Package {
+func importPkgs(pkgMap map[*packages.Package]*Package, pkgs map[string]*packages.Package, ld *loader, mode LoadMode) map[string]*Package {
 	if len(pkgs) == 0 {
 		return nil
 	}
 	ret := make(map[string]*Package, len(pkgs))
 	for path, pkg := range pkgs {
-		ret[path] = pkgOf(pkgMap, pkg, ld)
+		ret[path] = pkgOf(pkgMap, pkg, ld, mode)
 	}
 	return ret
 }
@@ -311,7 +311,7 @@ func initNongen(ret *Package, i int) {
 	copy(ret.CompiledNongenGoFiles, ret.CompiledGoFiles)
 	for i++; i < n; i++ {
 		file := ret.CompiledGoFiles[i]
-		if strings.HasPrefix(filepath.Base(file), "gop_autogen") {
+		if isAutogen(filepath.Base(file)) {
 			continue
 		}
 		ret.CompiledNongenGoFiles = append(ret.CompiledNongenGoFiles, file)
@@ -320,27 +320,27 @@ func initNongen(ret *Package, i int) {
 	fset := ret.Fset
 	for _, f := range ret.Syntax {
 		file := fset.File(f.Pos()).Name()
-		if strings.HasPrefix(filepath.Base(file), "gop_autogen") {
+		if isAutogen(filepath.Base(file)) {
 			continue
 		}
 		ret.NongenSyntax = append(ret.NongenSyntax, f)
 	}
 }
 
-func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package, ld *loader) *Package {
+func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package, ld *loader, mode LoadMode) *Package {
 	if ret, ok := pkgMap[pkg]; ok {
 		return ret
 	}
-	ret := &Package{Package: *pkg, Imports: importPkgs(pkgMap, pkg.Imports, ld)}
-	needNongen := (ld.Mode & NeedNongen) != 0
+	ret := &Package{Package: *pkg, Imports: importPkgs(pkgMap, pkg.Imports, ld, mode)}
+	needNongen := (mode & NeedNongen) != 0
 	if needNongen {
 		ret.CompiledNongenGoFiles = pkg.CompiledGoFiles
 		ret.NongenSyntax = pkg.Syntax
 	}
 	for i, file := range pkg.CompiledGoFiles {
 		dir, fname := filepath.Split(file)
-		if strings.HasPrefix(fname, "gop_autogen") { // has Go+ files
-			addGopFiles(ret, ld, dir, isGoTestFile(fname) || hasGoTestFile(pkg.CompiledGoFiles[i+1:]))
+		if isAutogen(fname) { // has Go+ files
+			addGopFiles(ret, ld, dir, mode, isGoTestFile(fname) || hasGoTestFile(pkg.CompiledGoFiles[i+1:]))
 			if needNongen {
 				initNongen(ret, i)
 			}
@@ -361,16 +361,35 @@ func hasGoTestFile(goFiles []string) bool {
 	return false
 }
 
+func isAutogen(fname string) bool {
+	return strings.HasPrefix(fname, "gop_autogen")
+}
+
 func isGoTestFile(fname string) bool {
 	return strings.HasSuffix(fname, "_test.go")
 }
 
-func addGopFiles(ret *Package, ld *loader, dir string, test bool) {
+func autogenFiles(ret *Package, test bool) []*goast.File {
+	files := make([]*goast.File, 0, 2)
+	fset := ret.Fset
+	for _, f := range ret.Syntax {
+		file := fset.File(f.Pos()).Name()
+		fname := filepath.Base(file)
+		if isAutogen(fname) {
+			if !isGoTestFile(fname) || test {
+				files = append(files, f)
+			}
+		}
+	}
+	return files
+}
+
+func addGopFiles(ret *Package, ld *loader, dir string, mode LoadMode, test bool) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
-	fset := token.NewFileSet()
+	fsetTemp := token.NewFileSet()
 	pkgName := ret.Name
 	for _, e := range entries {
 		fname := e.Name()
@@ -385,7 +404,7 @@ func addGopFiles(ret *Package, ld *loader, dir string, test bool) {
 			continue
 		}
 		file := dir + fname
-		f, err := parser.ParseFile(fset, file, nil, parser.PackageClauseOnly)
+		f, err := parser.ParseFile(fsetTemp, file, nil, parser.PackageClauseOnly)
 		if err == nil && pkgName == f.Name.Name {
 			ret.GopFiles = append(ret.GopFiles, file)
 			ret.CompiledGopFiles = append(ret.CompiledGopFiles, file)
@@ -396,7 +415,7 @@ func addGopFiles(ret *Package, ld *loader, dir string, test bool) {
 		ctx := ld.Context
 		mod := ctx.LoadMod(ret.Module)
 		ret.GopSyntax = ld.parseFiles(ret, mod, ret.CompiledGopFiles)
-		if ld.Mode&(NeedTypes|NeedTypesInfo) != 0 {
+		if mode&(NeedTypes|NeedTypesInfo) != 0 {
 			ret.GopTypesInfo = &typesutil.Info{
 				Types:      make(map[ast.Expr]types.TypeAndValue),
 				Defs:       make(map[*ast.Ident]types.Object),
@@ -417,8 +436,15 @@ func addGopFiles(ret *Package, ld *loader, dir string, test bool) {
 				Fset:  ld.Fset,
 				Mod:   mod,
 			}
+
+			scope := ret.Types.Scope()
+			objMap := typesutil.DeleteObjects(scope, autogenFiles(ret, test))
 			c := typesutil.NewChecker(cfg, opts, nil, ret.GopTypesInfo)
-			c.Files(nil, ret.GopSyntax)
+			err = c.Files(nil, ret.GopSyntax)
+			typesutil.CorrectTypesInfo(scope, objMap, ret.TypesInfo.Uses)
+			if err != nil && debugVerbose {
+				log.Println("typesutil.Check:", err)
+			}
 		}
 	}
 }
@@ -427,7 +453,6 @@ type loader struct {
 	Fset      *token.FileSet
 	Context   *Context
 	ParseFile func(fset *token.FileSet, filename string, src any, cfg parser.Config) (*ast.File, error)
-	Mode      LoadMode
 
 	// Overlay provides a mapping of absolute file paths to file contents.
 	// If the file with the given path already exists, the parser will use the

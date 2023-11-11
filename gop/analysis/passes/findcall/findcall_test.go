@@ -36,7 +36,7 @@ func TestFromStringLiterals(t *testing.T) {
 		{
 			desc:    "SimpleTest",
 			pkgpath: "main",
-			files: map[string]string{"main/main.go": `package main // want package:"found"
+			files: map[string]string{"main/main.gop": `package main // want package:"found"
 
 func main() {
 	println("hello") // want "call of println"

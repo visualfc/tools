@@ -526,7 +526,13 @@ func check(t Testing, gopath string, pass *analysis.Pass, diagnostics []analysis
 		} else {
 			// Package facts are reported at the start of the file.
 			name = "package"
-			posn = pass.Fset.Position(pass.Files[0].Pos())
+			var pkgPos token.Pos
+			if len(pass.Files) > 0 {
+				pkgPos = pass.Files[0].Pos()
+			} else {
+				pkgPos = pass.GopFiles[0].Pos()
+			}
+			posn = pass.Fset.Position(pkgPos)
 			posn.Line = 1
 		}
 
