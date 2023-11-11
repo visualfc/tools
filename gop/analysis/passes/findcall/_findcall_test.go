@@ -7,11 +7,13 @@ package findcall_test
 import (
 	"testing"
 
+	gofindcall "golang.org/x/tools/go/analysis/passes/findcall"
 	"golang.org/x/tools/gop/analysis/analysistest"
 	"golang.org/x/tools/gop/analysis/passes/findcall"
 )
 
 func init() {
+	gofindcall.Analyzer.Flags.Set("name", "println")
 	findcall.Analyzer.Flags.Set("name", "println")
 }
 

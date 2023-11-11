@@ -17,7 +17,6 @@ import (
 	"go/format"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"log"
 	"os"
 	"reflect"
@@ -45,7 +44,7 @@ var (
 	//	t	show [t]iming info (NB: use 'p' flag to avoid GC/scheduler noise)
 	//	v	show [v]erbose logging
 	//
-	Debug = ""
+	Debug = "v"
 
 	// Log files for optional performance tracing.
 	CPUProfile, MemProfile, Trace string
@@ -79,7 +78,7 @@ func RegisterFlags() {
 // It provides most of the logic for the main functions of both the
 // singlechecker and the multi-analysis commands.
 // It returns the appropriate exit code.
-func Run(args []string, analyzers []*analysis.Analyzer) (exitcode int) {
+func Run(args []string, analyzers []analysis.IAnalyzer) (exitcode int) {
 	if CPUProfile != "" {
 		f, err := os.Create(CPUProfile)
 		if err != nil {
@@ -224,9 +223,9 @@ func loadingError(initial []*packages.Package) error {
 // have a nil key.
 //
 // This entry point is used only by analysistest.
-func TestAnalyzer(a *analysis.Analyzer, pkgs []*packages.Package) []*TestAnalyzerResult {
+func TestAnalyzer(a analysis.IAnalyzer, pkgs []*packages.Package) []*TestAnalyzerResult {
 	var results []*TestAnalyzerResult
-	for _, act := range analyze(pkgs, []*analysis.Analyzer{a}) {
+	for _, act := range analyze(pkgs, []analysis.IAnalyzer{a}) {
 		facts := make(map[types.Object][]analysis.Fact)
 		for key, fact := range act.objectFacts {
 			if key.obj.Pkg() == act.pass.Pkg {
@@ -252,7 +251,7 @@ type TestAnalyzerResult struct {
 	Err         error
 }
 
-func analyze(pkgs []*packages.Package, analyzers []*analysis.Analyzer) []*action {
+func analyze(pkgs []*packages.Package, analyzers []analysis.IAnalyzer) []*action {
 	// Construct the action graph.
 	if dbg('v') {
 		log.Printf("building graph of analysis passes")
@@ -262,26 +261,30 @@ func analyze(pkgs []*packages.Package, analyzers []*analysis.Analyzer) []*action
 	// Edges express package-to-package (vertical) dependencies,
 	// and analysis-to-analysis (horizontal) dependencies.
 	type key struct {
-		*analysis.Analyzer
+		analysis.IAnalyzer
 		*packages.Package
 	}
 	actions := make(map[key]*action)
 
-	var mkAction func(a *analysis.Analyzer, pkg *packages.Package) *action
-	mkAction = func(a *analysis.Analyzer, pkg *packages.Package) *action {
+	var mkAction func(a analysis.IAnalyzer, pkg *packages.Package) *action
+	mkAction = func(a analysis.IAnalyzer, pkg *packages.Package) *action {
+		if dbg('v') {
+			log.Println("==> mkAction", a)
+		}
 		k := key{a, pkg}
 		act, ok := actions[k]
 		if !ok {
 			act = &action{a: a, pkg: pkg}
 
 			// Add a dependency on each required analyzers.
-			for _, req := range a.Requires {
+			analysis.ForRequires(a, func(req analysis.IAnalyzer) error {
 				act.deps = append(act.deps, mkAction(req, pkg))
-			}
+				return nil
+			})
 
 			// An analysis that consumes/produces facts
 			// must run on the package's dependencies too.
-			if len(a.FactTypes) > 0 {
+			if len(analysis.FactTypes(a)) > 0 {
 				paths := make([]string, 0, len(pkg.Imports))
 				for path := range pkg.Imports {
 					paths = append(paths, path)
@@ -346,15 +349,15 @@ func applyFixes(roots []*action) error {
 					file := act.pkg.Fset.File(edit.Pos)
 					if file == nil {
 						return fmt.Errorf("analysis %q suggests invalid fix: missing file info for pos (%v)",
-							act.a.Name, edit.Pos)
+							analysis.Name(act.a), edit.Pos)
 					}
 					if edit.Pos > edit.End {
 						return fmt.Errorf("analysis %q suggests invalid fix: pos (%v) > end (%v)",
-							act.a.Name, edit.Pos, edit.End)
+							analysis.Name(act.a), edit.Pos, edit.End)
 					}
 					if eof := token.Pos(file.Base() + file.Size()); edit.End > eof {
 						return fmt.Errorf("analysis %q suggests invalid fix: end (%v) past end of file (%v)",
-							act.a.Name, edit.End, eof)
+							analysis.Name(act.a), edit.End, eof)
 					}
 					edit := diff.Edit{Start: file.Offset(edit.Pos), End: file.Offset(edit.End), New: string(edit.NewText)}
 					editsForTokenFile[file] = append(editsForTokenFile[file], edit)
@@ -393,7 +396,7 @@ func applyFixes(roots []*action) error {
 		for _, act := range actions {
 			edits := actToEdits[act]
 			if _, invalid := validateEdits(edits); invalid > 0 {
-				name, x, y := act.a.Name, edits[invalid-1], edits[invalid]
+				name, x, y := analysis.Name(act.a), edits[invalid-1], edits[invalid]
 				return diff3Conflict(path, name, name, []diff.Edit{x}, []diff.Edit{y})
 			}
 		}
@@ -402,7 +405,7 @@ func applyFixes(roots []*action) error {
 		for j := range actions {
 			for k := range actions[:j] {
 				x, y := actions[j], actions[k]
-				if x.a.Name > y.a.Name {
+				if analysis.Name(x.a) > analysis.Name(y.a) {
 					x, y = y, x
 				}
 				xedits, yedits := actToEdits[x], actToEdits[y]
@@ -411,7 +414,7 @@ func applyFixes(roots []*action) error {
 					// TODO: consider applying each action's consistent list of edits entirely,
 					// and then using a three-way merge (such as GNU diff3) on the resulting
 					// files to report more precisely the parts that actually conflict.
-					return diff3Conflict(path, x.a.Name, y.a.Name, xedits, yedits)
+					return diff3Conflict(path, analysis.Name(x.a), analysis.Name(y.a), xedits, yedits)
 				}
 			}
 		}
@@ -425,7 +428,7 @@ func applyFixes(roots []*action) error {
 
 	// Now we've got a set of valid edits for each file. Apply them.
 	for path, edits := range editsByPath {
-		contents, err := ioutil.ReadFile(path)
+		contents, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -440,7 +443,7 @@ func applyFixes(roots []*action) error {
 			out = formatted
 		}
 
-		if err := ioutil.WriteFile(path, out, 0644); err != nil {
+		if err := os.WriteFile(path, out, 0644); err != nil {
 			return err
 		}
 	}
@@ -480,7 +483,7 @@ func validateEdits(edits []diff.Edit) ([]diff.Edit, int) {
 // diff3Conflict returns an error describing two conflicting sets of
 // edits on a file at path.
 func diff3Conflict(path string, xlabel, ylabel string, xedits, yedits []diff.Edit) error {
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -533,7 +536,7 @@ func printDiagnostics(roots []*action) (exitcode int) {
 			if act.isroot {
 				diags = act.diagnostics
 			}
-			tree.Add(act.pkg.Fset, act.pkg.ID, act.a.Name, diags, act.err)
+			tree.Add(act.pkg.Fset, act.pkg.ID, analysis.Name(act.a), diags, act.err)
 		}
 		visitAll(roots)
 		tree.Print()
@@ -546,14 +549,14 @@ func printDiagnostics(roots []*action) (exitcode int) {
 		type key struct {
 			pos token.Position
 			end token.Position
-			*analysis.Analyzer
+			analysis.IAnalyzer
 			message string
 		}
 		seen := make(map[key]bool)
 
 		print = func(act *action) {
 			if act.err != nil {
-				fmt.Fprintf(os.Stderr, "%s: %v\n", act.a.Name, act.err)
+				fmt.Fprintf(os.Stderr, "%s: %v\n", analysis.Name(act.a), act.err)
 				exitcode = 1 // analysis failed, at least partially
 				return
 			}
@@ -612,19 +615,19 @@ func printDiagnostics(roots []*action) (exitcode int) {
 
 // needFacts reports whether any analysis required by the specified set
 // needs facts.  If so, we must load the entire program from source.
-func needFacts(analyzers []*analysis.Analyzer) bool {
-	seen := make(map[*analysis.Analyzer]bool)
-	var q []*analysis.Analyzer // for BFS
+func needFacts(analyzers []analysis.IAnalyzer) bool {
+	seen := make(map[analysis.IAnalyzer]bool)
+	var q []analysis.IAnalyzer // for BFS
 	q = append(q, analyzers...)
 	for len(q) > 0 {
 		a := q[0]
 		q = q[1:]
 		if !seen[a] {
 			seen[a] = true
-			if len(a.FactTypes) > 0 {
+			if len(analysis.FactTypes(a)) > 0 {
 				return true
 			}
-			q = append(q, a.Requires...)
+			q = append(q, analysis.Requires(a)...)
 		}
 	}
 	return false
@@ -636,7 +639,7 @@ func needFacts(analyzers []*analysis.Analyzer) bool {
 // parallel), and across packages (as dependencies are analyzed).
 type action struct {
 	once         sync.Once
-	a            *analysis.Analyzer
+	a            analysis.IAnalyzer
 	pkg          *packages.Package
 	pass         *analysis.Pass
 	isroot       bool
@@ -721,6 +724,7 @@ func (act *action) execOnce() {
 	// Plumb the output values of the dependencies
 	// into the inputs of this action.  Also facts.
 	inputs := make(map[*analysis.Analyzer]interface{})
+	goInputs := make(map[*analysis.GoAnalyzer]interface{})
 	act.objectFacts = make(map[objectFactKey]analysis.Fact)
 	act.packageFacts = make(map[packageFactKey]analysis.Fact)
 	for _, dep := range act.deps {
@@ -728,7 +732,8 @@ func (act *action) execOnce() {
 			// Same package, different analysis (horizontal edge):
 			// in-memory outputs of prerequisite analyzers
 			// become inputs to this analysis pass.
-			inputs[dep.a] = dep.result
+			// inputs[dep.a] = dep.result
+			analysis.SetResult(inputs, goInputs, dep.a, dep.result)
 
 		} else if dep.a == act.a { // (always true)
 			// Same analysis, different package (vertical edge):
@@ -750,31 +755,60 @@ func (act *action) execOnce() {
 			TypesSizes:   act.pkg.TypesSizes,
 			TypeErrors:   act.pkg.TypeErrors,
 
-			Report:            func(d analysis.Diagnostic) { act.diagnostics = append(act.diagnostics, d) },
+			Report: func(d analysis.Diagnostic) {
+				if dbg('v') {
+					log.Println("==> Report:", d.Message)
+				}
+				act.diagnostics = append(act.diagnostics, d)
+			},
 			ImportObjectFact:  act.importObjectFact,
 			ExportObjectFact:  act.exportObjectFact,
 			ImportPackageFact: act.importPackageFact,
 			ExportPackageFact: act.exportPackageFact,
 			AllObjectFacts:    act.allObjectFacts,
 			AllPackageFacts:   act.allPackageFacts,
+
+			ResultOf: goInputs,
 		},
-		Analyzer:     act.a,
 		ResultOf:     inputs,
 		GopFiles:     act.pkg.GopSyntax,
-		GopTypesInfo: act.pass.GopTypesInfo,
+		GopTypesInfo: act.pkg.GopTypesInfo,
 	}
+	pass.SetAnalyzer(act.a)
 	act.pass = pass
 
 	var err error
-	if act.pkg.IllTyped && !pass.Analyzer.RunDespiteErrors {
-		err = fmt.Errorf("analysis skipped due to errors in package")
-	} else {
-		act.result, err = pass.Analyzer.Run(pass)
-		if err == nil {
-			if got, want := reflect.TypeOf(act.result), pass.Analyzer.ResultType; got != want {
-				err = fmt.Errorf(
-					"internal error: on package %s, analyzer %s returned a result of type %v, but declared ResultType %v",
-					pass.Pkg.Path(), pass.Analyzer, got, want)
+	if ana := pass.Analyzer; ana != nil { // Go+ Analyzer
+		if act.pkg.IllTyped && !ana.RunDespiteErrors {
+			err = fmt.Errorf("analysis skipped due to errors in package")
+		} else {
+			act.result, err = ana.Run(pass)
+			if dbg('v') {
+				log.Println("==> Run", ana, "goFiles:", len(pass.GoPass.Files), "gopFiles:", len(pass.GopFiles), err)
+			}
+			if err == nil {
+				if got, want := reflect.TypeOf(act.result), ana.ResultType; got != want {
+					err = fmt.Errorf(
+						"internal error: on package %s, analyzer %s returned a result of type %v, but declared ResultType %v",
+						pass.Pkg.Path(), ana, got, want)
+				}
+			}
+		}
+	} else { // Go Analyzer
+		ana := pass.GoPass.Analyzer
+		if act.pkg.IllTyped && !ana.RunDespiteErrors {
+			err = fmt.Errorf("analysis skipped due to errors in package")
+		} else {
+			act.result, err = ana.Run(&pass.GoPass)
+			if dbg('v') {
+				log.Println("==> Run", ana, "goFiles:", len(pass.GoPass.Files), err)
+			}
+			if err == nil {
+				if got, want := reflect.TypeOf(act.result), ana.ResultType; got != want {
+					err = fmt.Errorf(
+						"internal error: on package %s, analyzer %s returned a result of type %v, but declared ResultType %v",
+						pass.Pkg.Path(), ana, got, want)
+				}
 			}
 		}
 	}
@@ -921,6 +955,10 @@ func (act *action) importObjectFact(obj types.Object, ptr analysis.Fact) bool {
 
 // exportObjectFact implements Pass.ExportObjectFact.
 func (act *action) exportObjectFact(obj types.Object, fact analysis.Fact) {
+	if dbg('v') {
+		log.Println("==> exportObjectFact:", obj)
+	}
+
 	if act.pass.ExportObjectFact == nil {
 		log.Panicf("%s: Pass.ExportObjectFact(%s, %T) called after Run", act, obj, fact)
 	}

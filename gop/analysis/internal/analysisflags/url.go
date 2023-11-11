@@ -13,8 +13,9 @@ import (
 
 // ResolveURL resolves the URL field for a Diagnostic from an Analyzer
 // and returns the URL. See Diagnostic.URL for details.
-func ResolveURL(a *analysis.Analyzer, d analysis.Diagnostic) (string, error) {
-	if d.URL == "" && d.Category == "" && a.URL == "" {
+func ResolveURL(a analysis.IAnalyzer, d analysis.Diagnostic) (string, error) {
+	aURL := analysis.URL(a)
+	if d.URL == "" && d.Category == "" && aURL == "" {
 		return "", nil // do nothing
 	}
 	raw := d.URL
@@ -25,9 +26,9 @@ func ResolveURL(a *analysis.Analyzer, d analysis.Diagnostic) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid Diagnostic.URL %q: %s", raw, err)
 	}
-	base, err := url.Parse(a.URL)
+	base, err := url.Parse(aURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid Analyzer.URL %q: %s", a.URL, err)
+		return "", fmt.Errorf("invalid Analyzer.URL %q: %s", aURL, err)
 	}
 	return base.ResolveReference(u).String(), nil
 }

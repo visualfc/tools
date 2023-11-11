@@ -8,10 +8,7 @@ package analysistest
 import (
 	"bytes"
 	"fmt"
-	"go/format"
-	"go/token"
 	"go/types"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,6 +19,9 @@ import (
 	"testing"
 	"text/scanner"
 
+	"github.com/goplus/gop/ast"
+	"github.com/goplus/gop/format"
+	"github.com/goplus/gop/token"
 	"golang.org/x/tools/gop/analysis"
 	"golang.org/x/tools/gop/analysis/internal/checker"
 	"golang.org/x/tools/gop/packages"
@@ -35,7 +35,7 @@ import (
 // maps file names to contents). On success it returns the name of the
 // directory and a cleanup function to delete it.
 func WriteFiles(filemap map[string]string) (dir string, cleanup func(), err error) {
-	gopath, err := ioutil.TempDir("", "analysistest")
+	gopath, err := os.MkdirTemp("", "analysistest")
 	if err != nil {
 		return "", nil, err
 	}
@@ -44,7 +44,7 @@ func WriteFiles(filemap map[string]string) (dir string, cleanup func(), err erro
 	for name, content := range filemap {
 		filename := filepath.Join(gopath, "src", name)
 		os.MkdirAll(filepath.Dir(filename), 0777) // ignore error
-		if err := ioutil.WriteFile(filename, []byte(content), 0666); err != nil {
+		if err := os.WriteFile(filename, []byte(content), 0666); err != nil {
 			cleanup()
 			return "", nil, err
 		}
@@ -68,6 +68,7 @@ var TestData = func() string {
 // Testing is an abstraction of a *testing.T.
 type Testing interface {
 	Errorf(format string, args ...interface{})
+	Logf(format string, args ...interface{})
 }
 
 // RunWithSuggestedFixes behaves like Run, but additionally verifies suggested fixes.
@@ -98,7 +99,7 @@ type Testing interface {
 //			println()
 //		}
 //	}
-func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns ...string) []*Result {
+func RunWithSuggestedFixes(t Testing, dir string, a analysis.IAnalyzer, patterns ...string) []*Result {
 	r := Run(t, dir, a, patterns...)
 
 	// Process each result (package) separately, matching up the suggested
@@ -135,7 +136,7 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 						continue
 					}
 					if _, ok := fileContents[file]; !ok {
-						contents, err := ioutil.ReadFile(file.Name())
+						contents, err := os.ReadFile(file.Name())
 						if err != nil {
 							t.Errorf("error reading %s: %v", file.Name(), err)
 						}
@@ -194,7 +195,7 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 							// between files in the archive. normalize
 							// this to a single newline.
 							want := string(bytes.TrimRight(vf.Data, "\n")) + "\n"
-							formatted, err := format.Source(out)
+							formatted, err := format.Source(out, true)
 							if err != nil {
 								t.Errorf("%s: error formatting edited source: %v\n%s", file.Name(), err, out)
 								continue
@@ -225,7 +226,7 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 				}
 				want := string(ar.Comment)
 
-				formatted, err := format.Source(out)
+				formatted, err := format.Source(out, true)
 				if err != nil {
 					t.Errorf("%s: error formatting resulting source: %v\n%s", file.Name(), err, out)
 					continue
@@ -282,7 +283,7 @@ func RunWithSuggestedFixes(t Testing, dir string, a *analysis.Analyzer, patterns
 // Run also returns a Result for each package for which analysis was
 // attempted, even if unsuccessful. It is safe for a test to ignore all
 // the results, but a test may use it to perform additional checks.
-func Run(t Testing, dir string, a *analysis.Analyzer, patterns ...string) []*Result {
+func Run(t Testing, dir string, a analysis.IAnalyzer, patterns ...string) []*Result {
 	if t, ok := t.(testing.TB); ok {
 		testenv.NeedsGoPackages(t)
 	}
@@ -293,7 +294,7 @@ func Run(t Testing, dir string, a *analysis.Analyzer, patterns ...string) []*Res
 		return nil
 	}
 
-	if err := analysis.Validate([]*analysis.Analyzer{a}); err != nil {
+	if err := analysis.Validate([]analysis.IAnalyzer{a}); err != nil {
 		t.Errorf("Validate: %v", err)
 		return nil
 	}
@@ -316,7 +317,7 @@ type Result = checker.TestAnalyzerResult
 // dependencies) from dir, which is the root of a GOPATH-style project tree.
 // loadPackages returns an error if any package had an error, or the pattern
 // matched no packages.
-func loadPackages(a *analysis.Analyzer, dir string, patterns ...string) ([]*packages.Package, error) {
+func loadPackages(a analysis.IAnalyzer, dir string, patterns ...string) ([]*packages.Package, error) {
 	env := []string{"GOPATH=" + dir, "GO111MODULE=off"} // GOPATH mode
 
 	// Undocumented module mode. Will be replaced by something better.
@@ -349,7 +350,7 @@ func loadPackages(a *analysis.Analyzer, dir string, patterns ...string) ([]*pack
 	// It is incredibly confusing for tests to be printing to stderr
 	// willy-nilly instead of their test logs, especially when the
 	// errors are expected and are going to be fixed.
-	if !a.RunDespiteErrors {
+	if !analysis.RunDespiteErrors(a) {
 		packages.PrintErrors(pkgs)
 	}
 
@@ -364,6 +365,8 @@ func loadPackages(a *analysis.Analyzer, dir string, patterns ...string) ([]*pack
 // specified by the contents of "// want ..." comments in the package's
 // source files, which must have been parsed with comments enabled.
 func check(t Testing, gopath string, pass *analysis.Pass, diagnostics []analysis.Diagnostic, facts map[types.Object][]analysis.Fact) {
+	t.Logf("==> analysistest.check - diagnostics: %d facts: %d\n", len(diagnostics), len(facts))
+
 	type key struct {
 		file string
 		line int
@@ -389,41 +392,51 @@ func check(t Testing, gopath string, pass *analysis.Pass, diagnostics []analysis
 		}
 	}
 
+	processComments := func(cgroup *ast.CommentGroup) {
+		for _, c := range cgroup.List {
+			text := strings.TrimPrefix(c.Text, "//")
+			if text == c.Text { // not a //-comment.
+				text = strings.TrimPrefix(text, "/*")
+				text = strings.TrimSuffix(text, "*/")
+			}
+
+			// Hack: treat a comment of the form "//...// want..."
+			// or "/*...// want... */
+			// as if it starts at 'want'.
+			// This allows us to add comments on comments,
+			// as required when testing the buildtag analyzer.
+			if i := strings.Index(text, "// want"); i >= 0 {
+				text = text[i+len("// "):]
+			}
+
+			// It's tempting to compute the filename
+			// once outside the loop, but it's
+			// incorrect because it can change due
+			// to //line directives.
+			posn := pass.Fset.Position(c.Pos())
+			filename := sanitize(gopath, posn.Filename)
+			processComment(filename, posn.Line, text)
+		}
+	}
+
 	// Extract 'want' comments from parsed Go files.
 	for _, f := range pass.Files {
 		for _, cgroup := range f.Comments {
-			for _, c := range cgroup.List {
+			processComments(cgroup)
+		}
+	}
 
-				text := strings.TrimPrefix(c.Text, "//")
-				if text == c.Text { // not a //-comment.
-					text = strings.TrimPrefix(text, "/*")
-					text = strings.TrimSuffix(text, "*/")
-				}
-
-				// Hack: treat a comment of the form "//...// want..."
-				// or "/*...// want... */
-				// as if it starts at 'want'.
-				// This allows us to add comments on comments,
-				// as required when testing the buildtag analyzer.
-				if i := strings.Index(text, "// want"); i >= 0 {
-					text = text[i+len("// "):]
-				}
-
-				// It's tempting to compute the filename
-				// once outside the loop, but it's
-				// incorrect because it can change due
-				// to //line directives.
-				posn := pass.Fset.Position(c.Pos())
-				filename := sanitize(gopath, posn.Filename)
-				processComment(filename, posn.Line, text)
-			}
+	// Extract 'want' comments from parsed Go+ files.
+	for _, f := range pass.GopFiles {
+		for _, cgroup := range f.Comments {
+			processComments(cgroup)
 		}
 	}
 
 	// Extract 'want' comments from non-Go files.
 	// TODO(adonovan): we may need to handle //line directives.
 	for _, filename := range pass.OtherFiles {
-		data, err := ioutil.ReadFile(filename)
+		data, err := os.ReadFile(filename)
 		if err != nil {
 			t.Errorf("can't read '// want' comments from %s: %v", filename, err)
 			continue
@@ -488,6 +501,7 @@ func check(t Testing, gopath string, pass *analysis.Pass, diagnostics []analysis
 	// across the files of a single compilation unit.)
 	var objects []types.Object
 	for obj := range facts {
+		t.Logf("==> objectFact: %v\n", obj)
 		objects = append(objects, obj)
 	}
 	sort.Slice(objects, func(i, j int) bool {
