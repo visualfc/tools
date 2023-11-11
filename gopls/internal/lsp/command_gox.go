@@ -50,3 +50,7 @@ func gopListImportsCmd(result *command.ListImportsResult, ctx context.Context, a
 	})
 	return nil
 }
+
+func (c *commandHandler) RunGopCommand(ctx context.Context, args command.RunGopCommandArgs) error {
+	return nil
+}

@@ -168,6 +168,7 @@ func DefaultOptions() *Options {
 						string(command.GCDetails):         false,
 						string(command.UpgradeDependency): true,
 						string(command.Vendor):            true,
+						string(command.RunGopCommand):     true, //goxls: option
 						// TODO(hyangah): enable command.RunGovulncheck.
 					},
 				},

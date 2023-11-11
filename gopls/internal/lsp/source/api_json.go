@@ -636,7 +636,7 @@ var GeneratedAPIJSON = &APIJSON{
 						},
 					},
 				},
-				Default:   "{\"gc_details\":false,\"generate\":true,\"regenerate_cgo\":true,\"tidy\":true,\"upgrade_dependency\":true,\"vendor\":true}",
+				Default:   "{\"gc_details\":false,\"generate\":true,\"regenerate_cgo\":true,\"run_gop_command\":true,\"tidy\":true,\"upgrade_dependency\":true,\"vendor\":true}",
 				Hierarchy: "ui",
 			},
 			{
@@ -785,6 +785,11 @@ var GeneratedAPIJSON = &APIJSON{
 			Title:   "run `go work [args...]`, and apply the resulting go.work",
 			Doc:     "edits to the current go.work file.",
 			ArgDoc:  "{\n\t\"ViewID\": string,\n\t\"InitFirst\": bool,\n\t\"Args\": []string,\n}",
+		},
+		{
+			Command: "gopls.run_gop_command",
+			Title:   "run `gop <command> [args...]`",
+			ArgDoc:  "{\n\t// URI for the directory to gop command\n\t\"URI\": string,\n\t// Command for gop command\n\t\"Command\": string,\n\t// Args for gop command arguments\n\t\"Args\": []string,\n}",
 		},
 		{
 			Command:   "gopls.run_govulncheck",

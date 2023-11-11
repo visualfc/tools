@@ -189,6 +189,9 @@ type Interface interface {
 	// RunGoWorkCommand: run `go work [args...]`, and apply the resulting go.work
 	// edits to the current go.work file.
 	RunGoWorkCommand(context.Context, RunGoWorkArgs) error
+
+	// RunGopCommand: run `gop <command> [args...]`
+	RunGopCommand(context.Context, RunGopCommandArgs) error
 }
 
 type RunTestsArgs struct {
@@ -498,4 +501,13 @@ type RunGoWorkArgs struct {
 	ViewID    string   // ID of the view to run the command from
 	InitFirst bool     // Whether to run `go work init` first
 	Args      []string // Args to pass to `go work`
+}
+
+type RunGopCommandArgs struct {
+	// URI for the directory to gop command
+	URI protocol.DocumentURI
+	// Command for gop command
+	Command string
+	// Args for gop command arguments
+	Args []string
 }
