@@ -3,7 +3,7 @@ module golang.org/x/tools/gopls
 go 1.18
 
 require (
-	github.com/google/go-cmp v0.5.9
+	github.com/google/go-cmp v0.6.0
 	github.com/goplus/gop v1.1.10
 	github.com/goplus/mod v0.11.9
 	github.com/jba/printsrc v0.2.2
