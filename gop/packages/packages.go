@@ -6,6 +6,7 @@ package packages
 
 import (
 	"context"
+	goast "go/ast"
 	"go/types"
 	"log"
 	"os"
@@ -110,6 +111,9 @@ const (
 
 	// NeedEmbedPatterns adds EmbedPatterns.
 	NeedEmbedPatterns = packages.NeedEmbedPatterns
+
+	// NeedNongen adds CompiledNongenGoFiles, NongenSyntax.
+	NeedNongen = LoadMode(1 << 30)
 )
 
 const (
@@ -160,6 +164,21 @@ type Package struct {
 	// Imports maps import paths appearing in the package's Go/Go+ source files
 	// to corresponding loaded Packages.
 	Imports map[string]*Package
+
+	// CompiledNongenGoFiles lists the absolute file paths of the package's source
+	// files that are suitable for type checking.
+	// This may differ from GoFiles if files are processed before compilation.
+	CompiledNongenGoFiles []string
+
+	// NongenSyntax is the package's syntax trees, for the files listed in CompiledNongenGoFiles.
+	//
+	// The NeedSyntax LoadMode bit populates this field for packages matching the patterns.
+	// If NeedDeps and NeedImports are also set, this field will also be populated
+	// for dependencies.
+	//
+	// NongenSyntax is kept in the same order as CompiledNongenGoFiles, with the caveat that nils are
+	// removed.  If parsing returned nil, nongenSyntax may be shorter than CompiledNongenGoFiles.
+	NongenSyntax []*goast.File
 
 	// GopSyntax is the package's syntax trees, for the files listed in CompiledGopFiles.
 	//
@@ -286,15 +305,45 @@ func importPkgs(pkgMap map[*packages.Package]*Package, pkgs map[string]*packages
 	return ret
 }
 
+func initNongen(ret *Package, i int) {
+	n := len(ret.CompiledGoFiles)
+	ret.CompiledNongenGoFiles = make([]string, i, n)
+	copy(ret.CompiledNongenGoFiles, ret.CompiledGoFiles)
+	for i++; i < n; i++ {
+		file := ret.CompiledGoFiles[i]
+		if strings.HasPrefix(filepath.Base(file), "gop_autogen") {
+			continue
+		}
+		ret.CompiledNongenGoFiles = append(ret.CompiledNongenGoFiles, file)
+	}
+	ret.NongenSyntax = make([]*goast.File, 0, n)
+	fset := ret.Fset
+	for _, f := range ret.Syntax {
+		file := fset.File(f.Pos()).Name()
+		if strings.HasPrefix(filepath.Base(file), "gop_autogen") {
+			continue
+		}
+		ret.NongenSyntax = append(ret.NongenSyntax, f)
+	}
+}
+
 func pkgOf(pkgMap map[*packages.Package]*Package, pkg *packages.Package, ld *loader) *Package {
 	if ret, ok := pkgMap[pkg]; ok {
 		return ret
 	}
 	ret := &Package{Package: *pkg, Imports: importPkgs(pkgMap, pkg.Imports, ld)}
+	needNongen := (ld.Mode & NeedNongen) != 0
+	if needNongen {
+		ret.CompiledNongenGoFiles = pkg.CompiledGoFiles
+		ret.NongenSyntax = pkg.Syntax
+	}
 	for i, file := range pkg.CompiledGoFiles {
 		dir, fname := filepath.Split(file)
 		if strings.HasPrefix(fname, "gop_autogen") { // has Go+ files
 			addGopFiles(ret, ld, dir, isGoTestFile(fname) || hasGoTestFile(pkg.CompiledGoFiles[i+1:]))
+			if needNongen {
+				initNongen(ret, i)
+			}
 			break
 		}
 	}
@@ -317,9 +366,6 @@ func isGoTestFile(fname string) bool {
 }
 
 func addGopFiles(ret *Package, ld *loader, dir string, test bool) {
-	if debugVerbose {
-		log.Println("==> addGopFiles:", dir, test)
-	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -419,10 +465,6 @@ func (ld *loader) parseFiles(ret *Package, mod *gopmod.Module, filenames []strin
 		}(i, file)
 	}
 	wg.Wait()
-
-	if debugVerbose {
-		log.Println("==> parseFiles done:", filenames)
-	}
 
 	for _, err := range errors {
 		if err != nil {

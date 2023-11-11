@@ -41,6 +41,8 @@ func init() {
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
+	noFacts := len(pass.AllObjectFacts()) == 0
+
 	for _, f := range pass.GopFiles {
 		ast.Inspect(f, func(n ast.Node) bool {
 			if call, ok := n.(*ast.CallExpr); ok {
@@ -86,7 +88,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		}
 	}
 
-	if len(pass.AllObjectFacts()) > 0 {
+	if noFacts && len(pass.AllObjectFacts()) > 0 {
 		pass.ExportPackageFact(new(foundFact))
 	}
 

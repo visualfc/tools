@@ -5,16 +5,21 @@
 package findcall_test
 
 import (
+	"path/filepath"
 	"testing"
 
 	gofindcall "golang.org/x/tools/go/analysis/passes/findcall"
 	"golang.org/x/tools/gop/analysis/analysistest"
+	"golang.org/x/tools/gop/analysis/internal/checker"
 	"golang.org/x/tools/gop/analysis/passes/findcall"
+	"golang.org/x/tools/gop/packages"
 )
 
 func init() {
 	gofindcall.Analyzer.Flags.Set("name", "println")
 	findcall.Analyzer.Flags.Set("name", "println")
+	checker.SetDebug("v")
+	packages.SetDebug(packages.DbgFlagAll)
 }
 
 // TestFromStringLiterals demonstrates how to test an analysis using
@@ -48,7 +53,7 @@ func println(s string) {} // want println:"found"`,
 				t.Fatal(err)
 			}
 			defer cleanup()
-			analysistest.Run(t, dir, findcall.Analyzer, test.pkgpath)
+			analysistest.Run(t, dir, findcall.Analyzer, filepath.Join(dir, "src", test.pkgpath))
 		})
 	}
 }

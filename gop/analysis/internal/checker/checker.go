@@ -242,8 +242,12 @@ func TestAnalyzer(a analysis.IAnalyzer, pkgs []*packages.Package) []*TestAnalyze
 	for _, act := range analyze(pkgs, []analysis.IAnalyzer{a}) {
 		facts := make(map[types.Object][]analysis.Fact)
 		for key, fact := range act.objectFacts {
-			if key.obj.Pkg() == act.pass.Pkg {
+			inPkg := key.obj.Pkg() == act.pass.Pkg
+			if inPkg {
 				facts[key.obj] = append(facts[key.obj], fact)
+			}
+			if debugVerbose {
+				log.Println("==> objectFact:", key.obj, inPkg)
 			}
 		}
 		for key, fact := range act.packageFacts {
@@ -282,9 +286,6 @@ func analyze(pkgs []*packages.Package, analyzers []analysis.IAnalyzer) []*action
 
 	var mkAction func(a analysis.IAnalyzer, pkg *packages.Package) *action
 	mkAction = func(a analysis.IAnalyzer, pkg *packages.Package) *action {
-		if debugVerbose {
-			log.Println("==> mkAction", a)
-		}
 		k := key{a, pkg}
 		act, ok := actions[k]
 		if !ok {
@@ -647,6 +648,10 @@ func needFacts(analyzers []analysis.IAnalyzer) bool {
 	return false
 }
 
+type diagnosticsRet struct {
+	diagnostics []analysis.Diagnostic
+}
+
 // An action represents one unit of analysis work: the application of
 // one analysis to one package. Actions form a DAG, both within a
 // package (as different analyzers are applied, either in sequence or
@@ -661,9 +666,9 @@ type action struct {
 	objectFacts  map[objectFactKey]analysis.Fact
 	packageFacts map[packageFactKey]analysis.Fact
 	result       interface{}
-	diagnostics  []analysis.Diagnostic
-	err          error
-	duration     time.Duration
+	*diagnosticsRet
+	err      error
+	duration time.Duration
 }
 
 type objectFactKey struct {
@@ -681,8 +686,8 @@ func (act *action) String() string {
 }
 
 func execAll(actions []*action) {
-	if debugVerbose {
-		log.Println("==> execAll:", len(actions))
+	if len(actions) == 0 {
+		return
 	}
 	sequential := dbg('p')
 	var wg sync.WaitGroup
@@ -742,8 +747,6 @@ func (act *action) execOnce() {
 	// into the inputs of this action.  Also facts.
 	inputs := make(map[*analysis.Analyzer]interface{})
 	goInputs := make(map[*analysis.GoAnalyzer]interface{})
-	act.objectFacts = make(map[objectFactKey]analysis.Fact)
-	act.packageFacts = make(map[packageFactKey]analysis.Fact)
 	for _, dep := range act.deps {
 		if dep.pkg == act.pkg {
 			// Same package, different analysis (horizontal edge):
@@ -751,7 +754,9 @@ func (act *action) execOnce() {
 			// become inputs to this analysis pass.
 			// inputs[dep.a] = dep.result
 			analysis.SetResult(inputs, goInputs, dep.a, dep.result)
-
+			act.objectFacts = dep.objectFacts
+			act.packageFacts = dep.packageFacts
+			act.diagnosticsRet = dep.diagnosticsRet
 		} else if dep.a == act.a { // (always true)
 			// Same analysis, different package (vertical edge):
 			// serialized facts produced by prerequisite analysis
@@ -759,12 +764,21 @@ func (act *action) execOnce() {
 			inheritFacts(act, dep)
 		}
 	}
+	if act.diagnosticsRet == nil {
+		act.diagnosticsRet = new(diagnosticsRet)
+	}
+	if act.objectFacts == nil {
+		act.objectFacts = make(map[objectFactKey]analysis.Fact)
+	}
+	if act.packageFacts == nil {
+		act.packageFacts = make(map[packageFactKey]analysis.Fact)
+	}
 
 	// Run the analysis.
 	pass := &analysis.Pass{
 		GoPass: analysis.GoPass{
 			Fset:         act.pkg.Fset,
-			Files:        act.pkg.Syntax,
+			Files:        act.pkg.NongenSyntax,
 			OtherFiles:   act.pkg.OtherFiles,
 			IgnoredFiles: act.pkg.IgnoredFiles,
 			Pkg:          act.pkg.Types,
@@ -773,9 +787,6 @@ func (act *action) execOnce() {
 			TypeErrors:   act.pkg.TypeErrors,
 
 			Report: func(d analysis.Diagnostic) {
-				if debugVerbose {
-					log.Println("==> Report:", d.Message)
-				}
 				act.diagnostics = append(act.diagnostics, d)
 			},
 			ImportObjectFact:  act.importObjectFact,
@@ -800,9 +811,6 @@ func (act *action) execOnce() {
 			err = fmt.Errorf("analysis skipped due to errors in package")
 		} else {
 			act.result, err = ana.Run(pass)
-			if debugVerbose {
-				log.Println("==> Run", ana, "goFiles:", len(pass.GoPass.Files), "gopFiles:", len(pass.GopFiles), err)
-			}
 			if err == nil {
 				if got, want := reflect.TypeOf(act.result), ana.ResultType; got != want {
 					err = fmt.Errorf(
@@ -817,9 +825,6 @@ func (act *action) execOnce() {
 			err = fmt.Errorf("analysis skipped due to errors in package")
 		} else {
 			act.result, err = ana.Run(&pass.GoPass)
-			if debugVerbose {
-				log.Println("==> Run", ana, "goFiles:", len(pass.GoPass.Files), err)
-			}
 			if err == nil {
 				if got, want := reflect.TypeOf(act.result), ana.ResultType; got != want {
 					err = fmt.Errorf(

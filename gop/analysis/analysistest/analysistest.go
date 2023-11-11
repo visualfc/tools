@@ -334,7 +334,7 @@ func loadPackages(a analysis.IAnalyzer, dir string, patterns ...string) ([]*pack
 
 	mode := packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedImports |
 		packages.NeedTypes | packages.NeedTypesSizes | packages.NeedSyntax | packages.NeedTypesInfo |
-		packages.NeedDeps | packages.NeedModule
+		packages.NeedDeps | packages.NeedModule | packages.NeedNongen
 	cfg := &packages.Config{
 		Mode:  mode,
 		Dir:   dir,
@@ -464,8 +464,12 @@ func check(t Testing, gopath string, pass *analysis.Pass, diagnostics []analysis
 
 	checkMessage := func(posn token.Position, kind, name, message string) {
 		posn.Filename = sanitize(gopath, posn.Filename)
+		t.Logf("==> checkMessage %s:%d: %s: %s %s\n", posn.Filename, posn.Line, kind, name, message)
 		k := key{posn.Filename, posn.Line}
 		expects := want[k]
+		if len(expects) == 0 {
+			t.Logf("==> checkMessage unexpect: %s:%d\n", posn.Filename, posn.Line)
+		}
 		var unmatched []string
 		for i, exp := range expects {
 			if exp.kind == kind && exp.name == name {
