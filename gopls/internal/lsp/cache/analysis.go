@@ -28,6 +28,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	gopast "github.com/goplus/gop/ast"
+	gopanalysis "golang.org/x/tools/gop/analysis"
+
+	"github.com/goplus/gop/x/typesutil"
+
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/gopls/internal/bug"
@@ -189,8 +194,9 @@ func (snapshot *snapshot) Analyze(ctx context.Context, pkgs map[PackageID]unit, 
 
 	// Filter and sort enabled root analyzers.
 	// A disabled analyzer may still be run if required by another.
-	toSrc := make(map[*analysis.Analyzer]*source.Analyzer)
-	var enabled []*analysis.Analyzer // enabled subset + transitive requirements
+	// goxls: use Go+ Analyzer
+	toSrc := make(map[gopanalysis.IAnalyzer]*source.Analyzer)
+	var enabled []gopanalysis.IAnalyzer // enabled subset + transitive requirements
 	for _, a := range analyzers {
 		if a.IsEnabled(snapshot.view.Options()) {
 			toSrc[a.Analyzer] = a
@@ -198,17 +204,18 @@ func (snapshot *snapshot) Analyze(ctx context.Context, pkgs map[PackageID]unit, 
 		}
 	}
 	sort.Slice(enabled, func(i, j int) bool {
-		return enabled[i].Name < enabled[j].Name
+		return gopanalysis.Name(enabled[i]) < gopanalysis.Name(enabled[j])
 	})
 	analyzers = nil // prevent accidental use
 
 	// Register fact types of required analyzers.
 	enabled = requiredAnalyzers(enabled)
-	var facty []*analysis.Analyzer // facty subset of enabled + transitive requirements
+	var facty []gopanalysis.IAnalyzer // facty subset of enabled + transitive requirements
 	for _, a := range enabled {
-		if len(a.FactTypes) > 0 {
+		factTypes := gopanalysis.FactTypes(a)
+		if len(factTypes) > 0 {
 			facty = append(facty, a)
-			for _, f := range a.FactTypes {
+			for _, f := range factTypes {
 				gob.Register(f) // <2us
 			}
 		}
@@ -284,6 +291,16 @@ func (snapshot *snapshot) Analyze(ctx context.Context, pkgs map[PackageID]unit, 
 					return nil, err
 				}
 				an.files[i] = fh
+			}
+
+			// goxls: Go+ files
+			an.gopFiles = make([]source.FileHandle, len(m.CompiledGopFiles))
+			for i, uri := range m.CompiledGopFiles {
+				fh, err := snapshot.ReadFile(ctx, uri)
+				if err != nil {
+					return nil, err
+				}
+				an.gopFiles[i] = fh
 			}
 		}
 		// Add edge from predecessor.
@@ -428,13 +445,14 @@ func (snapshot *snapshot) Analyze(ctx context.Context, pkgs map[PackageID]unit, 
 			// Skip analyzers that were added only to
 			// fulfil requirements of the original set.
 			srcAnalyzer, ok := toSrc[a]
+			aName := gopanalysis.Name(a)
 			if !ok {
 				// Although this 'skip' operation is logically sound,
 				// it is nonetheless surprising that its absence should
 				// cause #60909 since none of the analyzers added for
 				// requirements (e.g. ctrlflow, inspect, buildssa)
 				// is capable of reporting diagnostics.
-				if summary := root.summary.Actions[a.Name]; summary != nil {
+				if summary := root.summary.Actions[aName]; summary != nil {
 					if n := len(summary.Diagnostics); n > 0 {
 						bug.Reportf("Internal error: got %d unexpected diagnostics from analyzer %s. This analyzer was added only to fulfil the requirements of the requested set of analyzers, and it is not expected that such analyzers report diagnostics. Please report this in issue #60909.", n, a)
 					}
@@ -443,10 +461,10 @@ func (snapshot *snapshot) Analyze(ctx context.Context, pkgs map[PackageID]unit, 
 			}
 
 			// Inv: root.summary is the successful result of run (via runCached).
-			summary, ok := root.summary.Actions[a.Name]
+			summary, ok := root.summary.Actions[aName]
 			if summary == nil {
 				panic(fmt.Sprintf("analyzeSummary.Actions[%q] = (nil, %t); got %v (#60551)",
-					a.Name, ok, root.summary.Actions))
+					aName, ok, root.summary.Actions))
 			}
 			if summary.Err != "" {
 				continue // action failed
@@ -492,7 +510,7 @@ type analysisNode struct {
 	fset            *token.FileSet              // file set shared by entire batch (DAG)
 	m               *source.Metadata            // metadata for this package
 	files           []source.FileHandle         // contents of CompiledGoFiles
-	analyzers       []*analysis.Analyzer        // set of analyzers to run
+	analyzers       []gopanalysis.IAnalyzer     // set of analyzers to run - // goxls: use Go+ Analyzer
 	preds           []*analysisNode             // graph edges:
 	succs           map[PackageID]*analysisNode //   (preds -> self -> succs)
 	unfinishedSuccs int32
@@ -504,6 +522,9 @@ type analysisNode struct {
 	typesOnce sync.Once      // guards lazy population of types and typesErr fields
 	types     *types.Package // type information lazily imported from summary
 	typesErr  error          // an error producing type information
+
+	// goxls: Go+ files
+	gopFiles []source.FileHandle // contents of CompiledGopFiles
 }
 
 func (an *analysisNode) String() string { return string(an.m.ID) }
@@ -697,7 +718,7 @@ func (an *analysisNode) cacheKey() [sha256.Size]byte {
 	// analyzers
 	fmt.Fprintf(hasher, "analyzers: %d\n", len(an.analyzers))
 	for _, a := range an.analyzers {
-		fmt.Fprintln(hasher, a.Name)
+		fmt.Fprintln(hasher, gopanalysis.Name(a))
 	}
 
 	// package metadata
@@ -791,8 +812,16 @@ func (an *analysisNode) run(ctx context.Context) (*analyzeSummary, error) {
 		}
 	}
 
+	// goxls: gopParsed
+	gopParsed, err := gopParsed(an, ctx)
+	if err != nil {
+		return nil, err // cancelled, or catastrophic error (e.g. missing file)
+	}
+
 	// Type-check the package syntax.
-	pkg := an.typeCheck(parsed)
+	// goxls: add Go+ files
+	// pkg := an.typeCheck(parsed)
+	pkg := an.typeCheck(parsed, gopParsed)
 
 	// Publish the completed package.
 	an.typesOnce.Do(func() { an.types = pkg.types })
@@ -841,15 +870,17 @@ func (an *analysisNode) run(ctx context.Context) (*analyzeSummary, error) {
 
 	// Build action graph for this package.
 	// Each graph node (action) is one unit of analysis.
-	actions := make(map[*analysis.Analyzer]*action)
-	var mkAction func(a *analysis.Analyzer) *action
-	mkAction = func(a *analysis.Analyzer) *action {
+	// goxls: use Go+ Analyzer
+	actions := make(map[gopanalysis.IAnalyzer]*action)
+	var mkAction func(a gopanalysis.IAnalyzer) *action
+	mkAction = func(a gopanalysis.IAnalyzer) *action {
 		act, ok := actions[a]
 		if !ok {
 			var hdeps []*action
-			for _, req := range a.Requires {
+			gopanalysis.ForRequires(a, func(req gopanalysis.IAnalyzer) error {
 				hdeps = append(hdeps, mkAction(req))
-			}
+				return nil
+			})
 			act = &action{a: a, pkg: pkg, vdeps: an.succs, hdeps: hdeps}
 			actions[a] = act
 		}
@@ -877,7 +908,7 @@ func (an *analysisNode) run(ctx context.Context) (*analyzeSummary, error) {
 		if root.summary == nil {
 			panic("root has nil action.summary (#60551)")
 		}
-		summaries[root.a.Name] = root.summary
+		summaries[gopanalysis.Name(root.a)] = root.summary
 	}
 
 	return &analyzeSummary{
@@ -889,7 +920,9 @@ func (an *analysisNode) run(ctx context.Context) (*analyzeSummary, error) {
 }
 
 // Postcondition: analysisPackage.types and an.exportDeps are populated.
-func (an *analysisNode) typeCheck(parsed []*source.ParsedGoFile) *analysisPackage {
+// goxls: add Go+ files
+// func (an *analysisNode) typeCheck(parsed []*source.ParsedGoFile) *analysisPackage {
+func (an *analysisNode) typeCheck(parsed []*source.ParsedGoFile, gopParsed []*source.ParsedGopFile) *analysisPackage {
 	m := an.m
 
 	if false { // debugging
@@ -912,6 +945,11 @@ func (an *analysisNode) typeCheck(parsed []*source.ParsedGoFile) *analysisPackag
 			Scopes:     make(map[ast.Node]*types.Scope),
 		},
 		typesSizes: m.TypesSizes,
+
+		// goxls: Go+
+		gopParsed:    gopParsed,
+		gopFiles:     make([]*gopast.File, len(gopParsed)),
+		gopTypesInfo: newGopTypeInfo(),
 	}
 	typeparams.InitInstanceInfo(pkg.typesInfo)
 
@@ -923,6 +961,14 @@ func (an *analysisNode) typeCheck(parsed []*source.ParsedGoFile) *analysisPackag
 
 	for i, p := range parsed {
 		pkg.files[i] = p.File
+		if p.ParseErr != nil {
+			pkg.compiles = false // parse error
+		}
+	}
+
+	// goxls: Go+
+	for i, p := range gopParsed {
+		pkg.gopFiles[i] = p.File
 		if p.ParseErr != nil {
 			pkg.compiles = false // parse error
 		}
@@ -943,6 +989,12 @@ func (an *analysisNode) typeCheck(parsed []*source.ParsedGoFile) *analysisPackag
 			// as parser recovery can be quite lossy (#59888).
 			typeError := e.(types.Error)
 			for _, p := range parsed {
+				if p.ParseErr != nil && source.NodeContains(p.File, typeError.Pos) {
+					return
+				}
+			}
+			// goxls: Go+
+			for _, p := range gopParsed {
 				if p.ParseErr != nil && source.NodeContains(p.File, typeError.Pos) {
 					return
 				}
@@ -1003,10 +1055,15 @@ func (an *analysisNode) typeCheck(parsed []*source.ParsedGoFile) *analysisPackag
 	// TODO(adonovan): do we actually need this??
 	typesinternal.SetUsesCgo(cfg)
 
-	check := types.NewChecker(cfg, pkg.fset, pkg.types, pkg.typesInfo)
+	// goxls: use Go+
+	// check := types.NewChecker(cfg, pkg.fset, pkg.types, pkg.typesInfo)
+	opts := &typesutil.Config{Types: pkg.types, Fset: pkg.fset, Mod: m.GopMod_()}
+	check := typesutil.NewChecker(cfg, opts, pkg.typesInfo, pkg.gopTypesInfo)
 
 	// Type checking errors are handled via the config, so ignore them here.
-	_ = check.Files(pkg.files)
+	// goxls: use Go+
+	// _ = check.Files(pkg.files)
+	_ = check.Files(pkg.files, pkg.gopFiles)
 
 	// debugging (type errors are quite normal)
 	if false {
@@ -1089,6 +1146,11 @@ type analysisPackage struct {
 	typesInfo      *types.Info
 	typeErrors     []types.Error
 	typesSizes     types.Sizes
+
+	// goxls: Go+
+	gopParsed    []*source.ParsedGopFile
+	gopFiles     []*gopast.File // same as gopParsed[i].File
+	gopTypesInfo *typesutil.Info
 }
 
 // An action represents one unit of analysis work: the application of
@@ -1097,7 +1159,7 @@ type analysisPackage struct {
 // parallel), and across packages (as dependencies are analyzed).
 type action struct {
 	once  sync.Once
-	a     *analysis.Analyzer
+	a     gopanalysis.IAnalyzer // goxls: use Go+ Analyzer
 	pkg   *analysisPackage
 	hdeps []*action                   // horizontal dependencies
 	vdeps map[PackageID]*analysisNode // vertical dependencies
@@ -1109,7 +1171,7 @@ type action struct {
 }
 
 func (act *action) String() string {
-	return fmt.Sprintf("%s@%s", act.a.Name, act.pkg.m.ID)
+	return fmt.Sprintf("%s@%s", gopanalysis.Name(act.a), act.pkg.m.ID)
 }
 
 // execActions executes a set of action graph nodes in parallel.
@@ -1151,7 +1213,7 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 	analyzer := act.a
 	pkg := act.pkg
 
-	hasFacts := len(analyzer.FactTypes) > 0
+	hasFacts := len(gopanalysis.FactTypes(analyzer)) > 0
 
 	// Report an error if any action dependency (vertical or horizontal) failed.
 	// To avoid long error messages describing chains of failure,
@@ -1159,11 +1221,12 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 	if hasFacts {
 		// TODO(adonovan): use deterministic order.
 		for _, vdep := range act.vdeps {
-			if summ := vdep.summary.Actions[analyzer.Name]; summ.Err != "" {
+			if summ := vdep.summary.Actions[gopanalysis.Name(analyzer)]; summ.Err != "" {
 				return nil, nil, errors.New(summ.Err)
 			}
 		}
 	}
+
 	for _, dep := range act.hdeps {
 		if dep.err != nil {
 			return nil, nil, dep.err
@@ -1172,8 +1235,8 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 	// Inv: all action dependencies succeeded.
 
 	// Were there list/parse/type errors that might prevent analysis?
-	if !pkg.compiles && !analyzer.RunDespiteErrors {
-		return nil, nil, fmt.Errorf("skipping analysis %q because package %q does not compile", analyzer.Name, pkg.m.ID)
+	if !pkg.compiles && !gopanalysis.RunDespiteErrors(analyzer) {
+		return nil, nil, fmt.Errorf("skipping analysis %q because package %q does not compile", analyzer, pkg.m.ID)
 	}
 	// Inv: package is well-formed enough to proceed with analysis.
 
@@ -1181,10 +1244,17 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 		log.Println("action.exec", act)
 	}
 
+	// goxls: add Go+ Analyzers
 	// Gather analysis Result values from horizontal dependencies.
 	inputs := make(map[*analysis.Analyzer]interface{})
+	gopInputs := make(map[*gopanalysis.Analyzer]interface{})
 	for _, dep := range act.hdeps {
-		inputs[dep.a] = dep.result
+		a := dep.a
+		if i, ok := a.(*analysis.Analyzer); ok {
+			inputs[i] = dep.result
+		} else {
+			gopInputs[a.(*gopanalysis.Analyzer)] = dep.result
+		}
 	}
 
 	// TODO(adonovan): opt: facts.Set works but it may be more
@@ -1233,7 +1303,7 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 			return nil, bug.Errorf("internal error in %s: missing vdep for id=%s", pkg.types.Path(), id)
 		}
 
-		return vdep.summary.Actions[analyzer.Name].Facts, nil
+		return vdep.summary.Actions[gopanalysis.Name(analyzer)].Facts, nil
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("internal error decoding analysis facts: %w", err)
@@ -1242,7 +1312,7 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 	// TODO(adonovan): make Export*Fact panic rather than discarding
 	// undeclared fact types, so that we discover bugs in analyzers.
 	factFilter := make(map[reflect.Type]bool)
-	for _, f := range analyzer.FactTypes {
+	for _, f := range gopanalysis.FactTypes(analyzer) {
 		factFilter[reflect.TypeOf(f)] = true
 	}
 
@@ -1264,30 +1334,37 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 
 	// Now run the (pkg, analyzer) action.
 	var diagnostics []gobDiagnostic
-	pass := &analysis.Pass{
-		Analyzer:   analyzer,
-		Fset:       pkg.fset,
-		Files:      pkg.files,
-		Pkg:        pkg.types,
-		TypesInfo:  pkg.typesInfo,
-		TypesSizes: pkg.typesSizes,
-		TypeErrors: pkg.typeErrors,
-		ResultOf:   inputs,
-		Report: func(d analysis.Diagnostic) {
-			diagnostic, err := toGobDiagnostic(posToLocation, analyzer, d)
-			if err != nil {
-				bug.Reportf("internal error converting diagnostic from analyzer %q: %v", analyzer.Name, err)
-				return
-			}
-			diagnostics = append(diagnostics, diagnostic)
+
+	// goxls: use Go+ pass
+	pass := &gopanalysis.Pass{
+		GoPass: analysis.Pass{
+			Fset:       pkg.fset,
+			Files:      pkg.files,
+			Pkg:        pkg.types,
+			TypesInfo:  pkg.typesInfo,
+			TypesSizes: pkg.typesSizes,
+			TypeErrors: pkg.typeErrors,
+			ResultOf:   inputs,
+			Report: func(d analysis.Diagnostic) {
+				diagnostic, err := toGobDiagnostic(posToLocation, analyzer, d)
+				if err != nil {
+					bug.Reportf("internal error converting diagnostic from analyzer %q: %v", analyzer, err)
+					return
+				}
+				diagnostics = append(diagnostics, diagnostic)
+			},
+			ImportObjectFact:  factset.ImportObjectFact,
+			ExportObjectFact:  factset.ExportObjectFact,
+			ImportPackageFact: factset.ImportPackageFact,
+			ExportPackageFact: factset.ExportPackageFact,
+			AllObjectFacts:    func() []analysis.ObjectFact { return factset.AllObjectFacts(factFilter) },
+			AllPackageFacts:   func() []analysis.PackageFact { return factset.AllPackageFacts(factFilter) },
 		},
-		ImportObjectFact:  factset.ImportObjectFact,
-		ExportObjectFact:  factset.ExportObjectFact,
-		ImportPackageFact: factset.ImportPackageFact,
-		ExportPackageFact: factset.ExportPackageFact,
-		AllObjectFacts:    func() []analysis.ObjectFact { return factset.AllObjectFacts(factFilter) },
-		AllPackageFacts:   func() []analysis.PackageFact { return factset.AllPackageFacts(factFilter) },
+		ResultOf:     gopInputs,
+		GopFiles:     pkg.gopFiles,
+		GopTypesInfo: pkg.gopTypesInfo,
 	}
+	pass.SetAnalyzer(analyzer)
 
 	// Recover from panics (only) within the analyzer logic.
 	// (Use an anonymous function to limit the recover scope.)
@@ -1304,7 +1381,7 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 				// to suppress panics.
 				const strict = true
 				if strict && bug.PanicOnBugs &&
-					analyzer.Name != "buildir" { // see https://github.com/dominikh/go-tools/issues/1343
+					gopanalysis.Name(analyzer) != "buildir" { // see https://github.com/dominikh/go-tools/issues/1343
 					// Uncomment this when debugging suspected failures
 					// in the driver, not the analyzer.
 					if false {
@@ -1313,7 +1390,7 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 					panic(r)
 				} else {
 					// In production, suppress the panic and press on.
-					err = fmt.Errorf("analysis %s for package %s panicked: %v", analyzer.Name, pass.Pkg.Path(), r)
+					err = fmt.Errorf("analysis %s for package %s panicked: %v", analyzer, pass.Pkg.Path(), r)
 				}
 			}
 
@@ -1323,16 +1400,16 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 			analyzerRunTimesMu.Unlock()
 		}()
 
-		result, err = pass.Analyzer.Run(pass)
+		result, err = pass.Run() // goxls: use Go+ pass.Run()
 	}()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if got, want := reflect.TypeOf(result), pass.Analyzer.ResultType; got != want {
+	if got, want := reflect.TypeOf(result), pass.ResultType(); got != want {
 		return nil, nil, bug.Errorf(
 			"internal error: on package %s, analyzer %s returned a result of type %v, but declared ResultType %v",
-			pass.Pkg.Path(), pass.Analyzer, got, want)
+			pass.Pkg.Path(), pass.IAnalyzer(), got, want)
 	}
 
 	// Disallow Export*Fact calls after Run.
@@ -1354,7 +1431,7 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 
 var (
 	analyzerRunTimesMu sync.Mutex
-	analyzerRunTimes   = make(map[*analysis.Analyzer]time.Duration)
+	analyzerRunTimes   = make(map[gopanalysis.IAnalyzer]time.Duration) // goxls: use Go+ Analyzer
 )
 
 type LabelDuration struct {
@@ -1370,7 +1447,7 @@ func AnalyzerRunTimes() []LabelDuration {
 
 	slice := make([]LabelDuration, 0, len(analyzerRunTimes))
 	for a, t := range analyzerRunTimes {
-		slice = append(slice, LabelDuration{Label: a.Name, Duration: t})
+		slice = append(slice, LabelDuration{Label: gopanalysis.Name(a), Duration: t})
 	}
 	sort.Slice(slice, func(i, j int) bool {
 		return slice[i].Duration > slice[j].Duration
@@ -1379,16 +1456,17 @@ func AnalyzerRunTimes() []LabelDuration {
 }
 
 // requiredAnalyzers returns the transitive closure of required analyzers in preorder.
-func requiredAnalyzers(analyzers []*analysis.Analyzer) []*analysis.Analyzer {
-	var result []*analysis.Analyzer
-	seen := make(map[*analysis.Analyzer]bool)
-	var visitAll func([]*analysis.Analyzer)
-	visitAll = func(analyzers []*analysis.Analyzer) {
+// goxls: use Go+ Analyzer
+func requiredAnalyzers(analyzers []gopanalysis.IAnalyzer) []gopanalysis.IAnalyzer {
+	var result []gopanalysis.IAnalyzer
+	seen := make(map[gopanalysis.IAnalyzer]bool)
+	var visitAll func([]gopanalysis.IAnalyzer)
+	visitAll = func(analyzers []gopanalysis.IAnalyzer) {
 		for _, a := range analyzers {
 			if !seen[a] {
 				seen[a] = true
 				result = append(result, a)
-				visitAll(a.Requires)
+				visitAll(gopanalysis.Requires(a))
 			}
 		}
 	}
@@ -1448,9 +1526,10 @@ type gobTextEdit struct {
 	NewText  []byte
 }
 
+// goxls: use Go+ Analyzer
 // toGobDiagnostic converts an analysis.Diagnosic to a serializable gobDiagnostic,
 // which requires expanding token.Pos positions into protocol.Location form.
-func toGobDiagnostic(posToLocation func(start, end token.Pos) (protocol.Location, error), a *analysis.Analyzer, diag analysis.Diagnostic) (gobDiagnostic, error) {
+func toGobDiagnostic(posToLocation func(start, end token.Pos) (protocol.Location, error), a gopanalysis.IAnalyzer, diag analysis.Diagnostic) (gobDiagnostic, error) {
 	var fixes []gobSuggestedFix
 	for _, fix := range diag.SuggestedFixes {
 		var gobEdits []gobTextEdit
@@ -1502,7 +1581,7 @@ func toGobDiagnostic(posToLocation func(start, end token.Pos) (protocol.Location
 		// based on user configuration per analyzer.
 		Code:           code,
 		CodeHref:       diagURL,
-		Source:         a.Name,
+		Source:         gopanalysis.Name(a),
 		Message:        diag.Message,
 		SuggestedFixes: fixes,
 		Related:        related,
@@ -1512,12 +1591,13 @@ func toGobDiagnostic(posToLocation func(start, end token.Pos) (protocol.Location
 
 // effectiveURL computes the effective URL of diag,
 // using the algorithm specified at Diagnostic.URL.
-func effectiveURL(a *analysis.Analyzer, diag analysis.Diagnostic) string {
+// goxls: use Go+ Analyzer
+func effectiveURL(a gopanalysis.IAnalyzer, diag analysis.Diagnostic) string {
 	u := diag.URL
 	if u == "" && diag.Category != "" {
 		u = "#" + diag.Category
 	}
-	if base, err := urlpkg.Parse(a.URL); err == nil {
+	if base, err := urlpkg.Parse(gopanalysis.URL(a)); err == nil {
 		if rel, err := urlpkg.Parse(u); err == nil {
 			u = base.ResolveReference(rel).String()
 		}

@@ -19,6 +19,9 @@ const (
 	// This is used for files of direct interest where the entire contents must
 	// be considered.
 	ParseFull = parser.AllErrors | parser.ParseComments
+
+	// SkipObjectResolution - don't resolve identifiers to objects - see ParseFile
+	SkipObjectResolution = parser.SkipObjectResolution
 )
 
 func ParseFile(fset *token.FileSet, filename string, src interface{}, mode parser.Mode) (f *ast.File, err error) {

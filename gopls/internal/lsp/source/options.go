@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	goxanalysis "golang.org/x/tools/gop/analysis"
+
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/asmdecl"
 	"golang.org/x/tools/go/analysis/passes/assign"
@@ -214,7 +216,7 @@ type Options struct {
 func (opts *Options) IsAnalyzerEnabled(name string) bool {
 	for _, amap := range []map[string]*Analyzer{opts.DefaultAnalyzers, opts.TypeErrorAnalyzers, opts.ConvenienceAnalyzers, opts.StaticcheckAnalyzers} {
 		for _, analyzer := range amap {
-			if analyzer.Analyzer.Name == name && analyzer.IsEnabled(opts) {
+			if goxanalysis.Name(analyzer.Analyzer) == name && analyzer.IsEnabled(opts) {
 				return true
 			}
 		}

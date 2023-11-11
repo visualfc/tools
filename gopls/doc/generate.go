@@ -33,6 +33,7 @@ import (
 	"github.com/jba/printsrc"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/gop/analysis"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/command/commandmeta"
 	"golang.org/x/tools/gopls/internal/lsp/mod"
@@ -511,16 +512,16 @@ func loadLenses(commands []*source.CommandJSON) []*source.LensJSON {
 func loadAnalyzers(m map[string]*source.Analyzer) []*source.AnalyzerJSON {
 	var sorted []string
 	for _, a := range m {
-		sorted = append(sorted, a.Analyzer.Name)
+		sorted = append(sorted, analysis.Name(a.Analyzer))
 	}
 	sort.Strings(sorted)
 	var json []*source.AnalyzerJSON
 	for _, name := range sorted {
 		a := m[name]
 		json = append(json, &source.AnalyzerJSON{
-			Name:    a.Analyzer.Name,
-			Doc:     a.Analyzer.Doc,
-			URL:     a.Analyzer.URL,
+			Name:    analysis.Name(a.Analyzer),
+			Doc:     analysis.Doc(a.Analyzer),
+			URL:     analysis.URL(a.Analyzer),
 			Default: a.Enabled,
 		})
 	}

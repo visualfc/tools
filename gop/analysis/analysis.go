@@ -225,6 +225,30 @@ func (pass *Pass) String() string {
 	return fmt.Sprintf("%s@%s", pass.Analyzer.Name, pass.Pkg.Path())
 }
 
+// Run runs analyzer to get analysis result.
+func (pass *Pass) Run() (result any, err error) {
+	if pass.Analyzer != nil {
+		return pass.Analyzer.Run(pass)
+	}
+	return pass.GoPass.Analyzer.Run(&pass.GoPass)
+}
+
+// IAnalyzer returns an abstract analyzer.
+func (pass *Pass) IAnalyzer() IAnalyzer {
+	if pass.Analyzer != nil {
+		return pass.Analyzer
+	}
+	return pass.GoPass.Analyzer
+}
+
+// ResultType returns the result type of this pass.
+func (pass *Pass) ResultType() reflect.Type {
+	if pass.Analyzer != nil {
+		return pass.Analyzer.ResultType
+	}
+	return pass.GoPass.Analyzer.ResultType
+}
+
 // SetAnalyzer sets Analyzer of this pass.
 func (pass *Pass) SetAnalyzer(a IAnalyzer) {
 	if i, ok := a.(*Analyzer); ok {
