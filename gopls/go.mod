@@ -19,7 +19,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	honnef.co/go/tools v0.4.2
 	mvdan.cc/gofumpt v0.4.0
-	mvdan.cc/xurls/v2 v2.4.0
+	mvdan.cc/xurls/v2 v2.5.0
 )
 
 require (
