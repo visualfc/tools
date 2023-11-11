@@ -36,6 +36,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/filecache"
 	"golang.org/x/tools/gopls/internal/lsp/frob"
 	"golang.org/x/tools/gopls/internal/lsp/progress"
@@ -909,6 +910,9 @@ func (an *analysisNode) run(ctx context.Context) (*analyzeSummary, error) {
 		if summary == nil {
 			panic("root has nil action.summary (#60551)")
 		}
+		if goxls.DbgAnalysis && len(summary.Diagnostics) > 0 {
+			log.Printf("actionSummary(%s): %v\n", root.a, summary.Diagnostics)
+		}
 		summaries[gopanalysis.Name(root.a)] = summary
 	}
 
@@ -1340,6 +1344,9 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 				}
 			}
 		}
+		if goxls.DbgAnalysis {
+			log.Printf("posToLocation failed: %s %d..%d\n", tokFile.Name(), start, end)
+		}
 		return protocol.Location{},
 			bug.Errorf("internal error: token.Pos not within package")
 	}
@@ -1413,6 +1420,9 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 		}()
 
 		result, err = pass.Run() // goxls: use Go+ pass.Run()
+		if goxls.DbgAnalysis && len(diagnostics) > 0 {
+			log.Printf("pass.Run(%s): %v\n", analyzer, diagnostics)
+		}
 	}()
 	if err != nil {
 		return nil, nil, err

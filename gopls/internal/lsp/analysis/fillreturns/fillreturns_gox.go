@@ -219,7 +219,6 @@ outer:
 
 		if goxls.DbgAnaFillreturns {
 			log.Printf("gopFillreturns - newReturn: %s\n", newBuf.String())
-			log.SingleStack()
 		}
 
 		pass.Report(analysis.Diagnostic{
