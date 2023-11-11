@@ -31,6 +31,9 @@ var GopAnalyzer = &analysis.Analyzer{
 }
 
 func gopRun(pass *analysis.Pass) (interface{}, error) {
+	if len(pass.GopFiles) == 0 {
+		return nil, nil
+	}
 	for _, err := range pass.TypeErrors {
 		gopRunForError(pass, err)
 	}

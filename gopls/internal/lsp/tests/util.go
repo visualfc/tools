@@ -448,22 +448,22 @@ func EnableAllAnalyzers(opts *source.Options) {
 	}
 	for _, a := range opts.DefaultAnalyzers {
 		if !a.IsEnabled(opts) {
-			opts.Analyses[a.Analyzer.Name] = true
+			opts.Analyses[a.Analyzer.String()] = true
 		}
 	}
 	for _, a := range opts.TypeErrorAnalyzers {
 		if !a.IsEnabled(opts) {
-			opts.Analyses[a.Analyzer.Name] = true
+			opts.Analyses[a.Analyzer.String()] = true
 		}
 	}
 	for _, a := range opts.ConvenienceAnalyzers {
 		if !a.IsEnabled(opts) {
-			opts.Analyses[a.Analyzer.Name] = true
+			opts.Analyses[a.Analyzer.String()] = true
 		}
 	}
 	for _, a := range opts.StaticcheckAnalyzers {
 		if !a.IsEnabled(opts) {
-			opts.Analyses[a.Analyzer.Name] = true
+			opts.Analyses[a.Analyzer.String()] = true
 		}
 	}
 }
