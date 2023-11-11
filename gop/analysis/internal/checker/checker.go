@@ -44,7 +44,7 @@ var (
 	//	t	show [t]iming info (NB: use 'p' flag to avoid GC/scheduler noise)
 	//	v	show [v]erbose logging
 	//
-	Debug = "v"
+	Debug = ""
 
 	// Log files for optional performance tracing.
 	CPUProfile, MemProfile, Trace string
@@ -54,7 +54,14 @@ var (
 
 	// Fix determines whether to apply all suggested fixes.
 	Fix bool
+
+	debugVerbose bool
 )
+
+func SetDebug(dbgFlags string) {
+	Debug = dbgFlags
+	debugVerbose = dbg('v')
+}
 
 // RegisterFlags registers command-line flags used by the analysis driver.
 func RegisterFlags() {
@@ -79,6 +86,10 @@ func RegisterFlags() {
 // singlechecker and the multi-analysis commands.
 // It returns the appropriate exit code.
 func Run(args []string, analyzers []analysis.IAnalyzer) (exitcode int) {
+	if !debugVerbose && Debug != "" { // maybe inconsistency
+		SetDebug(Debug)
+	}
+
 	if CPUProfile != "" {
 		f, err := os.Create(CPUProfile)
 		if err != nil {
@@ -122,7 +133,7 @@ func Run(args []string, analyzers []analysis.IAnalyzer) (exitcode int) {
 	}
 
 	// Load the packages.
-	if dbg('v') {
+	if debugVerbose {
 		log.SetPrefix("")
 		log.SetFlags(log.Lmicroseconds) // display timing
 		log.Printf("load %s", args)
@@ -132,6 +143,9 @@ func Run(args []string, analyzers []analysis.IAnalyzer) (exitcode int) {
 	// facts, we need source only for the initial packages.
 	allSyntax := needFacts(analyzers)
 	initial, err := load(args, allSyntax)
+	if debugVerbose {
+		log.Println("==> loaded:", len(initial), err)
+	}
 	if err != nil {
 		if _, ok := err.(typeParseError); !ok {
 			// Fail when some of the errors are not
@@ -253,8 +267,8 @@ type TestAnalyzerResult struct {
 
 func analyze(pkgs []*packages.Package, analyzers []analysis.IAnalyzer) []*action {
 	// Construct the action graph.
-	if dbg('v') {
-		log.Printf("building graph of analysis passes")
+	if debugVerbose {
+		log.Println("==> analyze - pkgs:", len(pkgs), "analyzers:", len(analyzers))
 	}
 
 	// Each graph node (action) is one unit of analysis.
@@ -268,7 +282,7 @@ func analyze(pkgs []*packages.Package, analyzers []analysis.IAnalyzer) []*action
 
 	var mkAction func(a analysis.IAnalyzer, pkg *packages.Package) *action
 	mkAction = func(a analysis.IAnalyzer, pkg *packages.Package) *action {
-		if dbg('v') {
+		if debugVerbose {
 			log.Println("==> mkAction", a)
 		}
 		k := key{a, pkg}
@@ -667,6 +681,9 @@ func (act *action) String() string {
 }
 
 func execAll(actions []*action) {
+	if debugVerbose {
+		log.Println("==> execAll:", len(actions))
+	}
 	sequential := dbg('p')
 	var wg sync.WaitGroup
 	for _, act := range actions {
@@ -756,7 +773,7 @@ func (act *action) execOnce() {
 			TypeErrors:   act.pkg.TypeErrors,
 
 			Report: func(d analysis.Diagnostic) {
-				if dbg('v') {
+				if debugVerbose {
 					log.Println("==> Report:", d.Message)
 				}
 				act.diagnostics = append(act.diagnostics, d)
@@ -783,7 +800,7 @@ func (act *action) execOnce() {
 			err = fmt.Errorf("analysis skipped due to errors in package")
 		} else {
 			act.result, err = ana.Run(pass)
-			if dbg('v') {
+			if debugVerbose {
 				log.Println("==> Run", ana, "goFiles:", len(pass.GoPass.Files), "gopFiles:", len(pass.GopFiles), err)
 			}
 			if err == nil {
@@ -800,7 +817,7 @@ func (act *action) execOnce() {
 			err = fmt.Errorf("analysis skipped due to errors in package")
 		} else {
 			act.result, err = ana.Run(&pass.GoPass)
-			if dbg('v') {
+			if debugVerbose {
 				log.Println("==> Run", ana, "goFiles:", len(pass.GoPass.Files), err)
 			}
 			if err == nil {
@@ -955,7 +972,7 @@ func (act *action) importObjectFact(obj types.Object, ptr analysis.Fact) bool {
 
 // exportObjectFact implements Pass.ExportObjectFact.
 func (act *action) exportObjectFact(obj types.Object, fact analysis.Fact) {
-	if dbg('v') {
+	if debugVerbose {
 		log.Println("==> exportObjectFact:", obj)
 	}
 
