@@ -1500,6 +1500,11 @@ func typeErrorAnalyzers() map[string]*Analyzer {
 			ActionKind: []protocol.CodeActionKind{protocol.SourceFixAll, protocol.QuickFix},
 			Enabled:    true,
 		},
+		fillreturns.GopAnalyzer.Name: { // goxls: use Go+ Analyzer
+			Analyzer:   fillreturns.GopAnalyzer,
+			ActionKind: []protocol.CodeActionKind{protocol.SourceFixAll, protocol.QuickFix},
+			Enabled:    true,
+		},
 		nonewvars.Analyzer.Name: {
 			Analyzer: nonewvars.Analyzer,
 			Enabled:  true,

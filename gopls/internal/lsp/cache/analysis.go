@@ -905,10 +905,11 @@ func (an *analysisNode) run(ctx context.Context) (*analyzeSummary, error) {
 	// Return summaries only for the requested actions.
 	summaries := make(map[string]*actionSummary)
 	for _, root := range roots {
-		if root.summary == nil {
+		summary := root.summary
+		if summary == nil {
 			panic("root has nil action.summary (#60551)")
 		}
-		summaries[gopanalysis.Name(root.a)] = root.summary
+		summaries[gopanalysis.Name(root.a)] = summary
 	}
 
 	return &analyzeSummary{
@@ -1320,12 +1321,23 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 	// TODO(adonovan): improve error messages.
 	posToLocation := func(start, end token.Pos) (protocol.Location, error) {
 		tokFile := pkg.fset.File(start)
-		for _, p := range pkg.parsed {
-			if p.Tok == tokFile {
-				if end == token.NoPos {
-					end = start
+		if strings.HasSuffix(tokFile.Name(), ".go") { // Go file
+			for _, p := range pkg.parsed {
+				if p.Tok == tokFile {
+					if end == token.NoPos {
+						end = start
+					}
+					return p.PosLocation(start, end)
 				}
-				return p.PosLocation(start, end)
+			}
+		} else { // goxls: Go+
+			for _, p := range pkg.gopParsed { // Go+ file
+				if p.Tok == tokFile {
+					if end == token.NoPos {
+						end = start
+					}
+					return p.PosLocation(start, end)
+				}
 			}
 		}
 		return protocol.Location{},

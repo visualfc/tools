@@ -108,6 +108,11 @@ func (pgf *ParsedGopFile) PosRange(start, end token.Pos) (protocol.Range, error)
 	return pgf.Mapper.PosRange(pgf.Tok, start, end)
 }
 
+// PosLocation returns a protocol Location for the token.Pos interval in this file.
+func (pgf *ParsedGopFile) PosLocation(start, end token.Pos) (protocol.Location, error) {
+	return pgf.Mapper.PosLocation(pgf.Tok, start, end)
+}
+
 func (m *Metadata) GopMod_() *gopmod.Module {
 	mod := m.gopMod_
 	if mod == nil {

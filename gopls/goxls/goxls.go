@@ -23,7 +23,7 @@ import (
 
 func Main() {
 	ctx := context.Background()
-	goxls.SetDebug(goxls.DbgFlagDefault)
+	goxls.SetDebug(goxls.DbgFlagDefault | goxls.DbgFlagAnaAll)
 	if os.Getenv("GOXLS_LOG_EVENT") != "" {
 		var printer export.Printer
 		var logw io.Writer
