@@ -495,6 +495,7 @@ type PackageStats struct {
 	LargestPackage  int // number of files in the largest package
 	CompiledGoFiles int // total number of compiled Go files across all packages
 	Modules         int // total number of unique modules
+	// goxls: TODO - how about Go+ files?
 }
 
 type RunGoWorkArgs struct {

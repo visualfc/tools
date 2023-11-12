@@ -44,9 +44,15 @@ func (s *Server) gopCodeAction(
 		return nil, nil
 	}
 
+	if goxls.DbgCodeAction && len(diagnostics) > 0 {
+		log.Println("gopCodeActionsMatchingDiagnostics start:", diagnostics)
+	}
 	actions, err := s.codeActionsMatchingDiagnostics(ctx, uri, snapshot, diagnostics, want)
 	if err != nil {
 		return nil, err
+	}
+	if goxls.DbgCodeAction && len(actions) > 0 {
+		log.Println("gopCodeActionsMatchingDiagnostics end:", actions)
 	}
 
 	// Only compute quick fixes if there are any diagnostics to fix.

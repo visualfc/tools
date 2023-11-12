@@ -51,7 +51,7 @@ func Definition(ctx context.Context, snapshot Snapshot, fh FileHandle, position 
 	if pgf.File != nil && pgf.File.Name.Pos() <= pos && pos <= pgf.File.Name.End() {
 		// If there's no package documentation, just use current file.
 		declFile := pgf
-		for _, pgf := range pkg.CompiledGoFiles() {
+		for _, pgf := range pkg.CompiledNongenGoFiles() {
 			if pgf.File.Name != nil && pgf.File.Doc != nil {
 				declFile = pgf
 				break
@@ -220,7 +220,7 @@ func importDefinition(ctx context.Context, s Snapshot, pkg Package, pgf *ParsedG
 	}
 
 	var locs []protocol.Location
-	for _, f := range impMetadata.CompiledGoFiles {
+	for _, f := range impMetadata.CompiledNongenGoFiles {
 		fh, err := s.ReadFile(ctx, f)
 		if err != nil {
 			if ctx.Err() != nil {

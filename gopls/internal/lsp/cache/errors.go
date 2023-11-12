@@ -48,7 +48,16 @@ func goPackagesErrorDiagnostics(ctx context.Context, e packages.Error, m *source
 		// We may not have been able to parse a valid span. Apply the errors to all files.
 		if _, err := spanToRange(ctx, fs, spn); err != nil {
 			var diags []*source.Diagnostic
-			for _, uri := range m.CompiledGoFiles {
+			// goxls: add Go+ files & use NongenGoFiles
+			for _, uri := range m.CompiledNongenGoFiles {
+				diags = append(diags, &source.Diagnostic{
+					URI:      uri,
+					Severity: protocol.SeverityError,
+					Source:   source.ListError,
+					Message:  e.Msg,
+				})
+			}
+			for _, uri := range m.CompiledGopFiles {
 				diags = append(diags, &source.Diagnostic{
 					URI:      uri,
 					Severity: protocol.SeverityError,
@@ -516,7 +525,8 @@ func parseGoListImportCycleError(ctx context.Context, e packages.Error, m *sourc
 	}
 	// Imports have quotation marks around them.
 	circImp := strconv.Quote(importList[1])
-	for _, uri := range m.CompiledGoFiles {
+	// goxls: add Go+ files & use NongenGoFiles
+	for _, uri := range m.CompiledNongenGoFiles {
 		pgf, err := parseGoURI(ctx, fs, uri, source.ParseHeader)
 		if err != nil {
 			return nil, err
@@ -538,6 +548,9 @@ func parseGoListImportCycleError(ctx context.Context, e packages.Error, m *sourc
 				}, nil
 			}
 		}
+	}
+	if len(m.CompiledGopFiles) > 0 {
+		log.Panicln("todo: Go+ files")
 	}
 	return nil, nil
 }

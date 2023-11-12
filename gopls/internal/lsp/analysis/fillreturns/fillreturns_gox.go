@@ -1,59 +1,39 @@
-// Copyright 2020 The Go Authors. All rights reserved.
+// Copyright 2023 The GoPlus Authors (goplus.org). All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package fillreturns defines an Analyzer that will attempt to
-// automatically fill in a return statement that has missing
-// values with zero value elements.
 package fillreturns
 
 import (
 	"bytes"
 	"fmt"
-	"go/ast"
-	"go/format"
 	"go/types"
-	"log"
-	"regexp"
-	"strings"
 
-	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/ast/astutil"
+	"github.com/goplus/gop/ast"
+	"github.com/goplus/gop/format"
+	"github.com/qiniu/x/log"
+	"golang.org/x/tools/gop/analysis"
+	"golang.org/x/tools/gop/ast/astutil"
 	"golang.org/x/tools/gopls/internal/goxls"
-	"golang.org/x/tools/internal/analysisinternal"
 	"golang.org/x/tools/internal/fuzzy"
-	"golang.org/x/tools/internal/typeparams"
+	"golang.org/x/tools/internal/gop/analysisinternal"
+	"golang.org/x/tools/internal/gop/typeparams"
 )
 
-const Doc = `suggest fixes for errors due to an incorrect number of return values
-
-This checker provides suggested fixes for type errors of the
-type "wrong number of return values (want %d, got %d)". For example:
-	func m() (int, string, *bool, error) {
-		return
-	}
-will turn into
-	func m() (int, string, *bool, error) {
-		return 0, "", nil, nil
-	}
-
-This functionality is similar to https://github.com/sqs/goreturns.
-`
-
-var Analyzer = &analysis.Analyzer{
-	Name:             "fillreturns",
+var GopAnalyzer = &analysis.Analyzer{
+	Name:             "gopFillreturns",
 	Doc:              Doc,
-	Requires:         []*analysis.Analyzer{},
-	Run:              run,
+	Requires:         []analysis.IAnalyzer{Analyzer},
+	Run:              gopRun,
 	RunDespiteErrors: true,
 }
 
-func run(pass *analysis.Pass) (interface{}, error) {
-	if len(pass.Files) == 0 {
+func gopRun(pass *analysis.Pass) (interface{}, error) {
+	if len(pass.GopFiles) == 0 {
 		return nil, nil
 	}
 
-	info := pass.TypesInfo
+	info := pass.GopTypesInfo
 	if info == nil {
 		return nil, fmt.Errorf("nil TypeInfo")
 	}
@@ -65,7 +45,7 @@ outer:
 			continue
 		}
 		var file *ast.File
-		for _, f := range pass.Files {
+		for _, f := range pass.GopFiles {
 			if f.Pos() <= typeErr.Pos && typeErr.Pos <= f.End() {
 				file = f
 				break
@@ -76,7 +56,7 @@ outer:
 		}
 
 		if goxls.DbgAnaFillreturns {
-			log.Printf("fillreturns - typeErr: %v\n", typeErr)
+			log.Printf("gopFillreturns - typeErr: %v\n", typeErr)
 		}
 
 		// Get the end position of the error.
@@ -238,7 +218,7 @@ outer:
 		}
 
 		if goxls.DbgAnaFillreturns {
-			log.Printf("fillreturns - newReturn: %s\n", newBuf.String())
+			log.Printf("gopFillreturns - newReturn: %s\n", newBuf.String())
 		}
 
 		pass.Report(analysis.Diagnostic{
@@ -256,39 +236,4 @@ outer:
 		})
 	}
 	return nil, nil
-}
-
-func matchingTypes(want, got types.Type) bool {
-	if want == got || types.Identical(want, got) {
-		return true
-	}
-	// Code segment to help check for untyped equality from (golang/go#32146).
-	if rhs, ok := want.(*types.Basic); ok && rhs.Info()&types.IsUntyped > 0 {
-		if lhs, ok := got.Underlying().(*types.Basic); ok {
-			return rhs.Info()&types.IsConstType == lhs.Info()&types.IsConstType
-		}
-	}
-	return types.AssignableTo(want, got) || types.ConvertibleTo(want, got)
-}
-
-// Error messages have changed across Go versions. These regexps capture recent
-// incarnations.
-//
-// TODO(rfindley): once error codes are exported and exposed via go/packages,
-// use error codes rather than string matching here.
-var wrongReturnNumRegexes = []*regexp.Regexp{
-	regexp.MustCompile(`wrong number of return values \(want (\d+), got (\d+)\)`),
-	regexp.MustCompile(`too many return values`),
-	regexp.MustCompile(`not enough return values`),
-	regexp.MustCompile(`not enough arguments to return`),
-}
-
-func FixesError(err types.Error) bool {
-	msg := strings.TrimSpace(err.Msg)
-	for _, rx := range wrongReturnNumRegexes {
-		if rx.MatchString(msg) {
-			return true
-		}
-	}
-	return false
 }

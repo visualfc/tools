@@ -1299,7 +1299,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 	var g errgroup.Group
 	for _, path := range paths {
 		m := known[source.PackagePath(path)]
-		for _, uri := range m.CompiledGoFiles {
+		for _, uri := range m.CompiledGopFiles { // goxls: TODO - how to handle Go files?
 			uri := uri
 			g.Go(func() error {
 				return quickParse(uri, m)

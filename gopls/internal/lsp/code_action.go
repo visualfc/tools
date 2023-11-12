@@ -8,11 +8,13 @@ import (
 	"context"
 	"fmt"
 	"go/ast"
+	"log"
 	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/ast/inspector"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/analysis/fillstruct"
 	"golang.org/x/tools/gopls/internal/lsp/analysis/infertypeargs"
 	"golang.org/x/tools/gopls/internal/lsp/analysis/stubmethods"
@@ -121,9 +123,15 @@ func (s *Server) codeAction(ctx context.Context, params *protocol.CodeActionPara
 			return nil, nil
 		}
 
+		if goxls.DbgCodeAction && len(diagnostics) > 0 {
+			log.Println("codeActionsMatchingDiagnostics start:", diagnostics)
+		}
 		actions, err := s.codeActionsMatchingDiagnostics(ctx, uri, snapshot, diagnostics, want)
 		if err != nil {
 			return nil, err
+		}
+		if goxls.DbgCodeAction && len(actions) > 0 {
+			log.Println("codeActionsMatchingDiagnostics done:", actions)
 		}
 
 		// Only compute quick fixes if there are any diagnostics to fix.
@@ -276,11 +284,16 @@ func (s *Server) findMatchingDiagnostics(uri span.URI, pd protocol.Diagnostic) [
 
 	var sds []*source.Diagnostic
 	for _, report := range s.diagnostics[uri].reports {
+		if goxls.DbgCodeAction {
+			log.Println("findMatchingDiagnostics report:", uri.Filename(), report, "diags:", len(report.diags))
+		}
 		for _, sd := range report.diags {
 			sameDiagnostic := (pd.Message == strings.TrimSpace(sd.Message) && // extra space may have been trimmed when converting to protocol.Diagnostic
 				protocol.CompareRange(pd.Range, sd.Range) == 0 &&
 				pd.Source == string(sd.Source))
-
+			if goxls.DbgCodeAction {
+				log.Println("findMatchingDiagnostics sameDiagnostic:", uri.Filename(), sameDiagnostic, sd.SuggestedFixes, sd)
+			}
 			if sameDiagnostic {
 				sds = append(sds, sd)
 			}
@@ -528,6 +541,9 @@ func (s *Server) codeActionsMatchingDiagnostics(ctx context.Context, uri span.UR
 	var unbundled []protocol.Diagnostic // diagnostics without bundled code actions in their Data field
 	for _, pd := range pds {
 		bundled := source.BundledQuickFixes(pd)
+		if goxls.DbgCodeAction && len(bundled) > 0 {
+			log.Println("source.BundledQuickFixes:", uri.Filename(), bundled)
+		}
 		if len(bundled) > 0 {
 			for _, fix := range bundled {
 				if want[fix.Kind] {
@@ -543,6 +559,9 @@ func (s *Server) codeActionsMatchingDiagnostics(ctx context.Context, uri span.UR
 	for _, pd := range unbundled {
 		for _, sd := range s.findMatchingDiagnostics(uri, pd) {
 			diagActions, err := codeActionsForDiagnostic(ctx, snapshot, sd, &pd, want)
+			if goxls.DbgCodeAction && len(diagActions) > 0 {
+				log.Println("codeActionsForDiagnostic:", uri.Filename(), diagActions)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -553,6 +572,9 @@ func (s *Server) codeActionsMatchingDiagnostics(ctx context.Context, uri span.UR
 }
 
 func codeActionsForDiagnostic(ctx context.Context, snapshot source.Snapshot, sd *source.Diagnostic, pd *protocol.Diagnostic, want map[protocol.CodeActionKind]bool) ([]protocol.CodeAction, error) {
+	if goxls.DbgCodeAction {
+		log.Println("codeActionsForDiagnostic sd.SuggestedFixe:", sd.URI.Filename(), sd.SuggestedFixes)
+	}
 	var actions []protocol.CodeAction
 	for _, fix := range sd.SuggestedFixes {
 		if !want[fix.ActionKind] {

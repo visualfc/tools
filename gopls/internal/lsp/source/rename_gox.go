@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"log"
 	"regexp"
 	"sort"
 	"strings"
@@ -368,7 +369,8 @@ func gopRenameOrdinary(ctx context.Context, snapshot Snapshot, f FileHandle, pp 
 
 // gopRenamePackageName renames package declarations, imports, and go.mod files.
 func gopRenamePackageName(ctx context.Context, s Snapshot, f FileHandle, newName PackageName) (map[span.URI][]diff.Edit, error) {
-	panic("todo")
+	log.Panicln("todo: Go+ files")
+	return nil, nil
 }
 
 // Rename all references to the target objects.

@@ -49,6 +49,9 @@ var Analyzer = &analysis.Analyzer{
 var undeclaredNamePrefixes = []string{"undeclared name: ", "undefined: "}
 
 func run(pass *analysis.Pass) (interface{}, error) {
+	if len(pass.Files) == 0 {
+		return nil, nil
+	}
 	for _, err := range pass.TypeErrors {
 		runForError(pass, err)
 	}

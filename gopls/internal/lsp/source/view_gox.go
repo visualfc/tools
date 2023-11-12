@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
@@ -21,6 +20,19 @@ import (
 	"golang.org/x/tools/gopls/internal/span"
 )
 
+func (m *Metadata) Dir() string {
+	var uri span.URI
+	if len(m.GoFiles) > 0 {
+		uri = m.GoFiles[0]
+	} else if len(m.GopFiles) > 0 {
+		uri = m.GopFiles[0]
+	} else {
+		return ""
+	}
+	return filepath.Dir(uri.Filename())
+}
+
+/*
 // CompiledNongenGoFiles returns all Go files excluding "gop_autogen*.go".
 func (m *Metadata) CompiledNongenGoFiles() []span.URI {
 	ret := make([]span.URI, 0, len(m.CompiledGoFiles))
@@ -33,6 +45,7 @@ func (m *Metadata) CompiledNongenGoFiles() []span.URI {
 	}
 	return ret
 }
+*/
 
 // A ParsedGopFile contains the results of parsing a Go+ file.
 type ParsedGopFile struct {
@@ -106,6 +119,11 @@ func (pgf *ParsedGopFile) RangePos(r protocol.Range) (token.Pos, token.Pos, erro
 // PosRange returns a protocol Range for the token.Pos interval in this file.
 func (pgf *ParsedGopFile) PosRange(start, end token.Pos) (protocol.Range, error) {
 	return pgf.Mapper.PosRange(pgf.Tok, start, end)
+}
+
+// PosLocation returns a protocol Location for the token.Pos interval in this file.
+func (pgf *ParsedGopFile) PosLocation(start, end token.Pos) (protocol.Location, error) {
+	return pgf.Mapper.PosLocation(pgf.Tok, start, end)
 }
 
 func (m *Metadata) GopMod_() *gopmod.Module {

@@ -36,6 +36,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/filecache"
 	"golang.org/x/tools/gopls/internal/lsp/frob"
 	"golang.org/x/tools/gopls/internal/lsp/progress"
@@ -284,8 +285,9 @@ func (snapshot *snapshot) Analyze(ctx context.Context, pkgs map[PackageID]unit, 
 			// Load the contents of each compiled Go file through
 			// the snapshot's cache. (These are all cache hits as
 			// files are pre-loaded following packages.Load)
-			an.files = make([]source.FileHandle, len(m.CompiledGoFiles))
-			for i, uri := range m.CompiledGoFiles {
+			// goxls: use NongenGoFiles
+			an.files = make([]source.FileHandle, len(m.CompiledNongenGoFiles))
+			for i, uri := range m.CompiledNongenGoFiles {
 				fh, err := snapshot.ReadFile(ctx, uri)
 				if err != nil {
 					return nil, err
@@ -905,10 +907,14 @@ func (an *analysisNode) run(ctx context.Context) (*analyzeSummary, error) {
 	// Return summaries only for the requested actions.
 	summaries := make(map[string]*actionSummary)
 	for _, root := range roots {
-		if root.summary == nil {
+		summary := root.summary
+		if summary == nil {
 			panic("root has nil action.summary (#60551)")
 		}
-		summaries[gopanalysis.Name(root.a)] = root.summary
+		if goxls.DbgAnalysis && len(summary.Diagnostics) > 0 {
+			log.Printf("actionSummary(%s): %v\n", root.a, summary.Diagnostics)
+		}
+		summaries[gopanalysis.Name(root.a)] = summary
 	}
 
 	return &analyzeSummary{
@@ -1320,13 +1326,27 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 	// TODO(adonovan): improve error messages.
 	posToLocation := func(start, end token.Pos) (protocol.Location, error) {
 		tokFile := pkg.fset.File(start)
-		for _, p := range pkg.parsed {
-			if p.Tok == tokFile {
-				if end == token.NoPos {
-					end = start
+		if strings.HasSuffix(tokFile.Name(), ".go") { // Go file
+			for _, p := range pkg.parsed {
+				if p.Tok == tokFile {
+					if end == token.NoPos {
+						end = start
+					}
+					return p.PosLocation(start, end)
 				}
-				return p.PosLocation(start, end)
 			}
+		} else { // goxls: Go+
+			for _, p := range pkg.gopParsed { // Go+ file
+				if p.Tok == tokFile {
+					if end == token.NoPos {
+						end = start
+					}
+					return p.PosLocation(start, end)
+				}
+			}
+		}
+		if goxls.DbgAnalysis {
+			log.Printf("posToLocation failed: %s %d..%d\n", tokFile.Name(), start, end)
 		}
 		return protocol.Location{},
 			bug.Errorf("internal error: token.Pos not within package")
@@ -1401,6 +1421,9 @@ func (act *action) exec() (interface{}, *actionSummary, error) {
 		}()
 
 		result, err = pass.Run() // goxls: use Go+ pass.Run()
+		if goxls.DbgAnalysis && len(diagnostics) > 0 {
+			log.Printf("pass.Run(%s): %v\n", analyzer, diagnostics)
+		}
 	}()
 	if err != nil {
 		return nil, nil, err

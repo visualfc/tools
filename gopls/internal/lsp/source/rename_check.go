@@ -44,9 +44,9 @@ import (
 
 	"github.com/qiniu/x/log"
 	"golang.org/x/tools/go/ast/astutil"
+	"golang.org/x/tools/gop/refactor/satisfy"
 	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
-	"golang.org/x/tools/refactor/satisfy"
 )
 
 // errorf reports an error (e.g. conflict) and prevents file modification.
@@ -878,7 +878,9 @@ func (r *renamer) satisfy() map[satisfy.Constraint]bool {
 					r.from, r.to, pkg.Metadata().PkgPath)
 				return nil
 			}
-			f.Find(pkg.GetTypesInfo(), pkg.GetSyntax())
+			// goxls: Go+ files
+			// f.Find(pkg.GetTypesInfo(), pkg.GetSyntax())
+			f.Find(pkg.GetTypesInfo(), pkg.GetNongenSyntax(), pkg.GopTypesInfo(), GopSyntax(pkg))
 		}
 		r.satisfyConstraints = f.Result
 	}

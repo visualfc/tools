@@ -687,6 +687,25 @@ This functionality is similar to https://github.com/sqs/goreturns.
 
 **Enabled by default.**
 
+## **gopFillreturns**
+
+suggest fixes for errors due to an incorrect number of return values
+
+This checker provides suggested fixes for type errors of the
+type "wrong number of return values (want %d, got %d)". For example:
+	func m() (int, string, *bool, error) {
+		return
+	}
+will turn into
+	func m() (int, string, *bool, error) {
+		return 0, "", nil, nil
+	}
+
+This functionality is similar to https://github.com/sqs/goreturns.
+
+
+**Enabled by default.**
+
 ## **nonewvars**
 
 suggested fixes for "no new vars on left side of :="

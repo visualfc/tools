@@ -18,6 +18,7 @@ import (
 	"go/types"
 	"io"
 
+	goxast "github.com/goplus/gop/ast"
 	goxparser "github.com/goplus/gop/parser"
 	"github.com/goplus/gop/x/typesutil"
 	"github.com/goplus/mod/gopmod"
@@ -557,9 +558,9 @@ type Metadata struct {
 	Name    PackageName
 
 	// these three fields are as defined by go/packages.Package
-	GoFiles         []span.URI
-	CompiledGoFiles []span.URI
-	IgnoredFiles    []span.URI
+	GoFiles               []span.URI
+	CompiledNongenGoFiles []span.URI // goxls: use NongenGoFiles
+	IgnoredFiles          []span.URI
 
 	// goxls: Go+ files
 	GopFiles         []span.URI
@@ -968,15 +969,15 @@ type Package interface {
 
 	// Results of parsing:
 	FileSet() *token.FileSet
-	CompiledGoFiles() []*ParsedGoFile // (borrowed)
+	// CompiledGoFiles() []*ParsedGoFile // (borrowed)
+	// GetSyntax() []*ast.File // (borrowed)
+	CompiledNongenGoFiles() []*ParsedGoFile // (borrowed) - goxls: use NongenGoFiles
+	GetNongenSyntax() []*ast.File           // (borrowed)
 	File(uri span.URI) (*ParsedGoFile, error)
-	GetSyntax() []*ast.File // (borrowed)
 	GetParseErrors() []scanner.ErrorList
 
 	// goxls: Go+ files
-	CompiledGopFiles() []*ParsedGopFile     // (borrowed)
-	CompiledNongenGoFiles() []*ParsedGoFile // (borrowed)
-	GetNongenSyntax() []*ast.File           // (borrowed)
+	CompiledGopFiles() []*ParsedGopFile // (borrowed)
 	GopFile(uri span.URI) (*ParsedGopFile, error)
 	GopTypesInfo() *typesutil.Info
 
@@ -986,6 +987,14 @@ type Package interface {
 	GetTypesInfo() *types.Info
 	DependencyTypes(PackagePath) *types.Package // nil for indirect dependency of no consequence
 	DiagnosticsForFile(ctx context.Context, s Snapshot, uri span.URI) ([]*Diagnostic, error)
+}
+
+func GopSyntax(pkg Package) []*goxast.File {
+	var syntax []*goxast.File
+	for _, pgf := range pkg.CompiledGopFiles() {
+		syntax = append(syntax, pgf.File)
+	}
+	return syntax
 }
 
 type unit = struct{}

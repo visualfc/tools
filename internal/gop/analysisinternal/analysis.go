@@ -12,7 +12,12 @@ import (
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
 	"github.com/goplus/gop/x/typesutil"
+	"golang.org/x/tools/internal/analysisinternal"
 )
+
+func TypeErrorEndPos(fset *token.FileSet, src []byte, start token.Pos) token.Pos {
+	return analysisinternal.TypeErrorEndPos(fset, src, start)
+}
 
 func ZeroValue(f *ast.File, pkg *types.Package, typ types.Type) ast.Expr {
 	under := typ
@@ -43,6 +48,19 @@ func ZeroValue(f *ast.File, pkg *types.Package, typ types.Type) ast.Expr {
 		}
 	}
 	return nil
+}
+
+// IsZeroValue checks whether the given expression is a 'zero value' (as determined by output of
+// analysisinternal.ZeroValue)
+func IsZeroValue(expr ast.Expr) bool {
+	switch e := expr.(type) {
+	case *ast.BasicLit:
+		return e.Value == "0" || e.Value == `""`
+	case *ast.Ident:
+		return e.Name == "nil" || e.Name == "false"
+	default:
+		return false
+	}
 }
 
 // TypeExpr returns syntax for the specified type. References to

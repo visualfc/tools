@@ -36,10 +36,12 @@ const (
 )
 
 func GCOptimizationDetails(ctx context.Context, snapshot Snapshot, m *Metadata) (map[span.URI][]*Diagnostic, error) {
-	if len(m.CompiledGoFiles) == 0 {
+	// goxls: add Go+ files & use NongenGoFiles
+	if len(m.CompiledNongenGoFiles) == 0 && len(m.CompiledGopFiles) == 0 {
 		return nil, nil
 	}
-	pkgDir := filepath.Dir(m.CompiledGoFiles[0].Filename())
+	// pkgDir := filepath.Dir(m.CompiledGoFiles[0].Filename())
+	pkgDir := m.Dir()
 	outDir := filepath.Join(os.TempDir(), fmt.Sprintf("gopls-%d.details", os.Getpid()))
 
 	if err := os.MkdirAll(outDir, 0700); err != nil {

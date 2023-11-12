@@ -10,6 +10,7 @@ import (
 	"go/ast"
 	"go/token"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -235,7 +236,16 @@ func missingModuleDiagnostics(ctx context.Context, snapshot *snapshot, pm *sourc
 		if err != nil {
 			return nil, err
 		}
-		compiledGoFiles, err := readFiles(ctx, snapshot, m.CompiledGoFiles)
+		// goxls: add Go+ files & use NongenGoFiles
+		compiledNongenGoFiles, err := readFiles(ctx, snapshot, m.CompiledNongenGoFiles)
+		if err != nil {
+			return nil, err
+		}
+		gopFiles, err := readFiles(ctx, snapshot, m.GopFiles)
+		if err != nil {
+			return nil, err
+		}
+		compiledGopFiles, err := readFiles(ctx, snapshot, m.CompiledGopFiles)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +255,7 @@ func missingModuleDiagnostics(ctx context.Context, snapshot *snapshot, pm *sourc
 		// If -mod=readonly is not set we may have successfully imported
 		// packages from missing modules. Otherwise they'll be in
 		// MissingDependencies. Combine both.
-		imps, err := parseImports(ctx, snapshot, goFiles)
+		imps, err := parseImports(ctx, snapshot, goFiles, gopFiles)
 		if err != nil {
 			return nil, err
 		}
@@ -278,7 +288,7 @@ func missingModuleDiagnostics(ctx context.Context, snapshot *snapshot, pm *sourc
 		if len(missingImports) == 0 {
 			continue
 		}
-		for _, goFile := range compiledGoFiles {
+		for _, goFile := range compiledNongenGoFiles {
 			pgf, err := snapshot.ParseGo(ctx, goFile, source.ParseHeader)
 			if err != nil {
 				continue
@@ -314,6 +324,9 @@ func missingModuleDiagnostics(ctx context.Context, snapshot *snapshot, pm *sourc
 				}
 				diagnostics = append(diagnostics, srcErr)
 			}
+		}
+		if len(compiledGopFiles) > 0 {
+			log.Panicln("todo: Go+ files")
 		}
 	}
 	return diagnostics, nil
@@ -485,7 +498,7 @@ func missingModuleForImport(pgf *source.ParsedGoFile, imp *ast.ImportSpec, req *
 // CompiledGoFiles, after cgo processing.)
 //
 // TODO(rfindley): this should key off source.ImportPath.
-func parseImports(ctx context.Context, s *snapshot, files []source.FileHandle) (map[string]bool, error) {
+func parseImports(ctx context.Context, s *snapshot, files, gopFiles []source.FileHandle) (map[string]bool, error) {
 	pgfs, err := s.view.parseCache.parseFiles(ctx, token.NewFileSet(), source.ParseHeader, false, files...)
 	if err != nil { // e.g. context cancellation
 		return nil, err
@@ -497,6 +510,9 @@ func parseImports(ctx context.Context, s *snapshot, files []source.FileHandle) (
 			path, _ := strconv.Unquote(spec.Path.Value)
 			seen[path] = true
 		}
+	}
+	if len(gopFiles) > 0 {
+		log.Panicln("todo: Go+ files")
 	}
 	return seen, nil
 }

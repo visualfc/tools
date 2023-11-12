@@ -639,7 +639,7 @@ func hoverImport(ctx context.Context, snapshot Snapshot, pkg Package, pgf *Parse
 
 	// Find the first file with a package doc comment.
 	var comment *ast.CommentGroup
-	for _, f := range impMetadata.CompiledGoFiles {
+	for _, f := range impMetadata.CompiledNongenGoFiles {
 		fh, err := snapshot.ReadFile(ctx, f)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -671,7 +671,7 @@ func hoverImport(ctx context.Context, snapshot Snapshot, pkg Package, pgf *Parse
 // pgf in pkg.
 func hoverPackageName(pkg Package, pgf *ParsedGoFile) (protocol.Range, *HoverJSON, error) {
 	var comment *ast.CommentGroup
-	for _, pgf := range pkg.CompiledGoFiles() {
+	for _, pgf := range pkg.CompiledNongenGoFiles() {
 		if pgf.File.Doc != nil {
 			comment = pgf.File.Doc
 			break

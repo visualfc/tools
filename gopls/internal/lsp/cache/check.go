@@ -12,6 +12,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"log"
 	"regexp"
 	"runtime"
 	"sort"
@@ -19,6 +20,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	gopast "github.com/goplus/gop/ast"
 	"github.com/goplus/gop/x/typesutil"
 	"golang.org/x/mod/module"
 	"golang.org/x/sync/errgroup"
@@ -603,10 +605,11 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 	cfg := b.typesConfig(ctx, ph.localInputs, onError)
 	cfg.IgnoreFuncBodies = true
 
+	// goxls: use NongenGoFiles
 	// Parse the compiled go files, bypassing the parse cache as packages checked
 	// for import are unlikely to get cache hits. Additionally, we can optimize
 	// parsing slightly by not passing parser.ParseComments.
-	pgfs := make([]*source.ParsedGoFile, len(ph.localInputs.compiledGoFiles))
+	pgfs := make([]*source.ParsedGoFile, len(ph.localInputs.compiledNongenGoFiles))
 	{
 		var group errgroup.Group
 		// Set an arbitrary concurrency limit; we want some parallelism but don't
@@ -617,7 +620,7 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 		// have a global limit on the type-check batch, but would have to be very
 		// careful to avoid starvation.
 		group.SetLimit(4)
-		for i, fh := range ph.localInputs.compiledGoFiles {
+		for i, fh := range ph.localInputs.compiledNongenGoFiles {
 			i, fh := i, fh
 			group.Go(func() error {
 				pgf, err := parseGoImpl(ctx, b.fset, fh, parser.SkipObjectResolution, false)
@@ -629,9 +632,6 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 			return nil, err // cancelled, or catastrophic error (e.g. missing file)
 		}
 	}
-	pkg := types.NewPackage(string(ph.localInputs.pkgPath), string(ph.localInputs.name))
-	check := types.NewChecker(cfg, b.fset, pkg, nil)
-
 	files := make([]*ast.File, len(pgfs))
 	for i, pgf := range pgfs {
 		files[i] = pgf.File
@@ -643,7 +643,46 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 		return nil, ctx.Err()
 	}
 
-	_ = check.Files(files) // ignore errors
+	// goxls: use Go+
+	// Parse the compiled go files, bypassing the parse cache as packages checked
+	// for import are unlikely to get cache hits. Additionally, we can optimize
+	// parsing slightly by not passing parser.ParseComments.
+	gopFiles := make([]*gopast.File, len(ph.localInputs.compiledGopFiles))
+	{
+		var group errgroup.Group
+		// Set an arbitrary concurrency limit; we want some parallelism but don't
+		// need GOMAXPROCS, as there is already a lot of concurrency among calls to
+		// checkPackageForImport.
+		//
+		// TODO(rfindley): is there a better way to limit parallelism here? We could
+		// have a global limit on the type-check batch, but would have to be very
+		// careful to avoid starvation.
+		group.SetLimit(4)
+		for i, fh := range ph.localInputs.compiledGopFiles {
+			i, fh := i, fh
+			group.Go(func() error {
+				pgf, err := parseGopImpl(ctx, b.fset, fh, parserutil.SkipObjectResolution, false)
+				gopFiles[i] = pgf.File
+				return err
+			})
+		}
+		if err := group.Wait(); err != nil {
+			return nil, err // cancelled, or catastrophic error (e.g. missing file)
+		}
+	}
+
+	// Type checking is expensive, and we may not have ecountered cancellations
+	// via parsing (e.g. if we got nothing but cache hits for parsed files).
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	pkg := types.NewPackage(string(ph.localInputs.pkgPath), string(ph.localInputs.name))
+	// goxls: use Go+
+	// check := types.NewChecker(cfg, b.fset, pkg, nil)
+	opts := &typesutil.Config{Types: pkg, Fset: b.fset, Mod: ph.m.GopMod_()}
+	check := typesutil.NewChecker(cfg, opts, nil, new(typesutil.Info))
+	_ = check.Files(files, gopFiles) // ignore errors
 
 	// If the context was cancelled, we may have returned a ton of transient
 	// errors to the type checker. Swallow them.
@@ -1083,7 +1122,9 @@ func (b *packageHandleBuilder) buildPackageHandle(ctx context.Context, n *handle
 			n.err = err
 			return
 		}
-		refs, err := b.s.typerefs(ctx, n.m, inputs.compiledGoFiles)
+		// goxls: use NongenGoFiles
+		// refs, err := b.s.typerefs(ctx, n.m, inputs.compiledGoFiles)
+		refs, err := b.s.typerefs(ctx, n.m, inputs.compiledNongenGoFiles, inputs.compiledGopFiles)
 		if err != nil {
 			n.err = err
 			return
@@ -1211,9 +1252,10 @@ func (b *packageHandleBuilder) evaluatePackageHandle(prevPH *packageHandle, n *h
 	return nil
 }
 
+// goxls: add Go+ files
 // typerefs returns typerefs for the package described by m and cgfs, after
 // either computing it or loading it from the file cache.
-func (s *snapshot) typerefs(ctx context.Context, m *source.Metadata, cgfs []source.FileHandle) (map[string][]typerefs.Symbol, error) {
+func (s *snapshot) typerefs(ctx context.Context, m *source.Metadata, cgfs, gopCgfs []source.FileHandle) (map[string][]typerefs.Symbol, error) {
 	imports := make(map[ImportPath]*source.Metadata)
 	for impPath, id := range m.DepsByImpPath {
 		if id != "" {
@@ -1221,7 +1263,7 @@ func (s *snapshot) typerefs(ctx context.Context, m *source.Metadata, cgfs []sour
 		}
 	}
 
-	data, err := s.typerefData(ctx, m.ID, imports, cgfs)
+	data, err := s.typerefData(ctx, m.ID, imports, cgfs, gopCgfs)
 	if err != nil {
 		return nil, err
 	}
@@ -1235,10 +1277,11 @@ func (s *snapshot) typerefs(ctx context.Context, m *source.Metadata, cgfs []sour
 	return refs, nil
 }
 
+// goxls: add Go+ files
 // typerefData retrieves encoded typeref data from the filecache, or computes it on
 // a cache miss.
-func (s *snapshot) typerefData(ctx context.Context, id PackageID, imports map[ImportPath]*source.Metadata, cgfs []source.FileHandle) ([]byte, error) {
-	key := typerefsKey(id, imports, cgfs)
+func (s *snapshot) typerefData(ctx context.Context, id PackageID, imports map[ImportPath]*source.Metadata, cgfs, gopCgfs []source.FileHandle) ([]byte, error) {
+	key := typerefsKey(id, imports, cgfs, gopCgfs)
 	if data, err := filecache.Get(typerefsKind, key); err == nil {
 		return data, nil
 	} else if err != filecache.ErrNotFound {
@@ -1261,9 +1304,10 @@ func (s *snapshot) typerefData(ctx context.Context, id PackageID, imports map[Im
 	return data, nil
 }
 
+// goxls: add Go+ files & use NongenGoFiles
 // typerefsKey produces a key for the reference information produced by the
 // typerefs package.
-func typerefsKey(id PackageID, imports map[ImportPath]*source.Metadata, compiledGoFiles []source.FileHandle) source.Hash {
+func typerefsKey(id PackageID, imports map[ImportPath]*source.Metadata, compiledNongenGoFiles, compiledGopFiles []source.FileHandle) source.Hash {
 	hasher := sha256.New()
 
 	fmt.Fprintf(hasher, "typerefs: %s\n", id)
@@ -1280,8 +1324,15 @@ func typerefsKey(id PackageID, imports map[ImportPath]*source.Metadata, compiled
 		fmt.Fprintf(hasher, "import %s %s %s", importPath, imp.ID, imp.Name)
 	}
 
-	fmt.Fprintf(hasher, "compiledGoFiles: %d\n", len(compiledGoFiles))
-	for _, fh := range compiledGoFiles {
+	// goxls: use NongenGoFiles but don't change data of hash algo
+	fmt.Fprintf(hasher, "compiledGoFiles: %d\n", len(compiledNongenGoFiles))
+	for _, fh := range compiledNongenGoFiles {
+		fmt.Fprintln(hasher, fh.FileIdentity())
+	}
+
+	// goxls: add Go+ files
+	fmt.Fprintf(hasher, "compiledGopFiles: %d\n", len(compiledGopFiles))
+	for _, fh := range compiledGopFiles {
 		fmt.Fprintln(hasher, fh.FileIdentity())
 	}
 
@@ -1299,12 +1350,12 @@ type typeCheckInputs struct {
 	id PackageID
 
 	// Used for type checking:
-	pkgPath                  PackagePath
-	name                     PackageName
-	goFiles, compiledGoFiles []source.FileHandle
-	sizes                    types.Sizes
-	depsByImpPath            map[ImportPath]PackageID
-	goVersion                string // packages.Module.GoVersion, e.g. "1.18"
+	pkgPath                        PackagePath
+	name                           PackageName
+	goFiles, compiledNongenGoFiles []source.FileHandle // goxls: use NongenGoFiles
+	sizes                          types.Sizes
+	depsByImpPath                  map[ImportPath]PackageID
+	goVersion                      string // packages.Module.GoVersion, e.g. "1.18"
 
 	// goxls: Go+ files
 	gopFiles, compiledGopFiles []source.FileHandle
@@ -1330,7 +1381,8 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 	if err != nil {
 		return typeCheckInputs{}, err
 	}
-	compiledGoFiles, err := readFiles(ctx, s, m.CompiledGoFiles)
+	// goxls: use NongenGoFiles
+	compiledNongenGoFiles, err := readFiles(ctx, s, m.CompiledNongenGoFiles)
 	if err != nil {
 		return typeCheckInputs{}, err
 	}
@@ -1351,14 +1403,14 @@ func (s *snapshot) typeCheckInputs(ctx context.Context, m *source.Metadata) (typ
 	}
 
 	return typeCheckInputs{
-		id:              m.ID,
-		pkgPath:         m.PkgPath,
-		name:            m.Name,
-		goFiles:         goFiles,
-		compiledGoFiles: compiledGoFiles,
-		sizes:           m.TypesSizes,
-		depsByImpPath:   m.DepsByImpPath,
-		goVersion:       goVersion,
+		id:                    m.ID,
+		pkgPath:               m.PkgPath,
+		name:                  m.Name,
+		goFiles:               goFiles,
+		compiledNongenGoFiles: compiledNongenGoFiles,
+		sizes:                 m.TypesSizes,
+		depsByImpPath:         m.DepsByImpPath,
+		goVersion:             goVersion,
 
 		// goxls: Go+ files
 		gopFiles:         gopFiles,
@@ -1409,8 +1461,9 @@ func localPackageKey(inputs typeCheckInputs) source.Hash {
 	}
 
 	// file names and contents
-	fmt.Fprintf(hasher, "compiledGoFiles: %d\n", len(inputs.compiledGoFiles))
-	for _, fh := range inputs.compiledGoFiles {
+	// goxls: use NongenGoFiles but don't change data of hash algo
+	fmt.Fprintf(hasher, "compiledGoFiles: %d\n", len(inputs.compiledNongenGoFiles))
+	for _, fh := range inputs.compiledNongenGoFiles {
 		fmt.Fprintln(hasher, fh.FileIdentity())
 	}
 	fmt.Fprintf(hasher, "goFiles: %d\n", len(inputs.goFiles))
@@ -1546,11 +1599,12 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 	if err != nil {
 		return nil, err
 	}
-	pkg.compiledGoFiles, err = b.parseCache.parseFiles(ctx, b.fset, source.ParseFull, false, inputs.compiledGoFiles...)
+	// goxls: use NongenGoFiles
+	pkg.compiledNongenGoFiles, err = b.parseCache.parseFiles(ctx, b.fset, source.ParseFull, false, inputs.compiledNongenGoFiles...)
 	if err != nil {
 		return nil, err
 	}
-	for _, pgf := range pkg.compiledGoFiles {
+	for _, pgf := range pkg.compiledNongenGoFiles {
 		if pgf.ParseErr != nil {
 			pkg.parseErrors = append(pkg.parseErrors, pgf.ParseErr)
 		}
@@ -1580,7 +1634,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 		return pkg, nil
 	}
 
-	if len(pkg.compiledGoFiles) == 0 && len(pkg.compiledGopFiles) == 0 { // goxls: Go+
+	if len(pkg.compiledNongenGoFiles) == 0 && len(pkg.compiledGopFiles) == 0 { // goxls: Go+
 		// No files most likely means go/packages failed.
 		//
 		// TODO(rfindley): in the past, we would capture go list errors in this
@@ -1600,7 +1654,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 	check := typesutil.NewChecker(cfg, opts, pkg.typesInfo, pkg.gopTypesInfo)
 
 	var files []*ast.File
-	for _, cgf := range pkg.compiledGoFiles {
+	for _, cgf := range pkg.compiledNongenGoFiles {
 		files = append(files, cgf.File)
 	}
 
@@ -1712,9 +1766,13 @@ func depsErrors(ctx context.Context, m *source.Metadata, meta *metadataGraph, fs
 		return nil, nil
 	}
 
-	// Subsequent checks require Go files.
-	if len(m.CompiledGoFiles) == 0 {
+	// goxls: add Go+ files & use NongenGoFiles
+	// Subsequent checks require Go/Go+ files.
+	if len(m.CompiledNongenGoFiles) == 0 && len(m.CompiledGopFiles) == 0 {
 		return nil, nil
+	}
+	if len(m.CompiledGopFiles) > 0 {
+		log.Panicln("todo: Go+ files")
 	}
 
 	// Build an index of all imports in the package.
@@ -1723,7 +1781,7 @@ func depsErrors(ctx context.Context, m *source.Metadata, meta *metadataGraph, fs
 		imp *ast.ImportSpec
 	}
 	allImports := map[string][]fileImport{}
-	for _, uri := range m.CompiledGoFiles {
+	for _, uri := range m.CompiledNongenGoFiles {
 		pgf, err := parseGoURI(ctx, fs, uri, source.ParseHeader)
 		if err != nil {
 			return nil, err
@@ -1776,7 +1834,7 @@ func depsErrors(ctx context.Context, m *source.Metadata, meta *metadataGraph, fs
 		}
 	}
 
-	modFile, err := nearestModFile(ctx, m.CompiledGoFiles[0], fs)
+	modFile, err := nearestModFile(ctx, m.CompiledNongenGoFiles[0], fs)
 	if err != nil {
 		return nil, err
 	}
