@@ -4,6 +4,8 @@
 
 package completion
 
+import "log"
+
 // wantLabelCompletion returns true if we want (only) label
 // completions at the position.
 func (c *gopCompleter) wantLabelCompletion() labelType {
@@ -14,5 +16,5 @@ func (c *gopCompleter) wantLabelCompletion() labelType {
 // labels adds completion items for labels defined in the enclosing
 // function.
 func (c *gopCompleter) labels(lt labelType) {
-	panic("todo")
+	log.Panicln("todo")
 }

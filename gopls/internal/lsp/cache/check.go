@@ -12,6 +12,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"log"
 	"regexp"
 	"runtime"
 	"sort"
@@ -1771,7 +1772,7 @@ func depsErrors(ctx context.Context, m *source.Metadata, meta *metadataGraph, fs
 		return nil, nil
 	}
 	if len(m.CompiledGopFiles) > 0 {
-		panic("todo: Go+ files")
+		log.Panicln("todo: Go+ files")
 	}
 
 	// Build an index of all imports in the package.

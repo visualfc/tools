@@ -550,7 +550,7 @@ func parseGoListImportCycleError(ctx context.Context, e packages.Error, m *sourc
 		}
 	}
 	if len(m.CompiledGopFiles) > 0 {
-		panic("todo: Go+ files")
+		log.Panicln("todo: Go+ files")
 	}
 	return nil, nil
 }

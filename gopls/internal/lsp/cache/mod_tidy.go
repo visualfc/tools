@@ -10,6 +10,7 @@ import (
 	"go/ast"
 	"go/token"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -325,7 +326,7 @@ func missingModuleDiagnostics(ctx context.Context, snapshot *snapshot, pm *sourc
 			}
 		}
 		if len(compiledGopFiles) > 0 {
-			panic("todo: Go+ files")
+			log.Panicln("todo: Go+ files")
 		}
 	}
 	return diagnostics, nil
@@ -511,7 +512,7 @@ func parseImports(ctx context.Context, s *snapshot, files, gopFiles []source.Fil
 		}
 	}
 	if len(gopFiles) > 0 {
-		panic("todo: Go+ files")
+		log.Panicln("todo: Go+ files")
 	}
 	return seen, nil
 }

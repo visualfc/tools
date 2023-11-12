@@ -852,7 +852,7 @@ func renamePackageClause(ctx context.Context, m *Metadata, snapshot Snapshot, ne
 		edits[f.URI] = append(edits[f.URI], edit)
 	}
 	if len(m.CompiledGopFiles) > 0 {
-		panic("todo: Go+ files")
+		log.Panicln("todo: Go+ files")
 	}
 
 	return nil
@@ -914,7 +914,7 @@ func renameImports(ctx context.Context, snapshot Snapshot, m *Metadata, newPath 
 			}
 		}
 		if len(rdep.CompiledGopFiles) > 0 {
-			panic("todo: Go+ files")
+			log.Panicln("todo: Go+ files")
 		}
 	}
 
