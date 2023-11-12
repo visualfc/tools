@@ -658,7 +658,7 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 		// have a global limit on the type-check batch, but would have to be very
 		// careful to avoid starvation.
 		group.SetLimit(4)
-		for i, fh := range ph.localInputs.compiledNongenGoFiles {
+		for i, fh := range ph.localInputs.compiledGopFiles {
 			i, fh := i, fh
 			group.Go(func() error {
 				pgf, err := parseGopImpl(ctx, b.fset, fh, parserutil.SkipObjectResolution, false)

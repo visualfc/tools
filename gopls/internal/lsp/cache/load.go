@@ -448,7 +448,10 @@ func buildMetadata(updates map[PackageID]*source.Metadata, pkg *packages.Package
 	updates[id] = m
 
 	// goxls: use NongenGoFiles
-	for _, filename := range pkg.CompiledNongenGoFiles {
+	for _, filename := range pkg.CompiledGoFiles {
+		if fname := filepath.Base(filename); strings.HasPrefix(fname, "gop_autogen") {
+			continue
+		}
 		uri := span.URIFromPath(filename)
 		m.CompiledNongenGoFiles = append(m.CompiledNongenGoFiles, uri)
 	}
@@ -676,17 +679,8 @@ func containsOpenFileLocked(s *snapshot, m *source.Metadata) bool {
 //
 // s.mu must be held while calling this function.
 func containsFileInWorkspaceLocked(s *snapshot, m *source.Metadata) bool {
-	uris := map[span.URI]struct{}{}
 	// goxls: add Go+ files & use NongenGoFiles
-	for _, uri := range m.CompiledNongenGoFiles {
-		uris[uri] = struct{}{}
-	}
-	for _, uri := range m.GopFiles {
-		uris[uri] = struct{}{}
-	}
-	for _, uri := range m.GoFiles {
-		uris[uri] = struct{}{}
-	}
+	uris := collectSourceURIs(m)
 
 	for uri := range uris {
 		// In order for a package to be considered for the workspace, at least one
