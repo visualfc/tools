@@ -429,6 +429,11 @@ var GeneratedAPIJSON = &APIJSON{
 							Default: "true",
 						},
 						{
+							Name:    "\"gopFillreturns\"",
+							Doc:     "suggest fixes for errors due to an incorrect number of return values\n\nThis checker provides suggested fixes for type errors of the\ntype \"wrong number of return values (want %d, got %d)\". For example:\n\tfunc m() (int, string, *bool, error) {\n\t\treturn\n\t}\nwill turn into\n\tfunc m() (int, string, *bool, error) {\n\t\treturn 0, \"\", nil, nil\n\t}\n\nThis functionality is similar to https://github.com/sqs/goreturns.\n",
+							Default: "true",
+						},
+						{
 							Name:    "\"nonewvars\"",
 							Doc:     "suggested fixes for \"no new vars on left side of :=\"\n\nThis checker provides suggested fixes for type errors of the\ntype \"no new vars on left side of :=\". For example:\n\tz := 1\n\tz := 2\nwill turn into\n\tz := 1\n\tz = 2\n",
 							Default: "true",
@@ -1146,6 +1151,11 @@ var GeneratedAPIJSON = &APIJSON{
 		},
 		{
 			Name:    "fillreturns",
+			Doc:     "suggest fixes for errors due to an incorrect number of return values\n\nThis checker provides suggested fixes for type errors of the\ntype \"wrong number of return values (want %d, got %d)\". For example:\n\tfunc m() (int, string, *bool, error) {\n\t\treturn\n\t}\nwill turn into\n\tfunc m() (int, string, *bool, error) {\n\t\treturn 0, \"\", nil, nil\n\t}\n\nThis functionality is similar to https://github.com/sqs/goreturns.\n",
+			Default: true,
+		},
+		{
+			Name:    "gopFillreturns",
 			Doc:     "suggest fixes for errors due to an incorrect number of return values\n\nThis checker provides suggested fixes for type errors of the\ntype \"wrong number of return values (want %d, got %d)\". For example:\n\tfunc m() (int, string, *bool, error) {\n\t\treturn\n\t}\nwill turn into\n\tfunc m() (int, string, *bool, error) {\n\t\treturn 0, \"\", nil, nil\n\t}\n\nThis functionality is similar to https://github.com/sqs/goreturns.\n",
 			Default: true,
 		},
