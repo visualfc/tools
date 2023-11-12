@@ -366,7 +366,8 @@ func (s *Server) diagnose(ctx context.Context, snapshot source.Snapshot, analyze
 	)
 	for _, m := range workspace {
 		var hasNonIgnored, hasOpenFile bool
-		for _, uri := range m.CompiledGoFiles {
+		// goxls: TODO - how about Go+ files?
+		for _, uri := range m.CompiledNongenGoFiles {
 			seen[uri] = struct{}{}
 			if !hasNonIgnored && !snapshot.IgnoredFile(uri) {
 				hasNonIgnored = true
@@ -500,11 +501,12 @@ func (s *Server) diagnosePkgs(ctx context.Context, snapshot source.Snapshot, toD
 	// empty diagnostics.
 	storedPkgDiags := make(map[span.URI]bool)
 	for _, m := range toDiagnose {
-		for _, uri := range m.CompiledGoFiles {
+		// goxls: add Go+ files & use NongenGoFiles
+		for _, uri := range m.CompiledNongenGoFiles {
 			s.storeDiagnostics(snapshot, uri, typeCheckSource, pkgDiags[uri], true)
 			storedPkgDiags[uri] = true
 		}
-		for _, uri := range m.CompiledGopFiles { // goxls: Incldue gop files
+		for _, uri := range m.CompiledGopFiles {
 			s.storeDiagnostics(snapshot, uri, typeCheckSource, pkgDiags[uri], true)
 			storedPkgDiags[uri] = true
 		}

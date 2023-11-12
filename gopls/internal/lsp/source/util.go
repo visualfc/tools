@@ -199,7 +199,13 @@ func findFileInDeps(s MetadataSource, m *Metadata, uri span.URI) *Metadata {
 			return nil
 		}
 		seen[m.ID] = true
-		for _, cgf := range m.CompiledGoFiles {
+		// goxls: add Go+ files & use NongenGoFiles
+		for _, cgf := range m.CompiledNongenGoFiles {
+			if cgf == uri {
+				return m
+			}
+		}
+		for _, cgf := range m.CompiledGopFiles {
 			if cgf == uri {
 				return m
 			}

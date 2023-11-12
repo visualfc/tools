@@ -1107,8 +1107,8 @@ func collectPackageStats(md []*source.Metadata) command.PackageStats {
 	modules := make(map[string]bool)
 
 	for _, m := range md {
-		n := len(m.CompiledGoFiles)
-		stats.CompiledGoFiles += n
+		n := len(m.CompiledNongenGoFiles)
+		stats.CompiledGoFiles += n // goxls: TODO - how about Go+ files?
 		if n > stats.LargestPackage {
 			stats.LargestPackage = n
 		}

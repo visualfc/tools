@@ -832,7 +832,7 @@ func renamePackage(ctx context.Context, s Snapshot, f FileHandle, newName Packag
 // Edits are written into the edits map.
 func renamePackageClause(ctx context.Context, m *Metadata, snapshot Snapshot, newName PackageName, edits map[span.URI][]diff.Edit) error {
 	// Rename internal references to the package in the renaming package.
-	for _, uri := range m.CompiledGoFiles {
+	for _, uri := range m.CompiledNongenGoFiles {
 		fh, err := snapshot.ReadFile(ctx, uri)
 		if err != nil {
 			return err
@@ -850,6 +850,9 @@ func renamePackageClause(ctx context.Context, m *Metadata, snapshot Snapshot, ne
 			return err
 		}
 		edits[f.URI] = append(edits[f.URI], edit)
+	}
+	if len(m.CompiledGopFiles) > 0 {
+		panic("todo: Go+ files")
 	}
 
 	return nil
@@ -873,7 +876,7 @@ func renameImports(ctx context.Context, snapshot Snapshot, m *Metadata, newPath 
 			continue // for renaming, these variants are redundant
 		}
 
-		for _, uri := range rdep.CompiledGoFiles {
+		for _, uri := range rdep.CompiledNongenGoFiles {
 			fh, err := snapshot.ReadFile(ctx, uri)
 			if err != nil {
 				return err
@@ -909,6 +912,9 @@ func renameImports(ctx context.Context, snapshot Snapshot, m *Metadata, newPath 
 				}
 				allEdits[uri] = append(allEdits[uri], edit)
 			}
+		}
+		if len(rdep.CompiledGopFiles) > 0 {
+			panic("todo: Go+ files")
 		}
 	}
 
@@ -1276,7 +1282,7 @@ func parsePackageNameDecl(ctx context.Context, snapshot Snapshot, fh FileHandle,
 
 // enclosingFile returns the CompiledGoFile of pkg that contains the specified position.
 func enclosingFile(pkg Package, pos token.Pos) (*ParsedGoFile, bool) {
-	for _, pgf := range pkg.CompiledGoFiles() {
+	for _, pgf := range pkg.CompiledNongenGoFiles() {
 		if pgf.File.Pos() <= pos && pos <= pgf.File.End() {
 			return pgf, true
 		}

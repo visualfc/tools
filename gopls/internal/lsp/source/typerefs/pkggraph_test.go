@@ -128,7 +128,7 @@ func (g *PackageGraph) buildPackage(ctx context.Context, id source.PackageID) (*
 		transitiveRefs: make(map[string]*typerefs.PackageSet),
 	}
 	var files []*source.ParsedGoFile
-	for _, filename := range p.metadata.CompiledGoFiles {
+	for _, filename := range p.metadata.CompiledNongenGoFiles {
 		f, err := g.parse(ctx, filename)
 		if err != nil {
 			return nil, err

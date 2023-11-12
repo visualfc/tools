@@ -233,7 +233,7 @@ func gopImportDefinition(ctx context.Context, s Snapshot, pkg Package, pgf *Pars
 	}
 
 	var locs []protocol.Location
-	for _, f := range impMetadata.CompiledGoFiles {
+	for _, f := range impMetadata.CompiledNongenGoFiles {
 		fh, err := s.ReadFile(ctx, f)
 		if err != nil {
 			if ctx.Err() != nil {

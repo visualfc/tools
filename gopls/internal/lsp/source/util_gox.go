@@ -14,7 +14,6 @@ import (
 	"github.com/goplus/gop/printer"
 	"github.com/goplus/gop/token"
 	"github.com/goplus/gop/x/typesutil"
-	"golang.org/x/tools/gopls/internal/bug"
 	"golang.org/x/tools/gopls/internal/span"
 	"golang.org/x/tools/internal/gop/typeparams"
 	"golang.org/x/tools/internal/tokeninternal"
@@ -166,6 +165,7 @@ func IsGopGenerated(ctx context.Context, snapshot Snapshot, uri span.URI) bool {
 	return false
 }
 
+/*
 // gopFindFileInDeps finds package metadata containing URI in the transitive
 // dependencies of m. When using the Gop command, the answer is unique.
 //
@@ -202,6 +202,7 @@ func gopFindFileInDeps(s MetadataSource, m *Metadata, uri span.URI) *Metadata {
 	}
 	return search(m)
 }
+*/
 
 // GopUnquoteImportPath returns the unquoted import path of s,
 // or "" if the path is not properly quoted.

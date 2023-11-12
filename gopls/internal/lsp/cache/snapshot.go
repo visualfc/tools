@@ -792,7 +792,12 @@ func (s *snapshot) MetadataForFile(ctx context.Context, uri span.URI) ([]*source
 	// files but different imports).
 	sort.Slice(metas, func(i, j int) bool {
 		x, y := metas[i], metas[j]
-		xfiles, yfiles := len(x.CompiledGoFiles), len(y.CompiledGoFiles)
+		// goxls: add Go+ files & use NongenGoFiles
+		xfiles, yfiles := len(x.CompiledNongenGoFiles), len(y.CompiledNongenGoFiles)
+		if xfiles != yfiles {
+			return xfiles < yfiles
+		}
+		xfiles, yfiles = len(x.CompiledGopFiles), len(y.CompiledGopFiles)
 		if xfiles != yfiles {
 			return xfiles < yfiles
 		}
@@ -1128,14 +1133,9 @@ func (s *snapshot) Symbols(ctx context.Context, workspaceOnly bool) (map[span.UR
 		return nil, fmt.Errorf("loading metadata: %v", err)
 	}
 
-	goFiles := make(map[span.URI]struct{})
+	var uris map[span.URI]struct{}
 	for _, m := range meta {
-		for _, uri := range m.GoFiles {
-			goFiles[uri] = struct{}{}
-		}
-		for _, uri := range m.CompiledGoFiles {
-			goFiles[uri] = struct{}{}
-		}
+		uris = collectSourceURIs(m, uris)
 	}
 
 	// Symbolize them in parallel.
@@ -1146,7 +1146,7 @@ func (s *snapshot) Symbols(ctx context.Context, workspaceOnly bool) (map[span.UR
 		result   = make(map[span.URI][]source.Symbol)
 	)
 	group.SetLimit(nprocs)
-	for uri := range goFiles {
+	for uri := range uris {
 		uri := uri
 		group.Go(func() error {
 			symbols, err := s.symbolize(ctx, uri)

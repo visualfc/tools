@@ -238,13 +238,13 @@ func (s *snapshot) load(ctx context.Context, allowNetwork bool, scopes ...loadSc
 	for _, m := range newMetadata {
 		if existing := s.meta.metadata[m.ID]; existing == nil {
 			// Record any new files we should pre-load.
-			for _, uri := range m.CompiledGoFiles {
+			// goxls: add Go+ files & use NongenGoFiles
+			for _, uri := range m.CompiledNongenGoFiles {
 				if !seenFiles[uri] {
 					seenFiles[uri] = true
 					files = append(files, uri)
 				}
 			}
-			// goxls: Go+
 			for _, uri := range m.CompiledGopFiles {
 				if !seenFiles[uri] {
 					seenFiles[uri] = true
@@ -447,9 +447,10 @@ func buildMetadata(updates map[PackageID]*source.Metadata, pkg *packages.Package
 
 	updates[id] = m
 
-	for _, filename := range pkg.CompiledGoFiles {
+	// goxls: use NongenGoFiles
+	for _, filename := range pkg.CompiledNongenGoFiles {
 		uri := span.URIFromPath(filename)
-		m.CompiledGoFiles = append(m.CompiledGoFiles, uri)
+		m.CompiledNongenGoFiles = append(m.CompiledNongenGoFiles, uri)
 	}
 	for _, filename := range pkg.GoFiles {
 		uri := span.URIFromPath(filename)
@@ -636,13 +637,8 @@ func containsPackageLocked(s *snapshot, m *source.Metadata) bool {
 			return false
 		}
 
-		uris := map[span.URI]struct{}{}
-		for _, uri := range m.CompiledGoFiles {
-			uris[uri] = struct{}{}
-		}
-		for _, uri := range m.GoFiles {
-			uris[uri] = struct{}{}
-		}
+		// goxls: add Go+ files & use NongenGoFiles
+		uris := collectSourceURIs(m)
 
 		filterFunc := s.view.filterFunc()
 		for uri := range uris {
@@ -663,13 +659,8 @@ func containsPackageLocked(s *snapshot, m *source.Metadata) bool {
 //
 // s.mu must be held while calling this function.
 func containsOpenFileLocked(s *snapshot, m *source.Metadata) bool {
-	uris := map[span.URI]struct{}{}
-	for _, uri := range m.CompiledGoFiles {
-		uris[uri] = struct{}{}
-	}
-	for _, uri := range m.GoFiles {
-		uris[uri] = struct{}{}
-	}
+	// goxls: add Go+ files & use NongenGoFiles
+	uris := collectSourceURIs(m)
 
 	for uri := range uris {
 		fh, _ := s.files.Get(uri)
@@ -686,7 +677,11 @@ func containsOpenFileLocked(s *snapshot, m *source.Metadata) bool {
 // s.mu must be held while calling this function.
 func containsFileInWorkspaceLocked(s *snapshot, m *source.Metadata) bool {
 	uris := map[span.URI]struct{}{}
-	for _, uri := range m.CompiledGoFiles {
+	// goxls: add Go+ files & use NongenGoFiles
+	for _, uri := range m.CompiledNongenGoFiles {
+		uris[uri] = struct{}{}
+	}
+	for _, uri := range m.GopFiles {
 		uris[uri] = struct{}{}
 	}
 	for _, uri := range m.GoFiles {
@@ -757,9 +752,10 @@ func computeWorkspacePackagesLocked(s *snapshot, meta *metadataGraph) map[Packag
 //
 // If m is not a command-line-arguments package, this is trivially true.
 func allFilesHaveRealPackages(g *metadataGraph, m *source.Metadata) bool {
-	n := len(m.CompiledGoFiles)
+	// goxls: add Go+ files & use NongenGoFiles
+	uris := collectSourceURIs(m)
 checkURIs:
-	for _, uri := range append(m.CompiledGoFiles[0:n:n], m.GoFiles...) {
+	for uri, _ := range uris {
 		for _, id := range g.ids[uri] {
 			if !source.IsCommandLineArguments(id) {
 				continue checkURIs

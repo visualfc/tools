@@ -16,7 +16,7 @@ import (
 func gopFormatVarType(
 	snapshot Snapshot, srcpkg Package, obj *types.Var, qf types.Qualifier, mq MetadataQualifier,
 	pos token.Pos, targetpgf *ParsedGopFile) (string, error) {
-	targetMeta := gopFindFileInDeps(snapshot, srcpkg.Metadata(), targetpgf.URI)
+	targetMeta := findFileInDeps(snapshot, srcpkg.Metadata(), targetpgf.URI)
 	if targetMeta == nil {
 		// If we have an object from type-checking, it should exist in a file in
 		// the forward transitive closure.

@@ -375,7 +375,7 @@ func load(query string, needExport bool) (map[PackageID]string, MetadataSource, 
 		meta[id] = m
 
 		for _, filename := range pkg.CompiledGoFiles {
-			m.CompiledGoFiles = append(m.CompiledGoFiles, span.URIFromPath(filename))
+			m.CompiledNongenGoFiles = append(m.CompiledNongenGoFiles, span.URIFromPath(filename))
 		}
 		for _, filename := range pkg.GoFiles {
 			m.GoFiles = append(m.GoFiles, span.URIFromPath(filename))

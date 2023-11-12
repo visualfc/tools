@@ -6,9 +6,6 @@ package cache
 
 import (
 	"fmt"
-	goast "go/ast"
-	"path/filepath"
-	"strings"
 
 	"github.com/goplus/gop/x/typesutil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
@@ -19,6 +16,7 @@ func (p *Package) GopTypesInfo() *typesutil.Info {
 	return p.pkg.gopTypesInfo
 }
 
+/*
 // CompiledNongenGoFiles returns all Go files excluding "gop_autogen*.go".
 func (p *Package) CompiledNongenGoFiles() []*source.ParsedGoFile {
 	gofs := p.pkg.compiledGoFiles
@@ -45,6 +43,7 @@ func (p *Package) GetNongenSyntax() []*goast.File {
 	}
 	return ret
 }
+*/
 
 func (p *Package) CompiledGopFiles() []*source.ParsedGopFile {
 	return p.pkg.compiledGopFiles

@@ -49,16 +49,16 @@ type syntaxPackage struct {
 	compiledGopFiles []*source.ParsedGopFile
 
 	// -- outputs --
-	fset            *token.FileSet // for now, same as the snapshot's FileSet
-	goFiles         []*source.ParsedGoFile
-	compiledGoFiles []*source.ParsedGoFile
-	diagnostics     []*source.Diagnostic
-	parseErrors     []scanner.ErrorList
-	typeErrors      []types.Error
-	types           *types.Package
-	typesInfo       *types.Info
-	importMap       map[PackagePath]*types.Package
-	hasFixedFiles   bool // if true, AST was sufficiently mangled that we should hide type errors
+	fset                  *token.FileSet // for now, same as the snapshot's FileSet
+	goFiles               []*source.ParsedGoFile
+	compiledNongenGoFiles []*source.ParsedGoFile // goxls: use NongenGoFiles
+	diagnostics           []*source.Diagnostic
+	parseErrors           []scanner.ErrorList
+	typeErrors            []types.Error
+	types                 *types.Package
+	typesInfo             *types.Info
+	importMap             map[PackagePath]*types.Package
+	hasFixedFiles         bool // if true, AST was sufficiently mangled that we should hide type errors
 
 	xrefsOnce sync.Once
 	_xrefs    []byte // only used by the xrefs method
@@ -69,7 +69,9 @@ type syntaxPackage struct {
 
 func (p *syntaxPackage) xrefs() []byte {
 	p.xrefsOnce.Do(func() {
-		p._xrefs = xrefs.Index(p.compiledGoFiles, p.types, p.typesInfo)
+		// goxls: Go+
+		// p._xrefs = xrefs.Index(p.compiledGoFiles, p.types, p.typesInfo)
+		p._xrefs = xrefs.Index(p.compiledNongenGoFiles, p.compiledGopFiles, p.types, p.typesInfo, p.gopTypesInfo)
 	})
 	return p._xrefs
 }
@@ -108,8 +110,14 @@ func (packageLoadScope) aScope() {}
 func (moduleLoadScope) aScope()  {}
 func (viewLoadScope) aScope()    {}
 
-func (p *Package) CompiledGoFiles() []*source.ParsedGoFile {
-	return p.pkg.compiledGoFiles
+// goxls: use NongenGoFiles
+/*
+	func (p *Package) CompiledGoFiles() []*source.ParsedGoFile {
+		return p.pkg.compiledGoFiles
+	}
+*/
+func (p *Package) CompiledNongenGoFiles() []*source.ParsedGoFile {
+	return p.pkg.compiledNongenGoFiles
 }
 
 func (p *Package) File(uri span.URI) (*source.ParsedGoFile, error) {
@@ -117,7 +125,7 @@ func (p *Package) File(uri span.URI) (*source.ParsedGoFile, error) {
 }
 
 func (pkg *syntaxPackage) File(uri span.URI) (*source.ParsedGoFile, error) {
-	for _, cgf := range pkg.compiledGoFiles {
+	for _, cgf := range pkg.compiledNongenGoFiles {
 		if cgf.URI == uri {
 			return cgf, nil
 		}
@@ -130,9 +138,19 @@ func (pkg *syntaxPackage) File(uri span.URI) (*source.ParsedGoFile, error) {
 	return nil, fmt.Errorf("no parsed file for %s in %v", uri, pkg.id)
 }
 
+// goxls: use NongenGoFiles
+/*
 func (p *Package) GetSyntax() []*ast.File {
 	var syntax []*ast.File
 	for _, pgf := range p.pkg.compiledGoFiles {
+		syntax = append(syntax, pgf.File)
+	}
+	return syntax
+}
+*/
+func (p *Package) GetNongenSyntax() []*ast.File {
+	var syntax []*ast.File
+	for _, pgf := range p.pkg.compiledNongenGoFiles {
 		syntax = append(syntax, pgf.File)
 	}
 	return syntax

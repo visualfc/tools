@@ -228,7 +228,7 @@ func gopHover(ctx context.Context, snapshot Snapshot, fh FileHandle, pp protocol
 		linkMeta *Metadata // metadata for the linked package
 	)
 	{
-		linkMeta = gopFindFileInDeps(snapshot, pkg.Metadata(), declPGF.URI)
+		linkMeta = findFileInDeps(snapshot, pkg.Metadata(), declPGF.URI)
 		if linkMeta == nil {
 			return protocol.Range{}, nil, bug.Errorf("no metadata for %s", declPGF.URI)
 		}
@@ -404,7 +404,7 @@ func gopHoverInGo(
 		linkMeta *Metadata // metadata for the linked package
 	)
 	{
-		linkMeta = gopFindFileInDeps(snapshot, pkg.Metadata(), declPGF.URI)
+		linkMeta = findFileInDeps(snapshot, pkg.Metadata(), declPGF.URI)
 		if linkMeta == nil {
 			return protocol.Range{}, nil, bug.Errorf("no metadata for %s", declPGF.URI)
 		}
@@ -553,7 +553,7 @@ func gopHoverImport(ctx context.Context, snapshot Snapshot, pkg Package, pgf *Pa
 		}
 	}
 	if comment == nil {
-		for _, f := range impMetadata.CompiledGoFiles {
+		for _, f := range impMetadata.CompiledNongenGoFiles {
 			fh, err := snapshot.ReadFile(ctx, f)
 			if err != nil {
 				if ctx.Err() != nil {

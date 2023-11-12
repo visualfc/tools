@@ -131,7 +131,7 @@ func packageReferences(ctx context.Context, snapshot Snapshot, uri span.URI) ([]
 	// doesn't end in _test.go and start over.
 	narrowest := metas[0]
 	if narrowest.ForTest != "" && strings.HasSuffix(string(uri), "_test.go") {
-		for _, f := range narrowest.CompiledGoFiles {
+		for _, f := range narrowest.CompiledNongenGoFiles {
 			if !strings.HasSuffix(string(f), "_test.go") {
 				return packageReferences(ctx, snapshot, f)
 			}
@@ -159,7 +159,7 @@ func packageReferences(ctx context.Context, snapshot Snapshot, uri span.URI) ([]
 			if _, ok := workspaceMap[rdep.ID]; !ok {
 				continue
 			}
-			for _, uri := range rdep.CompiledGoFiles {
+			for _, uri := range rdep.CompiledNongenGoFiles {
 				fh, err := snapshot.ReadFile(ctx, uri)
 				if err != nil {
 					return nil, err
@@ -188,7 +188,7 @@ func packageReferences(ctx context.Context, snapshot Snapshot, uri span.URI) ([]
 	// greatest number of files and thus we choose it for the
 	// "internal" references.
 	widest := metas[len(metas)-1] // may include _test.go files
-	for _, uri := range widest.CompiledGoFiles {
+	for _, uri := range widest.CompiledNongenGoFiles {
 		fh, err := snapshot.ReadFile(ctx, uri)
 		if err != nil {
 			return nil, err
@@ -605,7 +605,7 @@ func localReferences(pkg Package, targets map[types.Object]bool, correspond bool
 	}
 
 	// Scan through syntax looking for uses of one of the target objects.
-	for _, pgf := range pkg.CompiledGoFiles() {
+	for _, pgf := range pkg.CompiledNongenGoFiles() {
 		ast.Inspect(pgf.File, func(n ast.Node) bool {
 			if id, ok := n.(*ast.Ident); ok {
 				if obj, ok := pkg.GetTypesInfo().Uses[id]; ok && matches(obj) {

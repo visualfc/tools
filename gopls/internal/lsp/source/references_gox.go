@@ -121,7 +121,7 @@ func gopPackageReferences(ctx context.Context, snapshot Snapshot, uri span.URI) 
 				return gopPackageReferences(ctx, snapshot, f)
 			}
 		}
-		for _, f := range narrowest.CompiledNongenGoFiles() {
+		for _, f := range narrowest.CompiledNongenGoFiles {
 			if !strings.HasSuffix(string(f), "_test.go") {
 				return packageReferences(ctx, snapshot, f)
 			}
@@ -168,7 +168,7 @@ func gopPackageReferences(ctx context.Context, snapshot Snapshot, uri span.URI) 
 					}
 				}
 			}
-			for _, uri := range rdep.CompiledNongenGoFiles() {
+			for _, uri := range rdep.CompiledNongenGoFiles {
 				fh, err := snapshot.ReadFile(ctx, uri)
 				if err != nil {
 					return nil, err
@@ -218,7 +218,7 @@ func gopPackageReferences(ctx context.Context, snapshot Snapshot, uri span.URI) 
 			pkgPath:       widest.PkgPath,
 		})
 	}
-	for _, uri := range widest.CompiledNongenGoFiles() {
+	for _, uri := range widest.CompiledNongenGoFiles {
 		fh, err := snapshot.ReadFile(ctx, uri)
 		if err != nil {
 			return nil, err

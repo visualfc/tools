@@ -285,8 +285,9 @@ func (snapshot *snapshot) Analyze(ctx context.Context, pkgs map[PackageID]unit, 
 			// Load the contents of each compiled Go file through
 			// the snapshot's cache. (These are all cache hits as
 			// files are pre-loaded following packages.Load)
-			an.files = make([]source.FileHandle, len(m.CompiledGoFiles))
-			for i, uri := range m.CompiledGoFiles {
+			// goxls: use NongenGoFiles
+			an.files = make([]source.FileHandle, len(m.CompiledNongenGoFiles))
+			for i, uri := range m.CompiledNongenGoFiles {
 				fh, err := snapshot.ReadFile(ctx, uri)
 				if err != nil {
 					return nil, err

@@ -13,6 +13,7 @@ import (
 	"go/types"
 	"sort"
 
+	"github.com/goplus/gop/x/typesutil"
 	"golang.org/x/tools/go/types/objectpath"
 	"golang.org/x/tools/gopls/internal/lsp/frob"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -22,7 +23,9 @@ import (
 
 // Index constructs a serializable index of outbound cross-references
 // for the specified type-checked package.
-func Index(files []*source.ParsedGoFile, pkg *types.Package, info *types.Info) []byte {
+func Index(
+	files []*source.ParsedGoFile, gopFiles []*source.ParsedGopFile,
+	pkg *types.Package, info *types.Info, gopInfo *typesutil.Info) []byte {
 	// pkgObjects maps each referenced package Q to a mapping:
 	// from each referenced symbol in Q to the ordered list
 	// of references to that symbol from this package.
@@ -82,7 +85,7 @@ func Index(files []*source.ParsedGoFile, pkg *types.Package, info *types.Info) [
 							objects[obj] = gobObj
 						}
 
-						gobObj.Refs = append(gobObj.Refs, gobRef{
+						gobObj.GoRefs = append(gobObj.GoRefs, gobRef{
 							FileIndex: fileIndex,
 							Range:     nodeRange(n),
 						})
@@ -102,7 +105,7 @@ func Index(files []*source.ParsedGoFile, pkg *types.Package, info *types.Info) [
 					gobObj = &gobObject{Path: ""}
 					objects[nil] = gobObj
 				}
-				gobObj.Refs = append(gobObj.Refs, gobRef{
+				gobObj.GoRefs = append(gobObj.GoRefs, gobRef{
 					FileIndex: fileIndex,
 					Range:     nodeRange(n.Path),
 				})
@@ -110,6 +113,9 @@ func Index(files []*source.ParsedGoFile, pkg *types.Package, info *types.Info) [
 			return true
 		})
 	}
+
+	// goxls: Go+
+	gopIndex(gopFiles, pkg, gopInfo, getObjects, objectpathFor)
 
 	// Flatten the maps into slices, and sort for determinism.
 	var packages []*gobPackage
@@ -145,8 +151,16 @@ func Lookup(m *source.Metadata, data []byte, targets map[source.PackagePath]map[
 		if objectSet, ok := targets[gp.PkgPath]; ok {
 			for _, gobObj := range gp.Objects {
 				if _, ok := objectSet[gobObj.Path]; ok {
-					for _, ref := range gobObj.Refs {
-						uri := m.CompiledGoFiles[ref.FileIndex]
+					// goxls: add Go+ files & use NongenGoFiles
+					for _, ref := range gobObj.GoRefs {
+						uri := m.CompiledNongenGoFiles[ref.FileIndex]
+						locs = append(locs, protocol.Location{
+							URI:   protocol.URIFromSpanURI(uri),
+							Range: ref.Range,
+						})
+					}
+					for _, ref := range gobObj.GopRefs {
+						uri := m.CompiledGopFiles[ref.FileIndex]
 						locs = append(locs, protocol.Location{
 							URI:   protocol.URIFromSpanURI(uri),
 							Range: ref.Range,
@@ -184,11 +198,12 @@ type gobPackage struct {
 
 // A gobObject records all references to a particular symbol.
 type gobObject struct {
-	Path objectpath.Path // symbol name within package; "" => import of package itself
-	Refs []gobRef        // locations of references within P, in lexical order
+	Path    objectpath.Path // symbol name within package; "" => import of package itself
+	GoRefs  []gobRef        // locations of references within P, in lexical order
+	GopRefs []gobRef        // locations of references within P, in lexical order
 }
 
 type gobRef struct {
-	FileIndex int            // index of enclosing file within P's CompiledGoFiles
+	FileIndex int            // index of enclosing file within P's CompiledNongenGoFiles/CompiledGopFiles
 	Range     protocol.Range // source range of reference
 }
