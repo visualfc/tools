@@ -33,6 +33,7 @@ import (
 	"golang.org/x/tools/go/types/objectpath"
 	"golang.org/x/tools/gop/goputil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/command"
 	"golang.org/x/tools/gopls/internal/lsp/filecache"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -634,6 +635,9 @@ func (s *snapshot) PackageDiagnostics(ctx context.Context, ids ...PackageID) (ma
 		mu.Lock()
 		defer mu.Unlock()
 		for _, diag := range diags {
+			if goxls.DbgAnalysis {
+				log.Println("PackageDiagnostic:", *diag)
+			}
 			perFile[diag.URI] = append(perFile[diag.URI], diag)
 		}
 	}
