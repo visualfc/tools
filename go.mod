@@ -3,7 +3,7 @@ module golang.org/x/tools
 go 1.18 // tagx:compat 1.16
 
 require (
-	github.com/goplus/gop v1.1.4-0.20231126025829-911c819b8de3
+	github.com/goplus/gop v1.1.13
 	github.com/goplus/mod v0.11.9
 	github.com/qiniu/x v1.13.1
 	github.com/yuin/goldmark v1.4.13
