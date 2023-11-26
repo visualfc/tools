@@ -1,5 +1,5 @@
-github.com/goplus/gop v1.1.4-0.20231126025829-911c819b8de3 h1:GymFyCIPzAyJosmfM1ShSxCkC++DnPnFPmSsLAEGADY=
-github.com/goplus/gop v1.1.4-0.20231126025829-911c819b8de3/go.mod h1:uxSV3gzBDSyoM5FKi+FyXeyJGgSyE2nLDVyxNc/HBEA=
+github.com/goplus/gop v1.1.13 h1:Nnyzy7BeE25SbpGfOX/mHGBCpvVsmkr/9hW0FtUXZwY=
+github.com/goplus/gop v1.1.13/go.mod h1:iRl6Rxc4bazQaDr4yUlxSpa9Wxs8J2nXG0ON8vcfh4g=
 github.com/goplus/gox v1.13.1 h1:/X6Ja9R2hQuLVbN+PzLHRtaBcan+YmhASvGO3nMJsZw=
 github.com/goplus/gox v1.13.1/go.mod h1:UNzOPlRyO/uQn+9iHelk6KelAFaaC7OBn5AxtSSsC9c=
 github.com/goplus/mod v0.11.9 h1:XdWvSNi55fQ3KHnk0PVVHsXynG58lTbfXps/C9HjTVQ=
