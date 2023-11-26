@@ -1,7 +1,7 @@
-github.com/goplus/gop v1.1.10 h1:2Gs5ukCgQvvh3qr7M9rpySkoWEWo5YJ9uN3kfFl5AJw=
-github.com/goplus/gop v1.1.10/go.mod h1:lD62fuRxyIEjFW+/lbacXmyw2NDBsITKSTklIQhCVDc=
-github.com/goplus/gox v1.13.0 h1:QtgYiZs3J1cFqu4yVZPqOnbbXHk6vDqLNkG4DUIg4EY=
-github.com/goplus/gox v1.13.0/go.mod h1:MOJnwqA8/rSUkn0vsayHFK7TD/3XQrdexMTqdzR70X0=
+github.com/goplus/gop v1.1.4-0.20231126025829-911c819b8de3 h1:GymFyCIPzAyJosmfM1ShSxCkC++DnPnFPmSsLAEGADY=
+github.com/goplus/gop v1.1.4-0.20231126025829-911c819b8de3/go.mod h1:uxSV3gzBDSyoM5FKi+FyXeyJGgSyE2nLDVyxNc/HBEA=
+github.com/goplus/gox v1.13.1 h1:/X6Ja9R2hQuLVbN+PzLHRtaBcan+YmhASvGO3nMJsZw=
+github.com/goplus/gox v1.13.1/go.mod h1:UNzOPlRyO/uQn+9iHelk6KelAFaaC7OBn5AxtSSsC9c=
 github.com/goplus/mod v0.11.9 h1:XdWvSNi55fQ3KHnk0PVVHsXynG58lTbfXps/C9HjTVQ=
 github.com/goplus/mod v0.11.9/go.mod h1:YxrBMhvWGcvLU14j8e7qyKSVnj5Loba7GgH1rNXJtDg=
 github.com/qiniu/x v1.13.1 h1:hi7tkXFq6BWGbBpMoLV7kvA2elop69j6Kl7TlxnFAiU=
@@ -36,8 +36,8 @@ golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.5.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.8.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.12.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.13.0 h1:Af8nKPmuFypiUBjVoU9V20FiaFXOcuZI21p0ycVYYGE=
-golang.org/x/sys v0.13.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.14.0 h1:Vz7Qs629MkJkGyHxUlRHizWJRG2j8fbQKjELVSNhy7Q=
+golang.org/x/sys v0.14.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
 golang.org/x/term v0.5.0/go.mod h1:jMB1sMXY+tzblOD4FWmEbocvup2/aLOaQEp7JmGp78k=

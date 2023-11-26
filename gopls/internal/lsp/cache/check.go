@@ -26,6 +26,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/gopls/internal/bug"
+	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/filecache"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -1551,6 +1552,9 @@ func typeCheckImpl(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*
 		}
 		pkg.typeErrors = append(pkg.typeErrors, e.primary)
 		for _, diag := range diags {
+			if goxls.DbgAnalysis {
+				log.Println("typeErrorDiagnostic:", *diag)
+			}
 			// If the file didn't parse cleanly, it is highly likely that type
 			// checking errors will be confusing or redundant. But otherwise, type
 			// checking usually provides a good enough signal to include.

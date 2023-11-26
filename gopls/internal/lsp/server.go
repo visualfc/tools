@@ -176,7 +176,12 @@ func (s *Server) diagnoseFile(ctx context.Context, snapshot source.Snapshot, uri
 	if err != nil {
 		return nil, nil, err
 	}
-	pkg, _, err := source.NarrowestPackageForFile(ctx, snapshot, uri)
+	var pkg source.Package
+	if kind := snapshot.View().FileKind(fh); kind == source.Gop { // goxls: Go+
+		pkg, _, err = source.NarrowestPackageForGopFile(ctx, snapshot, uri)
+	} else {
+		pkg, _, err = source.NarrowestPackageForFile(ctx, snapshot, uri)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
