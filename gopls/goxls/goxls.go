@@ -21,9 +21,14 @@ import (
 	"golang.org/x/tools/internal/tool"
 )
 
-func Main() {
+const (
+	FlagsRelease = 0
+	FlagsDebug   = goxls.DbgFlagDefault | goxls.DbgFlagAnaAll
+)
+
+func Main(flags goxls.DbgFlags) {
 	ctx := context.Background()
-	goxls.SetDebug(goxls.DbgFlagDefault | goxls.DbgFlagAnaAll)
+	goxls.SetDebug(flags)
 	if os.Getenv("GOXLS_LOG_EVENT") != "" {
 		var printer export.Printer
 		var logw io.Writer

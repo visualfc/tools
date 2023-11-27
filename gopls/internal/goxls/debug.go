@@ -9,10 +9,10 @@ import (
 	"github.com/goplus/gop/x/typesutil"
 )
 
-type dbgFlags int
+type DbgFlags int
 
 const (
-	DbgFlagTypesUtil = 1 << iota
+	DbgFlagTypesUtil DbgFlags = 1 << iota
 	DbgFlagDisableRecover
 	DbgFlagCompletion
 	DbgFlagCodeAction
@@ -53,7 +53,7 @@ var (
 	DbgAnaFillreturns bool
 )
 
-func SetDebug(flags dbgFlags) {
+func SetDebug(flags DbgFlags) {
 	if (flags & DbgFlagTypesUtil) != 0 {
 		typesutil.SetDebug(typesutil.DbgFlagDefault)
 	}
