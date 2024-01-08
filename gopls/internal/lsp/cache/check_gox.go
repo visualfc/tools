@@ -11,6 +11,7 @@ import (
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/x/typesutil"
 	"github.com/goplus/mod/gopmod"
+	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 )
 
@@ -33,7 +34,8 @@ func checkCompiledFiles(cfg *typesutil.Config, check *typesutil.Checker, goFiles
 		f := cgf.File
 		if checkKind && f.IsNormalGox {
 			var isClass bool
-			f.IsProj, isClass = cfg.Mod.ClassKind(cfg.Fset.Position(f.Pos()).Filename)
+			pos := safetoken.StartPosition(cfg.Fset, f.Pos())
+			f.IsProj, isClass = cfg.Mod.ClassKind(pos.Filename)
 			if isClass {
 				f.IsNormalGox = false
 			}
@@ -48,7 +50,8 @@ func checkFiles(cfg *typesutil.Config, check *typesutil.Checker, gofiles []*goas
 		for _, f := range files {
 			if f.IsNormalGox {
 				var isClass bool
-				f.IsProj, isClass = cfg.Mod.ClassKind(cfg.Fset.Position(f.Pos()).Filename)
+				pos := safetoken.StartPosition(cfg.Fset, f.Pos())
+				f.IsProj, isClass = cfg.Mod.ClassKind(pos.Filename)
 				if isClass {
 					f.IsNormalGox = false
 				}
