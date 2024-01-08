@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/goplus/gop"
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/scanner"
@@ -124,6 +125,10 @@ func (pgf *ParsedGopFile) PosRange(start, end token.Pos) (protocol.Range, error)
 // PosLocation returns a protocol Location for the token.Pos interval in this file.
 func (pgf *ParsedGopFile) PosLocation(start, end token.Pos) (protocol.Location, error) {
 	return pgf.Mapper.PosLocation(pgf.Tok, start, end)
+}
+
+func (m *Metadata) LoadGopMod() {
+	m.gopMod_, _ = gop.LoadMod(m.LoadDir)
 }
 
 func (m *Metadata) GopMod_() *gopmod.Module {

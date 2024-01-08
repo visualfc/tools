@@ -683,7 +683,8 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 	// check := types.NewChecker(cfg, b.fset, pkg, nil)
 	opts := &typesutil.Config{Types: pkg, Fset: b.fset, Mod: ph.m.GopMod_()}
 	check := typesutil.NewChecker(cfg, opts, nil, new(typesutil.Info))
-	_ = check.Files(files, gopFiles) // ignore errors
+
+	_ = checkFiles(opts, check, files, gopFiles) // ignore errors
 
 	// If the context was cancelled, we may have returned a ton of transient
 	// errors to the type checker. Swallow them.
@@ -1671,7 +1672,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 	// Type checking errors are handled via the config, so ignore them here.
 	// goxls: use Go+
 	// _ = check.Files(files) // 50us-15ms, depending on size of package
-	_ = checkFiles(check, files, pkg.compiledGopFiles)
+	_ = checkCompiledFiles(opts, check, files, pkg.compiledGopFiles)
 
 	// If the context was cancelled, we may have returned a ton of transient
 	// errors to the type checker. Swallow them.
