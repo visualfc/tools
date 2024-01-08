@@ -10,6 +10,7 @@ import (
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/x/typesutil"
+	"github.com/goplus/mod/gopmod"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 )
 
@@ -25,10 +26,34 @@ func newGopTypeInfo() *typesutil.Info {
 	}
 }
 
-func checkFiles(check *typesutil.Checker, goFiles []*goast.File, compiledGopFiles []*source.ParsedGopFile) error {
+func checkCompiledFiles(cfg *typesutil.Config, check *typesutil.Checker, goFiles []*goast.File, compiledGopFiles []*source.ParsedGopFile) error {
 	gopFiles := make([]*ast.File, 0, len(compiledGopFiles))
+	checkKind := cfg.Mod != nil && cfg.Mod != gopmod.Default
 	for _, cgf := range compiledGopFiles {
-		gopFiles = append(gopFiles, cgf.File)
+		f := cgf.File
+		if checkKind && f.IsNormalGox {
+			var isClass bool
+			f.IsProj, isClass = cfg.Mod.ClassKind(cfg.Fset.Position(f.Pos()).Filename)
+			if isClass {
+				f.IsNormalGox = false
+			}
+		}
+		gopFiles = append(gopFiles, f)
 	}
 	return check.Files(goFiles, gopFiles)
+}
+
+func checkFiles(cfg *typesutil.Config, check *typesutil.Checker, gofiles []*goast.File, files []*ast.File) error {
+	if cfg.Mod != nil && cfg.Mod != gopmod.Default {
+		for _, f := range files {
+			if f.IsNormalGox {
+				var isClass bool
+				f.IsProj, isClass = cfg.Mod.ClassKind(cfg.Fset.Position(f.Pos()).Filename)
+				if isClass {
+					f.IsNormalGox = false
+				}
+			}
+		}
+	}
+	return check.Files(gofiles, files)
 }

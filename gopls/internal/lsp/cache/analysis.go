@@ -1069,7 +1069,7 @@ func (an *analysisNode) typeCheck(parsed []*source.ParsedGoFile, gopParsed []*so
 	// Type checking errors are handled via the config, so ignore them here.
 	// goxls: use Go+
 	// _ = check.Files(pkg.files)
-	_ = check.Files(pkg.files, pkg.gopFiles)
+	_ = checkFiles(opts, check, pkg.files, pkg.gopFiles)
 
 	// debugging (type errors are quite normal)
 	if false {
