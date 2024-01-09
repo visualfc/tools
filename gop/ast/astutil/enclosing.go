@@ -317,7 +317,7 @@ func childrenOf(n ast.Node) []ast.Node {
 		// here and order things correctly.
 		//
 		children = nil // discard ast.Walk(FuncDecl) info subtrees
-		if n.Shadow {
+		if n.Shadow {  // goxls: Go+ shadow func
 			for _, v := range n.Body.List {
 				children = append(children, v)
 			}
