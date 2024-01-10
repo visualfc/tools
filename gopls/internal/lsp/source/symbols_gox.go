@@ -7,10 +7,13 @@ package source
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/token"
 	"github.com/goplus/gop/x/typesutil"
+	"github.com/goplus/mod/modfile"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/internal/event"
@@ -24,13 +27,31 @@ func GopDocumentSymbols(ctx context.Context, snapshot Snapshot, fh FileHandle) (
 	if err != nil {
 		return nil, fmt.Errorf("getting file for GopDocumentSymbols: %w", err)
 	}
-
+	file := pgf.File
+	//check class if it is a normal gox file
+	if file.IsNormalGox {
+		m, err := snapshot.MetadataForFile(ctx, fh.URI())
+		if err == nil && len(m) > 0 {
+			if m[0].gopMod_ != nil {
+				var isClass bool
+				file.IsProj, isClass = m[0].gopMod_.ClassKind(fh.URI().Filename())
+				if isClass {
+					file.IsClass = isClass
+					file.IsNormalGox = false
+				}
+			}
+		}
+	}
+	var classType string
+	if file.IsClass {
+		classType, _ = classNameAndExt(fh.URI().Filename())
+	}
 	// Build symbols for file declarations. When encountering a declaration with
 	// errors (typically because positions are invalid), we skip the declaration
 	// entirely. VS Code fails to show any symbols if one of the top-level
 	// symbols is missing position information.
 	var symbols []protocol.DocumentSymbol
-	for _, decl := range pgf.File.Decls {
+	for _, decl := range file.Decls {
 		switch decl := decl.(type) {
 		case *ast.FuncDecl:
 			if decl.Name.Name == "_" {
@@ -38,9 +59,23 @@ func GopDocumentSymbols(ctx context.Context, snapshot Snapshot, fh FileHandle) (
 			}
 			fs, err := gopFuncSymbol(pgf.Mapper, pgf.Tok, decl)
 			if err == nil {
-				// If function is a method, prepend the type of the method.
-				if decl.Recv != nil && len(decl.Recv.List) > 0 {
-					fs.Name = fmt.Sprintf("(%s).%s", typesutil.ExprString(decl.Recv.List[0].Type), fs.Name)
+				if file.IsClass {
+					// class file func to method
+					fs.Kind = protocol.Method
+					var name = decl.Name.Name
+					if decl.Shadow && name == "main" {
+						if file.IsProj {
+							name = "MainEntry"
+						} else {
+							name = "Main"
+						}
+					}
+					fs.Name = fmt.Sprintf("(*%s).%s", classType, name)
+				} else {
+					// If function is a method, prepend the type of the method.
+					if decl.Recv != nil && len(decl.Recv.List) > 0 {
+						fs.Name = fmt.Sprintf("(%s).%s", typesutil.ExprString(decl.Recv.List[0].Type), fs.Name)
+					}
 				}
 				symbols = append(symbols, fs)
 			}
@@ -70,6 +105,15 @@ func GopDocumentSymbols(ctx context.Context, snapshot Snapshot, fh FileHandle) (
 		}
 	}
 	return symbols, nil
+}
+
+func classNameAndExt(file string) (name, ext string) {
+	fname := filepath.Base(file)
+	name, ext = modfile.SplitFname(fname)
+	if idx := strings.Index(name, "."); idx > 0 {
+		name = name[:idx]
+	}
+	return
 }
 
 func gopFuncSymbol(m *protocol.Mapper, tf *token.File, decl *ast.FuncDecl) (protocol.DocumentSymbol, error) {
