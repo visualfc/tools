@@ -5,6 +5,7 @@
 package cache
 
 import (
+	"fmt"
 	goast "go/ast"
 	"go/types"
 
@@ -27,7 +28,12 @@ func newGopTypeInfo() *typesutil.Info {
 	}
 }
 
-func checkCompiledFiles(cfg *typesutil.Config, check *typesutil.Checker, goFiles []*goast.File, compiledGopFiles []*source.ParsedGopFile) error {
+func checkCompiledFiles(cfg *typesutil.Config, check *typesutil.Checker, goFiles []*goast.File, compiledGopFiles []*source.ParsedGopFile) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("checkFiles: %v", r)
+		}
+	}()
 	gopFiles := make([]*ast.File, 0, len(compiledGopFiles))
 	checkKind := cfg.Mod != nil && cfg.Mod != gopmod.Default
 	for _, cgf := range compiledGopFiles {
@@ -45,7 +51,12 @@ func checkCompiledFiles(cfg *typesutil.Config, check *typesutil.Checker, goFiles
 	return check.Files(goFiles, gopFiles)
 }
 
-func checkFiles(cfg *typesutil.Config, check *typesutil.Checker, gofiles []*goast.File, files []*ast.File) error {
+func checkFiles(cfg *typesutil.Config, check *typesutil.Checker, gofiles []*goast.File, files []*ast.File) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("checkFiles: %v", r)
+		}
+	}()
 	if cfg.Mod != nil && cfg.Mod != gopmod.Default {
 		for _, f := range files {
 			if f.IsNormalGox {
