@@ -1672,6 +1672,9 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 	// goxls: use Go+
 	// _ = check.Files(files) // 50us-15ms, depending on size of package
 	_ = checkCompiledFiles(opts, check, files, pkg.compiledGopFiles)
+	if len(pkg.typeErrors) > 0 {
+		return nil, pkg.typeErrors[0]
+	}
 
 	// If the context was cancelled, we may have returned a ton of transient
 	// errors to the type checker. Swallow them.
