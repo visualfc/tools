@@ -7,6 +7,7 @@ package completion
 import (
 	"context"
 	"go/types"
+	"strings"
 	"time"
 
 	"github.com/qiniu/x/log"
@@ -190,13 +191,72 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 		cand.score = 0
 	}
 
-	cand.name = deepCandName(cand)
+	var aliasName string
+	cand.name, aliasName = gopDeepCandName(cand, c.pkg.GetTypes())
 	if item, err := c.item(ctx, *cand); err == nil {
 		c.items = append(c.items, item)
+		if aliasName != cand.name {
+			ac := *cand
+			ac.name = aliasName
+			ac.score += 0.0001
+			if item, err := c.item(ctx, ac); err == nil {
+				c.items = append(c.items, item)
+			}
+		}
 	} else if false && goxls.DbgCompletion {
 		log.Println("gopCompleter.addCandidate item:", err)
 		log.SingleStack()
 	}
+}
+
+// deepCandName produces the full candidate name including any
+// ancestor objects. For example, "foo.bar().baz" for candidate "baz".
+func gopDeepCandName(cand *candidate, this *types.Package) (name string, alias string) {
+	totalLen := len(cand.obj.Name())
+	totalLen2 := totalLen
+	for i, obj := range cand.path {
+		n := len(obj.Name()) + 1
+		totalLen += n
+		totalLen2 += n
+		if cand.pathInvokeMask&(1<<uint16(i)) > 0 {
+			totalLen += 2
+		}
+	}
+
+	var buf strings.Builder
+	buf.Grow(totalLen)
+	var buf2 strings.Builder
+	buf.Grow(totalLen2)
+
+	for i, obj := range cand.path {
+		buf.WriteString(obj.Name())
+		buf2.WriteString(gopStyleName(obj, this))
+		if cand.pathInvokeMask&(1<<uint16(i)) > 0 {
+			buf.WriteByte('(')
+			buf.WriteByte(')')
+		}
+		buf.WriteByte('.')
+		buf2.WriteByte('.')
+	}
+
+	buf.WriteString(cand.obj.Name())
+	buf2.WriteString(gopStyleName(cand.obj, this))
+
+	return buf.String(), buf2.String()
+}
+
+func gopStyleName(obj types.Object, this *types.Package) (name string) {
+	name = obj.Name()
+	if isFunc(obj) {
+		if pkg := obj.Pkg(); pkg != nil && pkg != this {
+			if strings.ToUpper(name) != name {
+				if c := name[0]; c >= 'A' && c <= 'Z' {
+					return string(rune(c)-('A'-'a')) + name[1:]
+				}
+			}
+		}
+	}
+	return
 }
 
 // penalty reports a score penalty for cand in the range (0, 1).
