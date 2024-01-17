@@ -3300,11 +3300,9 @@ func forEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ident,
 }
 
 // goxls: quickParse
-func (c *gopCompleter) quickParse(ctx context.Context, selName string, relevances map[string]float64, needImport bool) func(uri span.URI, m *source.Metadata) error {
-	var cMu sync.Mutex // guards c.items and c.matcher
-	var enough int32   // atomic bool
+func (c *gopCompleter) quickParse(ctx context.Context, cMu *sync.Mutex, enough *int32, selName string, relevances map[string]float64, needImport bool) func(uri span.URI, m *source.Metadata) error {
 	return func(uri span.URI, m *source.Metadata) error {
-		if atomic.LoadInt32(&enough) != 0 {
+		if atomic.LoadInt32(enough) != 0 {
 			return nil
 		}
 
@@ -3318,7 +3316,7 @@ func (c *gopCompleter) quickParse(ctx context.Context, selName string, relevance
 		}
 		path := string(m.PkgPath)
 		forEachPackageMember(content, func(tok token.Token, id *ast.Ident, fn *ast.FuncDecl) {
-			if atomic.LoadInt32(&enough) != 0 {
+			if atomic.LoadInt32(enough) != 0 {
 				return
 			}
 
@@ -3414,7 +3412,7 @@ func (c *gopCompleter) quickParse(ctx context.Context, selName string, relevance
 			cMu.Lock()
 			c.items = append(c.items, item)
 			if len(c.items) >= unimportedMemberTarget {
-				atomic.StoreInt32(&enough, 1)
+				atomic.StoreInt32(enough, 1)
 			}
 			cMu.Unlock()
 		})
