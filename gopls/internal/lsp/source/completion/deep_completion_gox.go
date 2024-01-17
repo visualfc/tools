@@ -249,10 +249,13 @@ func gopStyleName(obj types.Object, this *types.Package) (name string) {
 	name = obj.Name()
 	if isFunc(obj) {
 		if pkg := obj.Pkg(); pkg != nil && pkg != this {
-			if strings.ToUpper(name) != name {
-				if c := name[0]; c >= 'A' && c <= 'Z' {
-					return string(rune(c)-('A'-'a')) + name[1:]
+			if c := name[0]; c >= 'A' && c <= 'Z' {
+				if len(name) > 1 {
+					if c1 := name[1]; c1 >= 'A' && c1 <= 'Z' {
+						return
+					}
 				}
+				return string(rune(c)-('A'-'a')) + name[1:]
 			}
 		}
 	}
