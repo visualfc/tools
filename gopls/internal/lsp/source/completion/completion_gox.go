@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/goplus/gop/ast"
+	"github.com/goplus/gop/cl"
 	"github.com/goplus/gop/printer"
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
@@ -1409,6 +1410,10 @@ func (c *gopCompleter) lexical(ctx context.Context) error {
 		// position or embedded in interface declarations).
 		// builtinComparable = types.Universe.Lookup("comparable")
 	)
+	var className string
+	if c.file.IsClass {
+		className, _ = cl.ClassNameAndExt(c.filename)
+	}
 
 	// Track seen variables to avoid showing completions for shadowed variables.
 	// This works since we look at scopes from innermost to outermost.
@@ -1423,6 +1428,11 @@ func (c *gopCompleter) lexical(ctx context.Context) error {
 	Names:
 		for _, name := range scope.Names() {
 			declScope, obj := scope.LookupParent(name, c.pos)
+			// Go+ class
+			if name == className {
+				c.methodsAndFields(obj.Type(), true, nil, c.deepState.enqueue)
+				continue
+			}
 			if declScope != scope {
 				continue // Name was declared in some enclosing scope, or not at all.
 			}
