@@ -54,7 +54,11 @@ func GopDocumentSymbols(ctx context.Context, snapshot Snapshot, fh FileHandle) (
 							name = "Main"
 						}
 					}
-					fs.Name = fmt.Sprintf("(*%s).%s", classType, name)
+					if !decl.IsClass && decl.Recv != nil && len(decl.Recv.List) > 0 {
+						fs.Name = fmt.Sprintf("(%s).%s", typesutil.ExprString(decl.Recv.List[0].Type), fs.Name)
+					} else {
+						fs.Name = fmt.Sprintf("(*%s).%s", classType, name)
+					}
 				} else {
 					// If function is a method, prepend the type of the method.
 					if decl.Recv != nil && len(decl.Recv.List) > 0 {
