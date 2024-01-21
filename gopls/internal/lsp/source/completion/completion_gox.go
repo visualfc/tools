@@ -1297,6 +1297,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 	}
 
 	// Extract the package-level candidates using a quick parse.
+	quickParseGo := c.quickParse(ctx, &cMu, &enough, sel.Sel.Name, relevances, needImport)
 	var g errgroup.Group
 	for _, path := range paths {
 		m := known[source.PackagePath(path)]
@@ -1304,6 +1305,12 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 			uri := uri
 			g.Go(func() error {
 				return quickParse(uri, m)
+			})
+		}
+		for _, uri := range m.CompiledNongenGoFiles {
+			uri := uri
+			g.Go(func() error {
+				return quickParseGo(uri, m)
 			})
 		}
 	}
