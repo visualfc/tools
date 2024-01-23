@@ -12,6 +12,7 @@ import (
 
 	"github.com/qiniu/x/log"
 	"golang.org/x/tools/gopls/internal/goxls"
+	"golang.org/x/tools/gopls/internal/lsp/snippet"
 )
 
 // deepSearch searches a candidate and its subordinate objects for completion
@@ -196,12 +197,14 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	if item, err := c.item(ctx, *cand); err == nil {
 		c.items = append(c.items, item)
 		if aliasName != cand.name {
-			ac := *cand
-			ac.name = aliasName
-			ac.score += 0.0001
-			if item, err := c.item(ctx, ac); err == nil {
-				c.items = append(c.items, item)
-			}
+			aliasItem := item
+			aliasItem.Label = aliasName
+			aliasItem.InsertText = aliasName
+			var snip snippet.Builder
+			snip.Write([]byte(strings.Replace(item.snippet.String(), cand.name, aliasName, 1)))
+			aliasItem.snippet = &snip
+			aliasItem.Score += 0.0001
+			c.items = append(c.items, aliasItem)
 		}
 	} else if false && goxls.DbgCompletion {
 		log.Println("gopCompleter.addCandidate item:", err)
