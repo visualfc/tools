@@ -197,19 +197,23 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	if item, err := c.item(ctx, *cand); err == nil {
 		c.items = append(c.items, item)
 		if aliasName != cand.name {
-			aliasItem := item
-			aliasItem.Label = aliasName
-			aliasItem.InsertText = aliasName
-			var snip snippet.Builder
-			snip.Write([]byte(strings.Replace(item.snippet.String(), cand.name, aliasName, 1)))
-			aliasItem.snippet = &snip
-			aliasItem.Score += 0.0001
-			c.items = append(c.items, aliasItem)
+			c.items = append(c.items, cloneAliasItem(item, cand.name, aliasName, 0.0001))
 		}
 	} else if false && goxls.DbgCompletion {
 		log.Println("gopCompleter.addCandidate item:", err)
 		log.SingleStack()
 	}
+}
+
+func cloneAliasItem(item CompletionItem, name string, alias string, score float64) CompletionItem {
+	aliasItem := item
+	aliasItem.Label = alias
+	aliasItem.InsertText = alias
+	var snip snippet.Builder
+	snip.Write([]byte(strings.Replace(item.snippet.String(), name, alias, 1)))
+	aliasItem.snippet = &snip
+	aliasItem.Score += score
+	return aliasItem
 }
 
 // deepCandName produces the full candidate name including any
