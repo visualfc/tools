@@ -252,17 +252,24 @@ func gopDeepCandName(cand *candidate, this *types.Package) (name string, alias s
 	return buf.String(), buf2.String()
 }
 
+func hasAliasName(name string) (alias string, ok bool) {
+	if c := name[0]; c >= 'A' && c <= 'Z' {
+		if len(name) > 1 {
+			if c1 := name[1]; c1 >= 'A' && c1 <= 'Z' {
+				return
+			}
+		}
+		alias, ok = string(rune(c)-('A'-'a'))+name[1:], true
+	}
+	return
+}
+
 func gopStyleName(obj types.Object, this *types.Package) (name string) {
 	name = obj.Name()
 	if isFunc(obj) {
 		if pkg := obj.Pkg(); pkg != nil && pkg != this {
-			if c := name[0]; c >= 'A' && c <= 'Z' {
-				if len(name) > 1 {
-					if c1 := name[1]; c1 >= 'A' && c1 <= 'Z' {
-						return
-					}
-				}
-				return string(rune(c)-('A'-'a')) + name[1:]
+			if alias, ok := hasAliasName(name); ok {
+				return alias
 			}
 		}
 	}

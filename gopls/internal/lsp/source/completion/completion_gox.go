@@ -1288,6 +1288,12 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 
 			cMu.Lock()
 			c.items = append(c.items, item)
+			// goxls func alias
+			if tok == token.FUNC {
+				if alias, ok := hasAliasName(id.Name); ok {
+					c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001))
+				}
+			}
 			if len(c.items) >= unimportedMemberTarget {
 				atomic.StoreInt32(&enough, 1)
 			}
