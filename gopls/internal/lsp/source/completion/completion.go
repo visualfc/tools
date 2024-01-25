@@ -403,6 +403,10 @@ type candidate struct {
 	// imp is the import that needs to be added to this package in order
 	// for this candidate to be valid. nil if no import needed.
 	imp *importInfo
+
+	// goxls: lookup is method owner typ set lookup.
+	// nil if obj not method.
+	lookup func(pkg *types.Package, name string) *types.Selection
 }
 
 func (c candidate) hasMod(mod typeModKind) bool {
@@ -3411,6 +3415,12 @@ func (c *gopCompleter) quickParse(ctx context.Context, cMu *sync.Mutex, enough *
 
 			cMu.Lock()
 			c.items = append(c.items, item)
+			// goxls func alias
+			if tok == token.FUNC {
+				if alias, ok := hasAliasName(id.Name); ok {
+					c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001))
+				}
+			}
 			if len(c.items) >= unimportedMemberTarget {
 				atomic.StoreInt32(enough, 1)
 			}
