@@ -6,6 +6,7 @@ package completion
 
 import (
 	"context"
+	"fmt"
 	"go/types"
 	"strings"
 	"time"
@@ -13,6 +14,10 @@ import (
 	"github.com/qiniu/x/log"
 	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/snippet"
+)
+
+const (
+	showGopStyle bool = true
 )
 
 // deepSearch searches a candidate and its subordinate objects for completion
@@ -207,7 +212,11 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 
 func cloneAliasItem(item CompletionItem, name string, alias string, score float64) CompletionItem {
 	aliasItem := item
-	aliasItem.Label = alias
+	if showGopStyle {
+		aliasItem.Label = fmt.Sprintf("%-30v (Go+)", alias)
+	} else {
+		aliasItem.Label = alias
+	}
 	aliasItem.InsertText = alias
 	var snip snippet.Builder
 	snip.Write([]byte(strings.Replace(item.snippet.String(), name, alias, 1)))
@@ -237,7 +246,7 @@ func gopDeepCandName(cand *candidate, this *types.Package) (name string, alias s
 
 	for i, obj := range cand.path {
 		buf.WriteString(obj.Name())
-		buf2.WriteString(gopStyleName(obj, this))
+		buf2.WriteString(gopStyleName(obj, this, nil))
 		if cand.pathInvokeMask&(1<<uint16(i)) > 0 {
 			buf.WriteByte('(')
 			buf.WriteByte(')')
@@ -247,7 +256,7 @@ func gopDeepCandName(cand *candidate, this *types.Package) (name string, alias s
 	}
 
 	buf.WriteString(cand.obj.Name())
-	buf2.WriteString(gopStyleName(cand.obj, this))
+	buf2.WriteString(gopStyleName(cand.obj, this, cand.lookup))
 
 	return buf.String(), buf2.String()
 }
@@ -264,12 +273,20 @@ func hasAliasName(name string) (alias string, ok bool) {
 	return
 }
 
-func gopStyleName(obj types.Object, this *types.Package) (name string) {
+func gopStyleName(obj types.Object, this *types.Package, lookup func(pkg *types.Package, name string) *types.Selection) (name string) {
 	name = obj.Name()
 	if isFunc(obj) {
-		if pkg := obj.Pkg(); pkg != nil && pkg != this {
-			if alias, ok := hasAliasName(name); ok {
-				return alias
+		if pkg := obj.Pkg(); pkg != nil {
+			if pkg != this {
+				if alias, ok := hasAliasName(name); ok {
+					return alias
+				}
+			} else if lookup != nil {
+				if alias, ok := hasAliasName(name); ok {
+					if lookup(this, alias) == nil {
+						return alias
+					}
+				}
 			}
 		}
 	}

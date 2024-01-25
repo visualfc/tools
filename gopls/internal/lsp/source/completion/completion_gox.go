@@ -1392,13 +1392,13 @@ func (c *gopCompleter) methodsAndFields(typ types.Type, addressable bool, imp *i
 			return
 		}
 	}
-
 	for i := 0; i < mset.Len(); i++ {
 		cb(candidate{
 			obj:         mset.At(i).Obj(),
 			score:       stdScore,
 			imp:         imp,
 			addressable: addressable || isPointer(typ),
+			lookup:      mset.Lookup,
 		})
 	}
 

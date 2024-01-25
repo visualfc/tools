@@ -403,6 +403,10 @@ type candidate struct {
 	// imp is the import that needs to be added to this package in order
 	// for this candidate to be valid. nil if no import needed.
 	imp *importInfo
+
+	// goxls: lookup is method owner typ set lookup.
+	// nil if obj not method.
+	lookup func(pkg *types.Package, name string) *types.Selection
 }
 
 func (c candidate) hasMod(mod typeModKind) bool {
