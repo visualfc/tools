@@ -1776,7 +1776,7 @@ func depsErrors(ctx context.Context, m *source.Metadata, meta *metadataGraph, fs
 		return nil, nil
 	}
 	if len(m.CompiledGopFiles) > 0 {
-		log.Panicln("todo: Go+ files")
+		return nil, fmt.Errorf("todo: Go+ files: %v", m.CompiledGopFiles)
 	}
 
 	// Build an index of all imports in the package.
