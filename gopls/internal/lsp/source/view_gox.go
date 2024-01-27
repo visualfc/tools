@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/goplus/gop"
 	"github.com/goplus/gop/ast"
@@ -166,6 +167,19 @@ func NarrowestPackageForGopFile(ctx context.Context, snapshot Snapshot, uri span
 		return nil, nil, fmt.Errorf("no package metadata for file %s", uri)
 	}
 	narrowest := metas[0]
+
+	// check gop class test.gox
+	file := uri.Filename()
+	if strings.HasSuffix(file, "test.gox") && narrowest.ForTest == "" {
+		if _, ok := narrowest.GopMod_().ClassKind(file); ok {
+			for _, m := range metas {
+				if m.ForTest == narrowest.PkgPath {
+					narrowest = m
+					break
+				}
+			}
+		}
+	}
 	pkgs, err := snapshot.TypeCheck(ctx, narrowest.ID)
 	if err != nil {
 		return nil, nil, err
