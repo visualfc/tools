@@ -133,11 +133,10 @@ func (m *Metadata) LoadGopMod() {
 }
 
 func (m *Metadata) GopMod_() *gopmod.Module {
-	mod := m.gopMod_
-	if mod == nil {
-		mod = packages.Default.LoadMod(m.Module)
+	if m.gopMod_ == nil {
+		m.gopMod_ = packages.Default.LoadMod(m.Module)
 	}
-	return mod
+	return m.gopMod_
 }
 
 // NarrowestPackageForGopFile is a convenience function that selects the

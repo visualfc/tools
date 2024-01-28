@@ -648,6 +648,7 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 	// Parse the compiled go files, bypassing the parse cache as packages checked
 	// for import are unlikely to get cache hits. Additionally, we can optimize
 	// parsing slightly by not passing parser.ParseComments.
+	mod := ph.m.GopMod_()
 	gopFiles := make([]*gopast.File, len(ph.localInputs.compiledGopFiles))
 	{
 		var group errgroup.Group
@@ -662,7 +663,7 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 		for i, fh := range ph.localInputs.compiledGopFiles {
 			i, fh := i, fh
 			group.Go(func() error {
-				pgf, err := parseGopImpl(ctx, b.fset, fh, parserutil.SkipObjectResolution, false)
+				pgf, err := parseGopImpl(ctx, mod, b.fset, fh, parserutil.SkipObjectResolution, false)
 				gopFiles[i] = pgf.File
 				return err
 			})
@@ -681,9 +682,9 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 	pkg := types.NewPackage(string(ph.localInputs.pkgPath), string(ph.localInputs.name))
 	// goxls: use Go+
 	// check := types.NewChecker(cfg, b.fset, pkg, nil)
-	opts := &typesutil.Config{Types: pkg, Fset: b.fset, Mod: ph.m.GopMod_()}
+	opts := &typesutil.Config{Types: pkg, Fset: b.fset, Mod: mod}
 	check := typesutil.NewChecker(cfg, opts, nil, new(typesutil.Info))
-	_ = checkFiles(opts, check, files, gopFiles) // ignore errors
+	_ = check.Files(files, gopFiles) // ignore errors
 
 	// If the context was cancelled, we may have returned a ton of transient
 	// errors to the type checker. Swallow them.
@@ -1615,12 +1616,13 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 	}
 
 	// goxls: Go+ files
+	mod := ph.m.GopMod_()
 	pkg.gopTypesInfo = newGopTypeInfo()
-	pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, parserutil.ParseFull, false, inputs.gopFiles...)
+	pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, mod, b.fset, parserutil.ParseFull, false, inputs.gopFiles...)
 	if err != nil {
 		return nil, err
 	}
-	pkg.compiledGopFiles, err = b.parseCache.parseGopFiles(ctx, b.fset, parserutil.ParseFull, false, inputs.compiledGopFiles...)
+	pkg.compiledGopFiles, err = b.parseCache.parseGopFiles(ctx, mod, b.fset, parserutil.ParseFull, false, inputs.compiledGopFiles...)
 	if err != nil {
 		return nil, err
 	}
@@ -1654,7 +1656,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 
 	// goxls: use Go+
 	// check := types.NewChecker(cfg, pkg.fset, pkg.types, pkg.typesInfo)
-	opts := &typesutil.Config{Types: pkg.types, Fset: pkg.fset, Mod: ph.m.GopMod_()}
+	opts := &typesutil.Config{Types: pkg.types, Fset: pkg.fset, Mod: mod}
 	check := typesutil.NewChecker(cfg, opts, pkg.typesInfo, pkg.gopTypesInfo)
 
 	var files []*ast.File
@@ -1671,7 +1673,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 	// Type checking errors are handled via the config, so ignore them here.
 	// goxls: use Go+
 	// _ = check.Files(files) // 50us-15ms, depending on size of package
-	_ = checkCompiledFiles(opts, check, files, pkg.compiledGopFiles)
+	_ = checkCompiledFiles(check, files, pkg.compiledGopFiles)
 
 	// If the context was cancelled, we may have returned a ton of transient
 	// errors to the type checker. Swallow them.

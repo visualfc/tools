@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	"github.com/goplus/gop/token"
+	"github.com/goplus/mod/gopmod"
 	"golang.org/x/tools/gopls/internal/goxls/parserutil"
 	"golang.org/x/tools/gopls/internal/lsp/source"
 )
 
-func parseGopImports(ctx context.Context, s *snapshot, files []source.FileHandle, seen map[string]bool) error {
-	pgfs, err := s.view.parseCache.parseGopFiles(ctx, token.NewFileSet(), parserutil.ParseHeader, false, files...)
+func parseGopImports(ctx context.Context, mod *gopmod.Module, s *snapshot, files []source.FileHandle, seen map[string]bool) error {
+	pgfs, err := s.view.parseCache.parseGopFiles(ctx, mod, token.NewFileSet(), parserutil.ParseHeader, false, files...)
 	if err != nil { // e.g. context cancellation
 		return err
 	}
