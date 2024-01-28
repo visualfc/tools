@@ -512,7 +512,10 @@ func parseImports(ctx context.Context, s *snapshot, files, gopFiles []source.Fil
 		}
 	}
 	if len(gopFiles) > 0 {
-		log.Panicln("todo: Go+ files")
+		err := parseGopImports(ctx, s, gopFiles, seen)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return seen, nil
 }
