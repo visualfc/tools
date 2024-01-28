@@ -2274,9 +2274,10 @@ Nodes:
 					// foo[int](<>) // <- get "int" completions instead of "T"
 					//
 					// TODO: remove this after https://go.dev/issue/52503
-					info := &typesutil.Info{Types: make(map[ast.Expr]types.TypeAndValue)}
-					typesutil.CheckExpr(c.pkg.FileSet(), c.pkg.GetTypes(), node.Fun.Pos(), node.Fun, info)
-					sig, _ = info.Types[node.Fun].Type.(*types.Signature)
+					// TODO: goxls not implement typesutil.CheckExpr
+					// info := &typesutil.Info{Types: make(map[ast.Expr]types.TypeAndValue)}
+					// typesutil.CheckExpr(c.pkg.FileSet(), c.pkg.GetTypes(), node.Fun.Pos(), node.Fun, info)
+					// sig, _ = info.Types[node.Fun].Type.(*types.Signature)
 				}
 
 				if sig != nil {
