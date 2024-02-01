@@ -213,7 +213,11 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 func cloneAliasItem(item CompletionItem, name string, alias string, score float64) CompletionItem {
 	aliasItem := item
 	if showGopStyle {
-		aliasItem.Label = fmt.Sprintf("%-30v (Go+)", alias)
+		if item.isOverload {
+			aliasItem.Label = fmt.Sprintf("%-30v (Go+ overload)", alias)
+		} else {
+			aliasItem.Label = fmt.Sprintf("%-30v (Go+)", alias)
+		}
 	} else {
 		aliasItem.Label = alias
 	}
@@ -222,6 +226,7 @@ func cloneAliasItem(item CompletionItem, name string, alias string, score float6
 	snip.Write([]byte(strings.Replace(item.snippet.String(), name, alias, 1)))
 	aliasItem.snippet = &snip
 	aliasItem.Score += score
+	aliasItem.isAlias = true
 	return aliasItem
 }
 

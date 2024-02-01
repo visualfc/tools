@@ -102,6 +102,12 @@ type CompletionItem struct {
 	// from which this candidate was derived is a slice.
 	// (Used to complete append() calls.)
 	isSlice bool
+
+	// goxls: isOverload reports Go+ overload func.
+	isOverload bool
+
+	// goxls: isAlias reports Go+ alias func.
+	isAlias bool
 }
 
 // completionOptions holds completion specific configuration.
