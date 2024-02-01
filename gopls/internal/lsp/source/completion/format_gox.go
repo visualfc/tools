@@ -142,8 +142,11 @@ Suffixes:
 					isOverload = true
 					var buf bytes.Buffer
 					buf.WriteString("Go+ overload funcs\n")
-					for _, obj := range objs {
-						s, err := source.NewSignature(ctx, c.snapshot, c.pkg, obj.Type().(*types.Signature), nil, c.qf, c.mq)
+					for _, o := range objs {
+						if isIndexOverload(o.Name(), obj.Name()) {
+							c.seen[o] = true
+						}
+						s, err := source.NewSignature(ctx, c.snapshot, c.pkg, o.Type().(*types.Signature), nil, c.qf, c.mq)
 						if err != nil {
 							return CompletionItem{}, err
 						}
@@ -277,6 +280,17 @@ Suffixes:
 	}
 
 	return item, nil
+}
+
+func isIndexOverload(fn string, name string) bool {
+	n := len(name)
+	if (len(fn) == n+3) && (fn[:n] == name) && (fn[n] == '_') && (fn[n+1] == '_') {
+		c := fn[n+2]
+		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *gopCompleter) formatBuiltin(ctx context.Context, cand candidate) (CompletionItem, error) {
