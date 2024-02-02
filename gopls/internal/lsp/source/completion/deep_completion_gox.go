@@ -173,9 +173,15 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	}
 
 	// Lower score of method calls so we prefer fields and vars over calls.
+	var aliasNoSnip bool
 	if cand.hasMod(invoke) {
-		if sig, ok := obj.Type().Underlying().(*types.Signature); ok && sig.Recv() != nil {
-			cand.score *= 0.9
+		if sig, ok := obj.Type().Underlying().(*types.Signature); ok {
+			if sig.Params() == nil || (sig.Recv() != nil && sig.Variadic() && sig.Params().Len() == 1) {
+				aliasNoSnip = true
+			}
+			if sig.Recv() != nil {
+				cand.score *= 0.9
+			}
 		}
 	}
 
@@ -202,7 +208,7 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	if item, err := c.item(ctx, *cand); err == nil {
 		c.items = append(c.items, item)
 		if aliasName != cand.name {
-			c.items = append(c.items, cloneAliasItem(item, cand.name, aliasName, 0.0001))
+			c.items = append(c.items, cloneAliasItem(item, cand.name, aliasName, 0.0001, aliasNoSnip))
 		}
 	} else if false && goxls.DbgCompletion {
 		log.Println("gopCompleter.addCandidate item:", err)
@@ -210,7 +216,7 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	}
 }
 
-func cloneAliasItem(item CompletionItem, name string, alias string, score float64) CompletionItem {
+func cloneAliasItem(item CompletionItem, name string, alias string, score float64, noSnip bool) CompletionItem {
 	aliasItem := item
 	if showGopStyle {
 		if item.isOverload {
@@ -222,9 +228,13 @@ func cloneAliasItem(item CompletionItem, name string, alias string, score float6
 		aliasItem.Label = alias
 	}
 	aliasItem.InsertText = alias
-	var snip snippet.Builder
-	snip.Write([]byte(strings.Replace(item.snippet.String(), name, alias, 1)))
-	aliasItem.snippet = &snip
+	if noSnip {
+		aliasItem.snippet = nil
+	} else {
+		var snip snippet.Builder
+		snip.Write([]byte(strings.Replace(item.snippet.String(), name, alias, 1)))
+		aliasItem.snippet = &snip
+	}
 	aliasItem.Score += score
 	aliasItem.isAlias = true
 	return aliasItem
