@@ -295,6 +295,17 @@ func isIndexOverload(fn string, name string) bool {
 	return false
 }
 
+func maybleIndexOverload(fn string) bool {
+	n := len(fn)
+	if (n > 3) && (fn[n-3] == '_') && (fn[n-2] == '_') {
+		c := fn[n-1]
+		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *gopCompleter) formatBuiltin(ctx context.Context, cand candidate) (CompletionItem, error) {
 	obj := cand.obj
 	item := CompletionItem{

@@ -3310,7 +3310,7 @@ func forEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ident,
 }
 
 // goxls: quickParse
-func (c *gopCompleter) quickParse(ctx context.Context, cMu *sync.Mutex, enough *int32, selName string, relevances map[string]float64, needImport bool) func(uri span.URI, m *source.Metadata) error {
+func (c *gopCompleter) quickParse(ctx context.Context, cMu *sync.Mutex, enough *int32, selName string, relevances map[string]float64, needImport bool, recheck *unimportChecked) func(uri span.URI, m *source.Metadata) error {
 	return func(uri span.URI, m *source.Metadata) error {
 		if atomic.LoadInt32(enough) != 0 {
 			return nil
@@ -3420,23 +3420,32 @@ func (c *gopCompleter) quickParse(ctx context.Context, cMu *sync.Mutex, enough *
 			}
 
 			cMu.Lock()
-			c.items = append(c.items, item)
-			// goxls func alias
+			if tok == token.CONST && id.Name == "GopPackage" {
+				recheck.pkgs[m.PkgPath] = true
+			}
 			if tok == token.FUNC {
-				if alias, ok := hasAliasName(id.Name); ok {
-					var noSnip bool
-					switch len(fn.Type.Params.List) {
-					case 0:
-						noSnip = true
-					case 1:
-						if fn.Recv != nil {
-							if _, ok := fn.Type.Params.List[0].Type.(*ast.Ellipsis); ok {
-								noSnip = true
-							}
+				var noSnip bool
+				switch len(fn.Type.Params.List) {
+				case 0:
+					noSnip = true
+				case 1:
+					if fn.Recv != nil {
+						if _, ok := fn.Type.Params.List[0].Type.(*ast.Ellipsis); ok {
+							noSnip = true
 						}
 					}
-					c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001, noSnip))
 				}
+				if maybleIndexOverload(id.Name) {
+					recheck.items[m.PkgPath] = append(recheck.items[m.PkgPath], recheckItem{item, noSnip})
+				} else {
+					c.items = append(c.items, item)
+					// goxls func alias
+					if alias, ok := hasAliasName(id.Name); ok {
+						c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001, noSnip))
+					}
+				}
+			} else {
+				c.items = append(c.items, item)
 			}
 			if len(c.items) >= unimportedMemberTarget {
 				atomic.StoreInt32(enough, 1)

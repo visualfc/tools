@@ -1310,12 +1310,20 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 		return nil
 	}
 
+	// recheck is gop index overload check
+	recheck := &unimportChecked{
+		make(map[source.PackagePath]bool),
+		make(map[source.PackagePath][]recheckItem),
+	}
+	for _, path := range paths {
+		recheck.pkgs[source.PackagePath(path)] = true
+	}
 	// Extract the package-level candidates using a quick parse.
-	quickParseGo := c.quickParse(ctx, &cMu, &enough, sel.Sel.Name, relevances, needImport)
+	quickParseGo := c.quickParse(ctx, &cMu, &enough, sel.Sel.Name, relevances, needImport, recheck)
 	var g errgroup.Group
 	for _, path := range paths {
 		m := known[source.PackagePath(path)]
-		for _, uri := range m.CompiledGopFiles { // goxls: TODO - how to handle Go files?
+		for _, uri := range m.CompiledGopFiles {
 			uri := uri
 			g.Go(func() error {
 				return quickParse(uri, m)
@@ -1330,6 +1338,33 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 	}
 	if err := g.Wait(); err != nil {
 		return err
+	}
+	// check gop packages index overload
+	for pkg, items := range recheck.items {
+		if recheck.pkgs[pkg] {
+			names := make(map[string]bool)
+			sort.Slice(items, func(i, j int) bool {
+				return items[i].Label < items[j].Label
+			})
+			for _, item := range items {
+				id := item.Label[:len(item.Label)-3]
+				if !names[id] {
+					names[id] = true
+					item.isOverload = true
+					c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, id, 0, false))
+					if alias, ok := hasAliasName(id); ok {
+						c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, alias, 0.0001, item.noSnip))
+					}
+				}
+			}
+		} else {
+			for _, item := range items {
+				c.items = append(c.items, item.CompletionItem)
+				if alias, ok := hasAliasName(item.Label); ok {
+					c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, alias, 0.0001, item.noSnip))
+				}
+			}
+		}
 	}
 
 	// In addition, we search in the module cache using goimports.
@@ -1366,6 +1401,16 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 		return imports.GetPackageExports(ctx, add, id.Name, c.filename, c.pkg.GetTypes().Name(), opts.Env)
 	})
 	return nil
+}
+
+type recheckItem struct {
+	CompletionItem
+	noSnip bool
+}
+
+type unimportChecked struct {
+	pkgs  map[source.PackagePath]bool // gop package
+	items map[source.PackagePath][]recheckItem
 }
 
 func (c *gopCompleter) packageMembers(pkg *types.Package, score float64, imp *importInfo, cb func(candidate)) {
