@@ -17,13 +17,14 @@ import (
 	"golang.org/x/tools/internal/event"
 )
 
-func GopSignatureHelp(ctx context.Context, snapshot Snapshot, fh FileHandle, position protocol.Position) ([]protocol.SignatureInformation, int, int, error) {
+func GopSignatureHelp(ctx context.Context, snapshot Snapshot, fh FileHandle, position protocol.Position, triggerCharacter string) ([]protocol.SignatureInformation, int, int, error) {
 	ctx, done := event.Start(ctx, "source.GopSignatureHelp")
 	defer done()
 
 	// We need full type-checking here, as we must type-check function bodies in
 	// order to provide signature help at the requested position.
 	pkg, pgf, err := NarrowestPackageForGopFile(ctx, snapshot, fh.URI())
+
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("getting file for SignatureHelp: %w", err)
 	}
@@ -31,18 +32,47 @@ func GopSignatureHelp(ctx context.Context, snapshot Snapshot, fh FileHandle, pos
 	if err != nil {
 		return nil, 0, 0, err
 	}
+	// check gop command style
+	trigSpace := triggerCharacter == " "
+	start := pos
+	if trigSpace {
+		// check left no space
+		var offset = int(pos - pgf.File.Pos())
+		if len(pgf.File.Code) >= offset {
+			for offset > 0 {
+				offset--
+				start--
+				if pgf.File.Code[offset] != ' ' {
+					break
+				}
+			}
+		}
+	} else if triggerCharacter == "," {
+		start--
+	}
 	// Find a call expression surrounding the query position.
 	var callExpr *ast.CallExpr
-	path, _ := astutil.PathEnclosingInterval(pgf.File, pos, pos)
+	path, _ := astutil.PathEnclosingInterval(pgf.File, start, start)
 	if path == nil {
 		return nil, 0, 0, fmt.Errorf("cannot find node enclosing position")
 	}
 
+	var ident *ast.Ident
 FindCall:
 	for _, node := range path {
 		switch node := node.(type) {
+		case *ast.Ident:
+			if trigSpace {
+				ident = node
+				goto FindObj
+			}
+		case *ast.SelectorExpr:
+			if trigSpace {
+				ident = node.Sel
+				goto FindObj
+			}
 		case *ast.CallExpr:
-			if pos >= node.Lparen && pos <= node.Rparen {
+			if node.IsCommand() || (pos >= node.Lparen && pos <= node.Rparen) {
 				callExpr = node
 				break FindCall
 			}
@@ -61,18 +91,17 @@ FindCall:
 		return nil, 0, 0, fmt.Errorf("cannot find an enclosing function")
 	}
 
-	qf := GopQualifier(pgf.File, pkg.GetTypes(), pkg.GopTypesInfo())
-
 	// Get the object representing the function, if available.
 	// There is no object in certain cases such as calling a function returned by
 	// a function (e.g. "foo()()").
-	var ident *ast.Ident
 	switch t := callExpr.Fun.(type) {
 	case *ast.Ident:
 		ident = t
 	case *ast.SelectorExpr:
 		ident = t.Sel
 	}
+FindObj:
+	qf := GopQualifier(pgf.File, pkg.GetTypes(), pkg.GopTypesInfo())
 	obj := pkg.GopTypesInfo().ObjectOf(ident)
 
 	// Handle builtin functions separately.
@@ -81,7 +110,12 @@ FindCall:
 	}
 
 	// Get the type information for the function being called.
-	sigType := pkg.GopTypesInfo().TypeOf(callExpr.Fun)
+	var sigType types.Type
+	if callExpr != nil {
+		sigType = pkg.GopTypesInfo().TypeOf(callExpr.Fun)
+	} else {
+		sigType = pkg.GopTypesInfo().TypeOf(ident)
+	}
 	if sigType == nil {
 		return nil, 0, 0, fmt.Errorf("cannot get type for Fun %[1]T (%[1]v)", callExpr.Fun)
 	}
@@ -91,7 +125,10 @@ FindCall:
 		return nil, 0, 0, fmt.Errorf("cannot find signature for Fun %[1]T (%[1]v)", callExpr.Fun)
 	}
 
-	activeParam := gopActiveParameter(callExpr, sig.Params().Len(), sig.Variadic(), pos)
+	var activeParam int
+	if callExpr != nil {
+		activeParam = gopActiveParameter(callExpr, sig.Params().Len(), sig.Variadic(), pos)
+	}
 
 	objs, overloads := pkg.GopTypesInfo().Overloads[ident]
 
@@ -172,7 +209,7 @@ func gopActiveParameter(callExpr *ast.CallExpr, numParams int, variadic bool, po
 	}
 	// First, check if the position is even in the range of the arguments.
 	start, end := callExpr.Lparen, callExpr.Rparen
-	if !(start <= pos && pos <= end) {
+	if !(start <= pos && pos <= end) && !callExpr.IsCommand() {
 		return 0
 	}
 	for _, expr := range callExpr.Args {
