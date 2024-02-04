@@ -165,25 +165,42 @@ FindObj:
 	}
 
 	if overloads {
-		activeSignature := 0
+		var activeSignature int
+		var matchSignature []int
 		infos := make([]protocol.SignatureInformation, len(objs))
 		for i, o := range objs {
-			if o.Name() == obj.Name() {
-				activeSignature = i
-			}
-			info, err := makeInfo(o.Name(), o.Type().(*types.Signature))
+			sig := o.Type().(*types.Signature)
+			info, err := makeInfo(o.Name(), sig)
 			if err != nil {
 				return nil, 0, 0, nil
 			}
+			if o.Name() == obj.Name() {
+				activeSignature = i
+			}
+			if sig.Variadic() || (sig.Params() != nil && sig.Params().Len() > activeParam) {
+				matchSignature = append(matchSignature, i)
+			}
 			infos[i] = *info
 		}
-		return infos, activeSignature, activeParam, nil
+		return infos, checkBestSignature(activeSignature, matchSignature), activeParam, nil
 	}
 	info, err := makeInfo(name, sig)
 	if err != nil {
 		return nil, 0, 0, err
 	}
 	return []protocol.SignatureInformation{*info}, 0, activeParam, nil
+}
+
+func checkBestSignature(activeSignature int, all []int) int {
+	if len(all) == 0 {
+		return activeSignature
+	}
+	for _, n := range all {
+		if activeSignature == n {
+			return activeSignature
+		}
+	}
+	return all[0]
 }
 
 func gopBuiltinSignature(ctx context.Context, snapshot Snapshot, callExpr *ast.CallExpr, name string, pos token.Pos) ([]protocol.SignatureInformation, int, int, error) {
