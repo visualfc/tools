@@ -33,15 +33,15 @@ func GopSignatureHelp(ctx context.Context, snapshot Snapshot, fh FileHandle, pos
 		return nil, 0, 0, err
 	}
 	// check gop command style
-	trigSpace := triggerCharacter == " "
+	trigSpace := triggerCharacter == " " || triggerCharacter == ""
 	start := pos
 	if trigSpace {
 		// check left no space
 		var offset = int(pos - pgf.File.Pos())
 		if len(pgf.File.Code) >= offset {
 			for offset > 0 {
-				offset--
 				start--
+				offset--
 				if pgf.File.Code[offset] != ' ' {
 					break
 				}
@@ -117,12 +117,12 @@ FindObj:
 		sigType = pkg.GopTypesInfo().TypeOf(ident)
 	}
 	if sigType == nil {
-		return nil, 0, 0, fmt.Errorf("cannot get type for Fun %[1]T (%[1]v)", callExpr.Fun)
+		return nil, 0, 0, fmt.Errorf("cannot get type for Fun %[1]T (%[1]v)", ident)
 	}
 
 	sig, _ := sigType.Underlying().(*types.Signature)
 	if sig == nil {
-		return nil, 0, 0, fmt.Errorf("cannot find signature for Fun %[1]T (%[1]v)", callExpr.Fun)
+		return nil, 0, 0, fmt.Errorf("cannot find signature for Fun %[1]T (%[1]v)", ident)
 	}
 
 	var activeParam int
