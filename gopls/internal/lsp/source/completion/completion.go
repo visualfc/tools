@@ -3435,7 +3435,7 @@ func (c *gopCompleter) quickParse(ctx context.Context, cMu *sync.Mutex, enough *
 							}
 						}
 					}
-					c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001, noSnip))
+					c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001, noSnip || c.allowCommand))
 				}
 			}
 			if len(c.items) >= unimportedMemberTarget {

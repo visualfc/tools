@@ -208,7 +208,7 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	if item, err := c.item(ctx, *cand); err == nil {
 		c.items = append(c.items, item)
 		if aliasName != cand.name {
-			c.items = append(c.items, cloneAliasItem(item, cand.name, aliasName, 0.0001, aliasNoSnip))
+			c.items = append(c.items, cloneAliasItem(item, cand.name, aliasName, 0.0001, aliasNoSnip || c.allowCommand))
 		}
 	} else if false && goxls.DbgCompletion {
 		log.Println("gopCompleter.addCandidate item:", err)
