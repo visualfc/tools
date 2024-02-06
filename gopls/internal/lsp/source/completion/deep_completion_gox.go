@@ -174,7 +174,9 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 
 	// Lower score of method calls so we prefer fields and vars over calls.
 	var aliasNoSnip bool
+	var hasInvoke bool
 	if cand.hasMod(invoke) {
+		hasInvoke = true
 		if sig, ok := obj.Type().Underlying().(*types.Signature); ok {
 			if sig.Params() == nil || (sig.Recv() != nil && sig.Variadic() && sig.Params().Len() == 1) {
 				aliasNoSnip = true
@@ -204,12 +206,23 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	}
 
 	var aliasName string
-	cand.name, aliasName = gopDeepCandName(cand, c.pkg.GetTypes())
+	var thisPkg *types.Package
+	if hasInvoke {
+		thisPkg = c.pkg.GetTypes()
+		cand.name, aliasName = gopDeepCandNameEx(cand, thisPkg)
+	} else {
+		cand.name = gopDeepCandName(cand)
+	}
 	if item, err := c.item(ctx, *cand); err == nil {
-		c.items = append(c.items, item)
-		if aliasName != cand.name {
+		if hasInvoke && aliasName != cand.name {
 			c.items = append(c.items, cloneAliasItem(item, cand.name, aliasName, 0.0001, aliasNoSnip || c.allowCommand))
 		}
+		if hasInvoke && (aliasNoSnip || c.allowCommand) && obj.Pkg() == thisPkg {
+			item.snippet = nil
+		} else if c.allowCommand && isBuiltin(obj) {
+			item.snippet = nil
+		}
+		c.items = append(c.items, item)
 	} else if false && goxls.DbgCompletion {
 		log.Println("gopCompleter.addCandidate item:", err)
 		log.SingleStack()
@@ -242,7 +255,36 @@ func cloneAliasItem(item CompletionItem, name string, alias string, score float6
 
 // deepCandName produces the full candidate name including any
 // ancestor objects. For example, "foo.bar().baz" for candidate "baz".
-func gopDeepCandName(cand *candidate, this *types.Package) (name string, alias string) {
+func gopDeepCandName(cand *candidate) (name string) {
+	totalLen := len(cand.obj.Name())
+	for i, obj := range cand.path {
+		n := len(obj.Name()) + 1
+		totalLen += n
+		if cand.pathInvokeMask&(1<<uint16(i)) > 0 {
+			totalLen += 2
+		}
+	}
+
+	var buf strings.Builder
+	buf.Grow(totalLen)
+
+	for i, obj := range cand.path {
+		buf.WriteString(obj.Name())
+		if cand.pathInvokeMask&(1<<uint16(i)) > 0 {
+			buf.WriteByte('(')
+			buf.WriteByte(')')
+		}
+		buf.WriteByte('.')
+	}
+
+	buf.WriteString(cand.obj.Name())
+
+	return buf.String()
+}
+
+// deepCandName produces the full candidate name including any
+// ancestor objects. For example, "foo.bar().baz" for candidate "baz".
+func gopDeepCandNameEx(cand *candidate, this *types.Package) (name string, alias string) {
 	totalLen := len(cand.obj.Name())
 	totalLen2 := totalLen
 	for i, obj := range cand.path {

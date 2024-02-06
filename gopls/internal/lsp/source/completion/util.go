@@ -146,6 +146,11 @@ func isFunc(obj types.Object) bool {
 	return ok
 }
 
+func isBuiltin(obj types.Object) bool {
+	_, ok := obj.(*types.Builtin)
+	return ok
+}
+
 func isEmptyInterface(T types.Type) bool {
 	intf, _ := T.(*types.Interface)
 	return intf != nil && intf.NumMethods() == 0 && typeparams.IsMethodSet(intf)
