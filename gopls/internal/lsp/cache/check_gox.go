@@ -23,3 +23,19 @@ func newGopTypeInfo() *typesutil.Info {
 		Overloads:  make(map[*ast.Ident][]types.Object),
 	}
 }
+
+type gopImporter struct {
+	imp types.Importer
+	gop types.Importer
+}
+
+func (p *gopImporter) Import(path string) (*types.Package, error) {
+	if pkg, err := p.imp.Import(path); err == nil {
+		return pkg, nil
+	}
+	return p.gop.Import(path)
+}
+
+func newGopImporter(imp, gop types.Importer) types.Importer {
+	return &gopImporter{imp, gop}
+}

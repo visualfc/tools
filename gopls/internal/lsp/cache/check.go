@@ -683,6 +683,7 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 		}
 
 		// goxls: use Go+
+		cfg.Importer = newGopImporter(cfg.Importer, ph.m.GopImporter(b.fset))
 		opts := &typesutil.Config{Types: pkg, Fset: b.fset, Mod: mod}
 		check := typesutil.NewChecker(cfg, opts, nil, new(typesutil.Info))
 		_ = check.Files(files, gopFiles) // ignore errors
@@ -1621,7 +1622,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 	}
 
 	// goxls: Go+ files
-	if len(inputs.gopFiles) > 0 {
+	if len(inputs.gopFiles) > 0 || len(inputs.compiledGopFiles) > 0 {
 		mod := ph.m.GopMod_()
 		pkg.gopTypesInfo = newGopTypeInfo()
 		pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, mod, b.fset, parserutil.ParseFull, false, inputs.gopFiles...)
@@ -1679,6 +1680,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 		for _, cgf := range pkg.compiledGopFiles {
 			gopFiles = append(gopFiles, cgf.File)
 		}
+		cfg.Importer = newGopImporter(cfg.Importer, ph.m.GopImporter(pkg.fset))
 		opts := &typesutil.Config{Types: pkg.types, Fset: pkg.fset, Mod: ph.m.GopMod_()}
 		check := typesutil.NewChecker(cfg, opts, pkg.typesInfo, pkg.gopTypesInfo)
 		_ = check.Files(files, gopFiles)
