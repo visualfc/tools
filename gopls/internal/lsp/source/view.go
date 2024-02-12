@@ -570,6 +570,7 @@ type Metadata struct {
 	GopFiles         []span.URI
 	CompiledGopFiles []span.URI
 	gopMod_          *gopmod.Module // see GopMod_()
+	gopImporter      types.Importer
 
 	ForTest       PackagePath // q in a "p [q.test]" package, else ""
 	TypesSizes    types.Sizes

@@ -7,6 +7,7 @@ package source
 import (
 	"context"
 	"fmt"
+	"go/types"
 	"path/filepath"
 
 	"github.com/goplus/gop"
@@ -14,6 +15,7 @@ import (
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
+	"github.com/goplus/gop/x/gopenv"
 	"github.com/goplus/mod/gopmod"
 	"golang.org/x/tools/gop/packages"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -136,6 +138,13 @@ func (m *Metadata) GopMod_() *gopmod.Module {
 		m.gopMod_ = packages.Default.LoadMod(m.Module)
 	}
 	return m.gopMod_
+}
+
+func (m *Metadata) GopImporter(fset *token.FileSet) types.Importer {
+	if m.gopImporter == nil {
+		m.gopImporter = gop.NewImporter(m.GopMod_(), gopenv.Get(), fset)
+	}
+	return m.gopImporter
 }
 
 // NarrowestPackageForGopFile is a convenience function that selects the
