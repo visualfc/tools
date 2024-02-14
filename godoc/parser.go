@@ -33,6 +33,7 @@ func replaceLinePrefixCommentsWithBlankLine(src []byte) {
 		// 0 <= i && i+len(linePrefix) <= len(src)
 		if i == 0 || src[i-1] == '\n' {
 			// at beginning of line: blank out line
+			i += 2
 			for i < len(src) && src[i] != '\n' {
 				src[i] = ' '
 				i++
