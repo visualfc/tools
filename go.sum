@@ -2,10 +2,10 @@ github.com/goplus/gop v1.2.0-pre.1.0.20240213120621-ecf48ca5a047 h1:pQDUp2hu34cV
 github.com/goplus/gop v1.2.0-pre.1.0.20240213120621-ecf48ca5a047/go.mod h1:9LoUwwzyyW1tN5Llk/o51QHaUp92glLF74EGZYj+tEc=
 github.com/goplus/gox v1.14.10 h1:fbcA/BzFqEOp28BQjt27UR3DkYYpT4uXObWxZXEDkbU=
 github.com/goplus/gox v1.14.10/go.mod h1:G7Hz+cAOUyJyN9pPHrpqhfQPDUtiJNmoRVTwoaQ9nw0=
-github.com/goplus/mod v0.13.5 h1:rEQ4UFmLKU1J5IK82DwC/sAKIhAMJZ2VbBrKU/k448c=
-github.com/goplus/mod v0.13.5/go.mod h1:PBGRYvD381NxJdeI+KyYHiDX9fgnDiuttzyCTG9LfHE=
-github.com/qiniu/x v1.13.5 h1:YJz5i3RD/7srMLEmp7UAcYmZ9qrhOPk0EL0pGiuxGbA=
-github.com/qiniu/x v1.13.5/go.mod h1:INZ2TSWSJVWO/RuELQROERcslBwVgFG7MkTfEdaQz9E=
+github.com/goplus/mod v0.13.7 h1:2tIe3cT/fmV+rOoPf896OH+AYcRu94Q0IeJU1LHVU4o=
+github.com/goplus/mod v0.13.7/go.mod h1:edZE5Qs+9mRnIjvWhyMNUkm5ayJ+dMlJ3J3YeXODNwA=
+github.com/qiniu/x v1.13.8 h1:xXXD1LuTw4VaqTWxFKonm0F6XlhQNE59+vgPYP3ij8Q=
+github.com/qiniu/x v1.13.8/go.mod h1:INZ2TSWSJVWO/RuELQROERcslBwVgFG7MkTfEdaQz9E=
 github.com/yuin/goldmark v1.4.13 h1:fVcFKWvrslecOb/tg+Cc05dkeYx540o0FuFt3nUVDoE=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
