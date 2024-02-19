@@ -38,6 +38,9 @@ func ParseFileEx(mod *gopmod.Module, fset *token.FileSet, filename string, src i
 			conf.ClassKind = mod.ClassKind
 		}
 		f, err = parser.ParseEntry(fset, filename, src, conf)
+		if err == parser.ErrUnknownFileKind { // fallback to a normal Go+ file
+			f, err = parser.ParseFile(fset, filename, src, mode)
+		}
 	} else {
 		f, err = parser.ParseFile(fset, filename, src, mode)
 	}
