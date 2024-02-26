@@ -5,7 +5,10 @@
 package parserutil
 
 import (
+	"strings"
+
 	"github.com/goplus/gop/ast"
+	"github.com/goplus/gop/cl"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/token"
 	"github.com/goplus/mod/gopmod"
@@ -43,6 +46,29 @@ func ParseFileEx(mod *gopmod.Module, fset *token.FileSet, filename string, src i
 		}
 	} else {
 		f, err = parser.ParseFile(fset, filename, src, mode)
+	}
+	return
+}
+
+const (
+	casePrefix = "case"
+)
+
+func testNameSuffix(testType string) string {
+	if c := testType[0]; c >= 'A' && c <= 'Z' {
+		return testType
+	}
+	return "_" + testType
+}
+
+// GetClassType is get class type from ast.File and filename
+func GetClassType(file *ast.File, filename string) (classType string, ok bool) {
+	if file.IsClass {
+		ok = true
+		classType, _ = cl.ClassNameAndExt(filename)
+		if strings.HasSuffix(filename, "test.gox") && !file.IsProj {
+			classType = casePrefix + testNameSuffix(classType)
+		}
 	}
 	return
 }
