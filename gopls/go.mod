@@ -9,7 +9,7 @@ require (
 	github.com/goplus/mod v0.13.8-0.20240218230953-c1aeebf6e4f7
 	github.com/jba/printsrc v0.2.2
 	github.com/jba/templatecheck v0.7.0
-	github.com/qiniu/x v1.13.9-0.20240218231431-55e88daed284
+	github.com/qiniu/x v1.13.9
 	github.com/sergi/go-diff v1.1.0
 	golang.org/x/mod v0.15.0
 	golang.org/x/sync v0.6.0
