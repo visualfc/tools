@@ -1,0 +1,7 @@
+Demo         //@godef("Demo",Demo__0)
+Demo 100     //@godef("Demo",Demo__1)
+Demo "hello" //@godef("Demo",Demo__3)
+
+var n N
+n.add 100      //@godef("add",Add__0)
+n.add 100, 200 //@godef("add",Add__1)

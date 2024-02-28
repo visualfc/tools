@@ -1,0 +1,26 @@
+-- Demo__0-hoverdef --
+```go
+func Demo__0()
+```
+
+[`main.Demo__0` on pkg.go.dev](https://pkg.go.dev/golang.org/lsptests/overload#Demo__0)
+-- Demo__1-hoverdef --
+```go
+func Demo__1(n int) int
+```
+
+[`main.Demo__1` on pkg.go.dev](https://pkg.go.dev/golang.org/lsptests/overload#Demo__1)
+-- Demo__3-hoverdef --
+```go
+func Demo__3(s ...string)
+```
+
+[`main.Demo__3` on pkg.go.dev](https://pkg.go.dev/golang.org/lsptests/overload#Demo__3)
+-- Add__0-hoverdef --
+```go
+func (*N).Add__0(a int)
+```
+-- Add__1-hoverdef --
+```go
+func (*N).Add__1(a ...int)
+```
