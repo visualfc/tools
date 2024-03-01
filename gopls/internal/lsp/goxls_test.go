@@ -14,7 +14,7 @@ import (
 
 // goxls: tests
 func TestXLS(t *testing.T) {
-	tests.RunTests(t, "../goxls/testdata", false, testXLS)
+	tests.RunTests(t, "../goxls/testdata", true, testXLS)
 }
 
 func testXLS(t *testing.T, datum *tests.Data) {

@@ -2,14 +2,6 @@ package main
 
 import "fmt"
 
-type DataInterface[T any] interface {
-	Size() int
-	Add__0(v ...T)
-	Add__1(v DataInterface[T])
-	IndexOf__0(v T) int
-	IndexOf__1(pos int, v T) int
-}
-
 func Demo__0() { //@Demo__0
 }
 
@@ -30,5 +22,5 @@ type N struct {
 func (m *N) Add__0(a int) { //@Add__0
 }
 
-func (m *N) Add__1(a ...int) { //@Add__1
+func (m *N) Add__1(a ...string) { //@Add__1
 }
