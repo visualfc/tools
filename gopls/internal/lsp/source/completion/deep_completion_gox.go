@@ -6,18 +6,23 @@ package completion
 
 import (
 	"context"
-	"fmt"
 	"go/types"
 	"strings"
 	"time"
 
 	"github.com/qiniu/x/log"
 	"golang.org/x/tools/gopls/internal/goxls"
+	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/snippet"
 )
 
 const (
 	showGopStyle bool = true
+)
+
+const (
+	CompletionItemTagAlias    protocol.CompletionItemTag = 2
+	CompletionItemTagOverload protocol.CompletionItemTag = 3
 )
 
 // deepSearch searches a candidate and its subordinate objects for completion
@@ -219,14 +224,12 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 func cloneAliasItem(item CompletionItem, name string, alias string, score float64, noSnip bool) CompletionItem {
 	aliasItem := item
 	if showGopStyle {
-		if item.isOverload {
-			aliasItem.Label = fmt.Sprintf("%-30v (Go+ overload)", alias)
-		} else {
-			aliasItem.Label = fmt.Sprintf("%-30v (Go+)", alias)
+		item.Tags = append(item.Tags, CompletionItemTagAlias)
+		if !item.isOverload {
+			aliasItem.Detail = "Go+ alias func\n\n" + aliasItem.Detail
 		}
-	} else {
-		aliasItem.Label = alias
 	}
+	aliasItem.Label = alias
 	aliasItem.InsertText = alias
 	if noSnip {
 		aliasItem.snippet = nil
