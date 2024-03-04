@@ -1049,9 +1049,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 		log.Println("gopCompleter.selector:", sel.X, ok, "type:", tv.Type)
 	}
 	if ok {
-		// goxls: assume tv.Addressable() => true
-		// c.methodsAndFields(tv.Type, tv.Addressable(), nil, c.deepState.enqueue)
-		c.methodsAndFields(tv.Type, true, nil, c.deepState.enqueue)
+		c.methodsAndFields(tv.Type, tv.Addressable(), nil, c.deepState.enqueue)
 		if goxls.DbgCompletion {
 			log.Println("gopCompleter methodsAndFields:", len(c.items))
 		}

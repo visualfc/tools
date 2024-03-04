@@ -140,8 +140,6 @@ func (c *gopCompleter) deepSearch(ctx context.Context, start time.Time, deadline
 					c.deepState.enqueue(newCand)
 				})
 			default:
-				// goxls: force cand.addressable = true (TODO)
-				cand.addressable = true
 				c.methodsAndFields(obj.Type(), cand.addressable, cand.imp, func(newCand candidate) {
 					newCand.pathInvokeMask = cand.pathInvokeMask
 					newCand.path = path
@@ -251,6 +249,9 @@ func gopDeepCandName(cand *candidate, this *types.Package) (name string, alias s
 		totalLen2 += n
 		if cand.pathInvokeMask&(1<<uint16(i)) > 0 {
 			totalLen += 2
+			if !isFunc(obj) {
+				totalLen2 += 2
+			}
 		}
 	}
 
@@ -261,10 +262,15 @@ func gopDeepCandName(cand *candidate, this *types.Package) (name string, alias s
 
 	for i, obj := range cand.path {
 		buf.WriteString(obj.Name())
-		buf2.WriteString(gopStyleName(obj, this, nil))
+		name, ok := hasGopStyleName(obj, this, nil)
+		buf2.WriteString(name)
 		if cand.pathInvokeMask&(1<<uint16(i)) > 0 {
 			buf.WriteByte('(')
 			buf.WriteByte(')')
+			if !ok {
+				buf2.WriteByte('(')
+				buf2.WriteByte(')')
+			}
 		}
 		buf.WriteByte('.')
 		buf2.WriteByte('.')
@@ -289,17 +295,22 @@ func hasAliasName(name string) (alias string, ok bool) {
 }
 
 func gopStyleName(obj types.Object, this *types.Package, lookup func(pkg *types.Package, name string) *types.Selection) (name string) {
+	name, _ = hasGopStyleName(obj, this, lookup)
+	return
+}
+
+func hasGopStyleName(obj types.Object, this *types.Package, lookup func(pkg *types.Package, name string) *types.Selection) (name string, ok bool) {
 	name = obj.Name()
 	if isFunc(obj) {
 		if pkg := obj.Pkg(); pkg != nil {
 			if pkg != this {
 				if alias, ok := hasAliasName(name); ok {
-					return alias
+					return alias, true
 				}
 			} else if lookup != nil {
 				if alias, ok := hasAliasName(name); ok {
 					if lookup(this, alias) == nil {
-						return alias
+						return alias, true
 					}
 				}
 			}
