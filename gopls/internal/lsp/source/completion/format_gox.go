@@ -119,10 +119,11 @@ func (c *gopCompleter) item(ctx context.Context, cand candidate) (CompletionItem
 			prefix = "<-" + prefix
 		}
 	}
-	var isOverload bool
 	var (
-		suffix   string
-		funcType = obj.Type()
+		isOverload bool
+		tags       []protocol.CompletionItemTag
+		suffix     string
+		funcType   = obj.Type()
 	)
 Suffixes:
 	for _, mod := range cand.mods {
@@ -153,7 +154,7 @@ Suffixes:
 						buf.WriteString("\n- func" + s.Format())
 					}
 					if showGopStyle {
-						label = fmt.Sprintf("%-30v (Go+ overload)", label)
+						tags = append(tags, CompletionItemTagOverload)
 					}
 					detail = buf.String()
 				}
@@ -240,6 +241,7 @@ Suffixes:
 		AdditionalTextEdits: protocolEdits,
 		Detail:              detail,
 		Kind:                kind,
+		Tags:                tags,
 		Score:               cand.score,
 		Depth:               len(cand.path),
 		snippet:             &snip,
