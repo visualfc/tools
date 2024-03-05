@@ -11,7 +11,7 @@ require (
 	github.com/jba/templatecheck v0.7.0
 	github.com/qiniu/x v1.13.9
 	github.com/sergi/go-diff v1.1.0
-	golang.org/x/mod v0.15.0
+	golang.org/x/mod v0.16.0
 	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.17.0
 	golang.org/x/text v0.14.0
