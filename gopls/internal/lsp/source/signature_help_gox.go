@@ -42,11 +42,16 @@ FindCall:
 	for _, node := range path {
 		switch node := node.(type) {
 		case *ast.CallExpr:
-			if pos >= node.Lparen && pos <= node.Rparen {
+			if node.IsCommand() {
+				if pos >= node.Fun.End() && pos <= node.NoParenEnd {
+					callExpr = node
+					break
+				}
+			} else if pos >= node.Lparen && pos <= node.Rparen {
 				callExpr = node
 				break FindCall
 			}
-		case *ast.FuncLit, *ast.FuncType:
+		case *ast.FuncLit, *ast.FuncType, *ast.LambdaExpr, *ast.LambdaExpr2:
 			// The user is within an anonymous function,
 			// which may be the parameter to the *ast.CallExpr.
 			// Don't show signature help in this case.
@@ -172,6 +177,9 @@ func gopActiveParameter(callExpr *ast.CallExpr, numParams int, variadic bool, po
 	}
 	// First, check if the position is even in the range of the arguments.
 	start, end := callExpr.Lparen, callExpr.Rparen
+	if callExpr.IsCommand() {
+		start, end = callExpr.Fun.Pos(), callExpr.NoParenEnd
+	}
 	if !(start <= pos && pos <= end) {
 		return 0
 	}
