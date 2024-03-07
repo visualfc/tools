@@ -156,7 +156,7 @@ func goListDriver(cfg *Config, patterns ...string) (*driverResponse, error) {
 			var sizes types.Sizes
 			sizes, sizeserr = packagesdriver.GetSizesGolist(ctx, state.cfgInvocation(), cfg.gocmdRunner)
 			srcP := reflect.ValueOf(sizes)
-			if sizeserr == nil && srcP.IsValid() {
+			if srcP.IsValid() {
 				srcV := srcP.Elem()
 				var stdSize types.StdSizes = types.StdSizes{}
 				if srcV.IsValid() && srcV.Kind() == reflect.Struct {
