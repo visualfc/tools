@@ -159,7 +159,7 @@ func goListDriver(cfg *Config, patterns ...string) (*driverResponse, error) {
 				// types.SizesFor always returns nil or a *types.StdSizes.
 				srcV := reflect.ValueOf(sizes).Elem()
 				var stdSize types.StdSizes = types.StdSizes{}
-				if srcV.Kind() == reflect.Struct {
+				if srcV.IsValid() && srcV.Kind() == reflect.Struct {
 					WordSizeField := srcV.FieldByName("WordSize")
 					stdSize.WordSize = WordSizeField.Int()
 					MaxAlignField := srcV.FieldByName("MaxAlign")
