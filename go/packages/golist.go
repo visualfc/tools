@@ -153,24 +153,8 @@ func goListDriver(cfg *Config, patterns ...string) (*driverResponse, error) {
 	if cfg.Mode&NeedTypesSizes != 0 || cfg.Mode&NeedTypes != 0 {
 		sizeswg.Add(1)
 		go func() {
-			var sizes types.Sizes
-			sizes, sizeserr = packagesdriver.GetSizesGolist(ctx, state.cfgInvocation(), cfg.gocmdRunner)
-			srcP := reflect.ValueOf(sizes)
-			if srcP.IsValid() {
-				srcV := srcP.Elem()
-				var stdSize types.StdSizes = types.StdSizes{}
-				if srcV.IsValid() && srcV.Kind() == reflect.Struct {
-					WordSizeField := srcV.FieldByName("WordSize")
-					stdSize.WordSize = WordSizeField.Int()
-					MaxAlignField := srcV.FieldByName("MaxAlign")
-					stdSize.MaxAlign = MaxAlignField.Int()
-				}
-				// types.SizesFor always returns nil or a *types.StdSizes.
-				// response.dr.Sizes, _ = sizes.(*types.StdSizes)
-				response.dr.Sizes = &stdSize
-			} else {
-				response.dr.Sizes = nil
-			}
+			sizes, _ := packagesdriver.GetSizesGolist(ctx, state.cfgInvocation(), cfg.gocmdRunner)
+			response.dr.Sizes = &types.StdSizes{WordSize: sizes.Sizeof(types.Typ[types.Int]), MaxAlign: sizes.Alignof(types.Typ[types.Int])}
 			sizeswg.Done()
 		}()
 	}
