@@ -65,7 +65,7 @@ func testNameSuffix(testType string) string {
 func GetClassType(file *ast.File, filename string) (classType string, ok bool) {
 	if file.IsClass {
 		ok = true
-		classType, _ = cl.ClassNameAndExt(filename)
+		classType, _, _ = cl.ClassNameAndExt(filename)
 		if strings.HasSuffix(filename, "test.gox") && !file.IsProj {
 			classType = casePrefix + testNameSuffix(classType)
 		}

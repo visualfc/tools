@@ -12,8 +12,8 @@ import (
 	"go/types"
 	"strings"
 
+	"github.com/goplus/gogen"
 	"github.com/goplus/gop/ast"
-	"github.com/goplus/gox"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
 	"golang.org/x/tools/gopls/internal/lsp/safetoken"
 	"golang.org/x/tools/gopls/internal/lsp/snippet"
@@ -139,7 +139,7 @@ Suffixes:
 					funcType = sig.Results().At(0).Type()
 				}
 				detail = "func" + s.Format()
-				if _, objs := gox.CheckSigFuncExObjects(sig); len(objs) > 0 {
+				if _, objs := gogen.CheckSigFuncExObjects(sig); len(objs) > 0 {
 					isOverload = true
 					var buf bytes.Buffer
 					buf.WriteString("Go+ overload funcs\n")
