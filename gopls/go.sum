@@ -19,8 +19,9 @@ github.com/goplus/gox v1.14.13-0.20240221143457-e20cebf7f229/go.mod h1:6b6XYHmyi
 github.com/goplus/gox v1.14.13-0.20240223085136-517ed22a822d h1:K4egyF3pziguN1LjXNNkBQGY0UbG4I+7vmKR8w5IM6o=
 github.com/goplus/gox v1.14.13-0.20240223085136-517ed22a822d/go.mod h1:6b6XYHmyiCevhwuEHcV/jzm7Z2FXLDBhuxgvkjceA+o=
 github.com/goplus/mod v0.13.7/go.mod h1:edZE5Qs+9mRnIjvWhyMNUkm5ayJ+dMlJ3J3YeXODNwA=
-github.com/goplus/mod v0.13.8 h1:5PbALN7GjvpQidAx2qiE3x/Bgf+ZHPrVZ3C63dfjGrA=
 github.com/goplus/mod v0.13.8/go.mod h1:7/8zsNzGWyB4Qojg+D7SxSgMzpcsDbZsbKo2SHy4Lwk=
+github.com/goplus/mod v0.13.9 h1:B9zZoHi2AzMltTSOFqZNVjqGlSMlhhNTWwEzVqhTQzg=
+github.com/goplus/mod v0.13.9/go.mod h1:MibsLSftGmxaQq78YzUzNviyFwB9RtpMaoscufvEKH4=
 github.com/jba/printsrc v0.2.2 h1:9OHK51UT+/iMAEBlQIIXW04qvKyF3/vvLuwW/hL8tDU=
 github.com/jba/printsrc v0.2.2/go.mod h1:1xULjw59sL0dPdWpDoVU06TIEO/Wnfv6AHRpiElTwYM=
 github.com/jba/templatecheck v0.7.0 h1:wjTb/VhGgSFeim5zjWVePBdaMo28X74bGLSABZV+zIA=
