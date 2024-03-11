@@ -689,7 +689,7 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 
 		// goxls: use Go+
 		cfg.Importer = newGopImporter(cfg.Importer, ph.m.GopImporter(b.fset))
-		opts := &typesutil.Config{Types: pkg, Fset: b.fset, Mod: mod, IgnoreFuncBodies: true}
+		opts := &typesutil.Config{Types: pkg, Fset: b.fset, Mod: mod, IgnoreFuncBodies: true, UpdateGoTypesOverload: true}
 		check := typesutil.NewChecker(cfg, opts, nil, new(typesutil.Info))
 		_ = check.Files(files, gopFiles) // ignore errors
 	} else {
