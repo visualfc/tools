@@ -100,6 +100,11 @@ func Qux() {
 
 	fmt.Println "hello", "world" //@signature(",", "Println(a ...any) (n int, err error)", 0)
 
+	fmt.Println //@signature(" //", "Println(a ...any) (n int, err error)", 0)
+	fmt.println //@signature(" //", "Println(a ...any) (n int, err error)", 0)
+
+	fmt.println fmt.Printf //@signature(" //", "Println(a ...any) (n int, err error)", 0)
+
 	Hello(func() {
 		//@signature("//", "", 0)
 	})
