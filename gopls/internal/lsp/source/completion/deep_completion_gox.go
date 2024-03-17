@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goplus/gogen"
 	"github.com/qiniu/x/log"
 	"golang.org/x/tools/gopls/internal/goxls"
 	"golang.org/x/tools/gopls/internal/lsp/protocol"
@@ -211,7 +212,8 @@ func (c *gopCompleter) addCandidate(ctx context.Context, cand *candidate) {
 	}
 	if item, err := c.item(ctx, *cand); err == nil {
 		if objIsFunc && aliasName != cand.name {
-			c.items = append(c.items, cloneAliasItem(item, cand.name, aliasName, 0.0001, c.allowCommand))
+			noSnip := gogen.HasAutoProperty(obj.Type()) || c.allowCommand
+			c.items = append(c.items, cloneAliasItem(item, cand.name, aliasName, 0.0001, noSnip))
 		}
 		if (objIsFunc || isBuiltin(obj)) && c.allowCommand {
 			item.snippet = nil

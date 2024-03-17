@@ -1318,7 +1318,8 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 			// goxls func alias
 			if tok == token.FUNC {
 				if alias, ok := hasAliasName(id.Name); ok {
-					c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001, c.allowCommand))
+					noSnip := (len(fn.Type.Params.List) == 0) || c.allowCommand
+					c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001, noSnip))
 				}
 			}
 			if len(c.items) >= unimportedMemberTarget {
