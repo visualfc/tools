@@ -1189,7 +1189,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 			return err
 		}
 		path := string(m.PkgPath)
-		gopForEachPackageMember(content, func(tok token.Token, id *ast.Ident, fn *ast.FuncDecl) {
+		gopForEachPackageMember(content, func(tok token.Token, id *ast.Ident, fnType *ast.FuncType, isOverload bool) {
 			if atomic.LoadInt32(&enough) != 0 {
 				return
 			}
@@ -1237,7 +1237,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 			}
 
 			// For functions, add a parameter snippet.
-			if fn != nil {
+			if fnType != nil {
 				var sn snippet.Builder
 				sn.WriteText(id.Name)
 
@@ -1277,10 +1277,15 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 					}
 				}
 
-				paramList("[", "]", typeparams.ForFuncType(fn.Type))
-				paramList("(", ")", fn.Type.Params)
+				paramList("[", "]", typeparams.ForFuncType(fnType))
+				paramList("(", ")", fnType.Params)
 
 				item.snippet = &sn
+			}
+			if isOverload {
+				// ast.OverloadFuncDecl
+				item.isOverload = true
+				item.Detail = "Go+ overload func\n\n" + item.Detail
 			}
 
 			cMu.Lock()
@@ -1288,7 +1293,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 			// goxls func alias
 			if tok == token.FUNC {
 				if alias, ok := hasAliasName(id.Name); ok {
-					noSnip := len(fn.Type.Params.List) == 0
+					noSnip := !isOverload && len(fnType.Params.List) == 0
 					c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001, noSnip))
 				}
 			}
@@ -1333,45 +1338,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 	if err := g.Wait(); err != nil {
 		return err
 	}
-	// check gop packages index overload
-	for pkg, items := range recheck.items {
-		if recheck.pkgs[pkg] {
-			names := make(map[string]bool)
-			sort.Slice(items, func(i, j int) bool {
-				return items[i].Label < items[j].Label
-			})
-			for _, item := range items {
-				id := item.Label[:len(item.Label)-3]
-				if !names[id] {
-					names[id] = true
-					item.isOverload = true
-					c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, id, 0, false))
-					if alias, ok := hasAliasName(id); ok {
-						c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, alias, 0.0001, item.noSnip))
-					}
-				}
-			}
-		} else {
-			for _, item := range items {
-				c.items = append(c.items, item.CompletionItem)
-				if alias, ok := hasAliasName(item.Label); ok {
-					c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, alias, 0.0001, item.noSnip))
-				}
-			}
-		}
-	}
-	// check gop packages gopo overload
-	for pkg, items := range recheck.gopo {
-		if recheck.pkgs[pkg] {
-			for _, item := range items {
-				c.items = append(c.items, item)
-				if alias, ok := hasAliasName(item.Label); ok {
-					c.items = append(c.items, cloneAliasItem(item, item.Label, alias, 0.0001, true))
-				}
-			}
-		}
-	}
-
+	recheck.checkOverload(c)
 	// In addition, we search in the module cache using goimports.
 	ctx, cancel := context.WithCancel(ctx)
 	var mu sync.Mutex
@@ -1411,12 +1378,6 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 type recheckItem struct {
 	CompletionItem
 	noSnip bool
-}
-
-type unimportChecked struct {
-	pkgs  map[source.PackagePath]bool             // gop package
-	items map[source.PackagePath][]recheckItem    // index overload funcs
-	gopo  map[source.PackagePath][]CompletionItem // gopo overload funcs
 }
 
 func (c *gopCompleter) packageMembers(pkg *types.Package, score float64, imp *importInfo, cb func(candidate)) {
@@ -2478,7 +2439,7 @@ Nodes:
 // TYPE/VAR/CONST/FUNC declaration in the Go source file, based on a
 // quick partial parse. fn is non-nil only for function declarations.
 // The AST position information is garbage.
-func gopForEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ident, fn *ast.FuncDecl)) {
+func gopForEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ident, fnType *ast.FuncType, isOverload bool)) {
 	purged := goxlsastutil.PurgeFuncBodies(content)
 	file, _ := parserutil.ParseFile(token.NewFileSet(), "", purged, 0)
 	for _, decl := range file.Decls {
@@ -2488,15 +2449,86 @@ func gopForEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ide
 				switch spec := spec.(type) {
 				case *ast.ValueSpec: // var/const
 					for _, id := range spec.Names {
-						f(decl.Tok, id, nil)
+						f(decl.Tok, id, nil, false)
 					}
 				case *ast.TypeSpec:
-					f(decl.Tok, spec.Name, nil)
+					f(decl.Tok, spec.Name, nil, false)
 				}
 			}
 		case *ast.FuncDecl:
 			if decl.Recv == nil {
-				f(token.FUNC, decl.Name, decl)
+				f(token.FUNC, decl.Name, decl.Type, false)
+			}
+		case *ast.OverloadFuncDecl:
+			if decl.Recv == nil && ast.IsExported(decl.Name.Name) {
+				var typ *ast.FuncType
+			FindType:
+				for _, expr := range decl.Funcs {
+					switch expr := expr.(type) {
+					case *ast.Ident:
+						if !ast.IsExported(expr.Name) {
+							continue
+						}
+						if obj := file.Scope.Lookup(expr.Name); obj != nil {
+							if d, ok := obj.Decl.(*ast.FuncDecl); ok {
+								typ = d.Type
+								break FindType
+							}
+						}
+					case *ast.FuncLit:
+						typ = expr.Type
+						break FindType
+					}
+				}
+				f(token.FUNC, decl.Name, typ, false)
+			}
+		}
+	}
+}
+
+type unimportChecked struct {
+	pkgs  map[source.PackagePath]bool             // gop package
+	items map[source.PackagePath][]recheckItem    // index overload funcs
+	gopo  map[source.PackagePath][]CompletionItem // gopo overload funcs
+}
+
+func (recheck *unimportChecked) checkOverload(c *gopCompleter) {
+	// check gop package index overload
+	for pkg, items := range recheck.items {
+		if recheck.pkgs[pkg] {
+			names := make(map[string]bool)
+			sort.Slice(items, func(i, j int) bool {
+				return items[i].Label < items[j].Label
+			})
+			for _, item := range items {
+				id := item.Label[:len(item.Label)-3]
+				if !names[id] {
+					names[id] = true
+					item.isOverload = true
+					item.Detail = "Go+ overload func\n\n" + item.Detail
+					c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, id, 0, false))
+					if alias, ok := hasAliasName(id); ok {
+						c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, alias, 0.0001, item.noSnip))
+					}
+				}
+			}
+		} else {
+			for _, item := range items {
+				c.items = append(c.items, item.CompletionItem)
+				if alias, ok := hasAliasName(item.Label); ok {
+					c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, alias, 0.0001, item.noSnip))
+				}
+			}
+		}
+	}
+	// check gop package gopo overload
+	for pkg, items := range recheck.gopo {
+		if recheck.pkgs[pkg] {
+			for _, item := range items {
+				c.items = append(c.items, item)
+				if alias, ok := hasAliasName(item.Label); ok {
+					c.items = append(c.items, cloneAliasItem(item, item.Label, alias, 0.0001, true))
+				}
 			}
 		}
 	}
