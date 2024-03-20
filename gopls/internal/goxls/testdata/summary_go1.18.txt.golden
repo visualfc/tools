@@ -1,7 +1,7 @@
 -- summary --
 CallHierarchyCount = 0
 CodeLensCount = 4
-CompletionsCount = 18
+CompletionsCount = 36
 CompletionSnippetCount = 12
 UnimportedCompletionsCount = 0
 DeepCompletionsCount = 0
@@ -14,7 +14,7 @@ SemanticTokenCount = 0
 SuggestedFixCount = 0
 MethodExtractionCount = 0
 DefinitionsCount = 23
-TypeDefinitionsCount = 1
+TypeDefinitionsCount = 2
 HighlightsCount = 0
 InlayHintsCount = 0
 RenamesCount = 0
