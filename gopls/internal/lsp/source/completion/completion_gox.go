@@ -1288,17 +1288,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 			// goxls func alias
 			if tok == token.FUNC {
 				if alias, ok := hasAliasName(id.Name); ok {
-					var noSnip bool
-					switch len(fn.Type.Params.List) {
-					case 0:
-						noSnip = true
-					case 1:
-						if fn.Recv != nil {
-							if _, ok := fn.Type.Params.List[0].Type.(*ast.Ellipsis); ok {
-								noSnip = true
-							}
-						}
-					}
+					noSnip := len(fn.Type.Params.List) == 0
 					c.items = append(c.items, cloneAliasItem(item, id.Name, alias, 0.0001, noSnip))
 				}
 			}
@@ -1314,9 +1304,13 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 	recheck := &unimportChecked{
 		make(map[source.PackagePath]bool),
 		make(map[source.PackagePath][]recheckItem),
+		make(map[source.PackagePath][]CompletionItem),
 	}
 	for _, path := range paths {
-		recheck.pkgs[source.PackagePath(path)] = true
+		m := known[source.PackagePath(path)]
+		if len(m.CompiledGopFiles) > 0 {
+			recheck.pkgs[source.PackagePath(path)] = true
+		}
 	}
 	// Extract the package-level candidates using a quick parse.
 	quickParseGo := c.quickParse(ctx, &cMu, &enough, sel.Sel.Name, relevances, needImport, recheck)
@@ -1366,6 +1360,17 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 			}
 		}
 	}
+	// check gop packages gopo overload
+	for pkg, items := range recheck.gopo {
+		if recheck.pkgs[pkg] {
+			for _, item := range items {
+				c.items = append(c.items, item)
+				if alias, ok := hasAliasName(item.Label); ok {
+					c.items = append(c.items, cloneAliasItem(item, item.Label, alias, 0.0001, true))
+				}
+			}
+		}
+	}
 
 	// In addition, we search in the module cache using goimports.
 	ctx, cancel := context.WithCancel(ctx)
@@ -1409,8 +1414,9 @@ type recheckItem struct {
 }
 
 type unimportChecked struct {
-	pkgs  map[source.PackagePath]bool // gop package
-	items map[source.PackagePath][]recheckItem
+	pkgs  map[source.PackagePath]bool             // gop package
+	items map[source.PackagePath][]recheckItem    // index overload funcs
+	gopo  map[source.PackagePath][]CompletionItem // gopo overload funcs
 }
 
 func (c *gopCompleter) packageMembers(pkg *types.Package, score float64, imp *importInfo, cb func(candidate)) {

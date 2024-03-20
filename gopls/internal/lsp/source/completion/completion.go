@@ -3420,21 +3420,33 @@ func (c *gopCompleter) quickParse(ctx context.Context, cMu *sync.Mutex, enough *
 			}
 
 			cMu.Lock()
-			if tok == token.CONST && id.Name == "GopPackage" {
-				recheck.pkgs[m.PkgPath] = true
-			}
-			if tok == token.FUNC {
-				var noSnip bool
-				switch len(fn.Type.Params.List) {
-				case 0:
-					noSnip = true
-				case 1:
-					if fn.Recv != nil {
-						if _, ok := fn.Type.Params.List[0].Type.(*ast.Ellipsis); ok {
-							noSnip = true
+			if tok == token.CONST {
+				if id.Name == "GopPackage" {
+					recheck.pkgs[m.PkgPath] = true
+				} else if strings.HasPrefix(id.Name, "Gopo_") {
+					md := checkTypeMethod(id.Name[5:])
+					if md.typ == "" && ast.IsExported(md.name) {
+						item := CompletionItem{
+							Label:      md.name,
+							Detail:     fmt.Sprintf("func (from %q)", m.PkgPath),
+							InsertText: md.name,
+							Score:      unimportedScore(relevances[path]),
+							Kind:       protocol.FunctionCompletion,
+							isOverload: true,
 						}
+						if needImport {
+							imp := &importInfo{importPath: path}
+							if imports.ImportPathToAssumedName(path) != string(m.Name) {
+								imp.name = string(m.Name)
+							}
+							item.AdditionalTextEdits, _ = c.importEdits(imp)
+						}
+						recheck.gopo[m.PkgPath] = append(recheck.gopo[m.PkgPath], item)
 					}
 				}
+			}
+			if tok == token.FUNC {
+				noSnip := len(fn.Type.Params.List) == 0
 				if maybleIndexOverload(id.Name) {
 					recheck.items[m.PkgPath] = append(recheck.items[m.PkgPath], recheckItem{item, noSnip})
 				} else {
@@ -3454,4 +3466,27 @@ func (c *gopCompleter) quickParse(ctx context.Context, cMu *sync.Mutex, enough *
 		})
 		return nil
 	}
+}
+
+type mthd struct {
+	typ  string
+	name string
+}
+
+// Func (no _ func name)
+// _Func (with _ func name)
+// TypeName_Method (no _ method name)
+// _TypeName__Method (with _ method name)
+func checkTypeMethod(name string) mthd {
+	if pos := strings.IndexByte(name, '_'); pos >= 0 {
+		if pos == 0 {
+			t := name[1:]
+			if pos = strings.Index(t, "__"); pos <= 0 {
+				return mthd{"", t} // _Func
+			}
+			return mthd{t[:pos], t[pos+2:]} // _TypeName__Method
+		}
+		return mthd{name[:pos], name[pos+1:]} // TypeName_Method
+	}
+	return mthd{"", name} // Func
 }
