@@ -1306,11 +1306,7 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 	}
 
 	// recheck is gop index overload check
-	recheck := &unimportChecked{
-		make(map[source.PackagePath]bool),
-		make(map[source.PackagePath][]recheckItem),
-		make(map[source.PackagePath][]CompletionItem),
-	}
+	recheck := newRecheckOverload()
 	for _, path := range paths {
 		m := known[source.PackagePath(path)]
 		if len(m.CompiledGopFiles) > 0 {
@@ -1373,11 +1369,6 @@ func (c *gopCompleter) selector(ctx context.Context, sel *ast.SelectorExpr) erro
 		return imports.GetPackageExports(ctx, add, id.Name, c.filename, c.pkg.GetTypes().Name(), opts.Env)
 	})
 	return nil
-}
-
-type recheckItem struct {
-	CompletionItem
-	noSnip bool
 }
 
 func (c *gopCompleter) packageMembers(pkg *types.Package, score float64, imp *importInfo, cb func(candidate)) {
@@ -2481,54 +2472,6 @@ func gopForEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ide
 					}
 				}
 				f(token.FUNC, decl.Name, typ, false)
-			}
-		}
-	}
-}
-
-type unimportChecked struct {
-	pkgs  map[source.PackagePath]bool             // gop package
-	items map[source.PackagePath][]recheckItem    // index overload funcs
-	gopo  map[source.PackagePath][]CompletionItem // gopo overload funcs
-}
-
-func (recheck *unimportChecked) checkOverload(c *gopCompleter) {
-	// check gop package index overload
-	for pkg, items := range recheck.items {
-		if recheck.pkgs[pkg] {
-			names := make(map[string]bool)
-			sort.Slice(items, func(i, j int) bool {
-				return items[i].Label < items[j].Label
-			})
-			for _, item := range items {
-				id := item.Label[:len(item.Label)-3]
-				if !names[id] {
-					names[id] = true
-					item.isOverload = true
-					item.Detail = "Go+ overload func\n\n" + item.Detail
-					c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, id, 0, false))
-					if alias, ok := hasAliasName(id); ok {
-						c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, alias, 0.0001, item.noSnip))
-					}
-				}
-			}
-		} else {
-			for _, item := range items {
-				c.items = append(c.items, item.CompletionItem)
-				if alias, ok := hasAliasName(item.Label); ok {
-					c.items = append(c.items, cloneAliasItem(item.CompletionItem, item.Label, alias, 0.0001, item.noSnip))
-				}
-			}
-		}
-	}
-	// check gop package gopo overload
-	for pkg, items := range recheck.gopo {
-		if recheck.pkgs[pkg] {
-			for _, item := range items {
-				c.items = append(c.items, item)
-				if alias, ok := hasAliasName(item.Label); ok {
-					c.items = append(c.items, cloneAliasItem(item, item.Label, alias, 0.0001, true))
-				}
 			}
 		}
 	}
