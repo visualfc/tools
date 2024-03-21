@@ -2471,7 +2471,7 @@ func gopForEachPackageMember(content []byte, f func(tok token.Token, id *ast.Ide
 						break FindType
 					}
 				}
-				f(token.FUNC, decl.Name, typ, false)
+				f(token.FUNC, decl.Name, typ, true)
 			}
 		}
 	}
