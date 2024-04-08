@@ -173,7 +173,8 @@ FindCall:
 	}
 
 	if overloads != nil {
-		activeSignature := 0
+		var activeSignature int
+		var matchSignature []int
 		infos := make([]protocol.SignatureInformation, len(overloads))
 		for i, o := range overloads {
 			if o.Name() == obj.Name() {
@@ -183,9 +184,15 @@ FindCall:
 			if err != nil {
 				return nil, 0, 0, nil
 			}
+			if o.Name() == obj.Name() {
+				activeSignature = i
+			}
+			if sig.Variadic() || (sig.Params() != nil && sig.Params().Len() > activeParam) {
+				matchSignature = append(matchSignature, i)
+			}
 			infos[i] = *info
 		}
-		return infos, activeSignature, activeParam, nil
+		return infos, checkBestSignature(activeSignature, matchSignature), activeParam, nil
 	}
 	info, err := makeInfo(name, sig)
 	if err != nil {
@@ -238,4 +245,16 @@ func gopActiveParameter(callExpr *ast.CallExpr, numParams int, variadic bool, po
 		start = expr.Pos() + 1 // to account for commas
 	}
 	return activeParam
+}
+
+func checkBestSignature(active int, matches []int) int {
+	if len(matches) == 0 {
+		return active
+	}
+	for _, n := range matches {
+		if active == n {
+			return active
+		}
+	}
+	return matches[0]
 }
