@@ -124,8 +124,9 @@ FindCall:
 	var sigType types.Type
 	if callExpr != nil {
 		sigType = pkg.GopTypesInfo().TypeOf(callExpr.Fun)
-	} else {
-		sigType = cmdObj.Type()
+	}
+	if sigType == nil && obj != nil {
+		sigType = obj.Type()
 	}
 	if sigType == nil {
 		return nil, 0, 0, fmt.Errorf("cannot get type for Fun %[1]T (%[1]v)", callExpr.Fun)
