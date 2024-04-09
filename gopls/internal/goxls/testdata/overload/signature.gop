@@ -1,0 +1,11 @@
+func _() {
+	Demo(100) //@signature_overload("100", "Demo__1(n int) int", 1, 0)
+	Demo(100, 200) //@signature_overload("100", "Demo__2(n1 int, n2 int)", 2, 0)
+	Demo(100, 200) //@signature_overload("200", "Demo__2(n1 int, n2 int)", 2, 1)
+}
+
+func _() {
+	Demo 100 //@signature_overload("100", "Demo__1(n int) int", 1, 0)
+	Demo 100, 200 //@signature_overload("100", "Demo__2(n1 int, n2 int)", 2, 0)
+	Demo 100, 200 //@signature_overload("200", "Demo__2(n1 int, n2 int)", 2, 1)
+}
