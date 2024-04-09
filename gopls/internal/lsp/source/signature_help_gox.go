@@ -146,12 +146,14 @@ FindCall:
 		comment *ast.CommentGroup
 	)
 	if obj != nil {
-		d, err := HoverDocForObject(ctx, snapshot, pkg.FileSet(), obj)
-		if err != nil && !overloads {
-			return nil, 0, 0, err
-		}
 		name = obj.Name()
-		comment = d
+		if !overloads {
+			d, err := HoverDocForObject(ctx, snapshot, pkg.FileSet(), obj)
+			if err != nil {
+				return nil, 0, 0, err
+			}
+			comment = d
+		}
 	} else {
 		name = "func"
 	}
