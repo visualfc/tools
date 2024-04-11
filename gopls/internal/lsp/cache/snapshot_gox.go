@@ -54,7 +54,7 @@ func gopMetadataChanges(ctx context.Context, lockedSnapshot *snapshot, oldFH, ne
 	var mod *gopmod.Module
 	for _, id := range ids {
 		if m := lockedSnapshot.meta.metadata[id]; m != nil {
-			mod = m.GopMod_()
+			mod = m.GopMod_
 			if mod != nil {
 				break
 			}

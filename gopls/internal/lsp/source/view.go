@@ -569,7 +569,7 @@ type Metadata struct {
 	// goxls: Go+ files
 	GopFiles         []span.URI
 	CompiledGopFiles []span.URI
-	gopMod_          *gopmod.Module // see GopMod_()
+	GopMod_          *gopmod.Module
 	gopImporter      types.Importer
 
 	ForTest       PackagePath // q in a "p [q.test]" package, else ""

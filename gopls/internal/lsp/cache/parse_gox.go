@@ -49,7 +49,7 @@ func (s *snapshot) GopModForFile(ctx context.Context, uri span.URI) (*gopmod.Mod
 	if len(m) == 0 {
 		return gopmod.Default, nil
 	}
-	return m[0].GopMod_(), nil
+	return m[0].GopMod_, nil
 }
 
 // parseGopImpl parses the Go+ source file whose content is provided by fh.

@@ -656,7 +656,7 @@ func (b *typeCheckBatch) checkPackageForImport(ctx context.Context, ph *packageH
 	// for import are unlikely to get cache hits. Additionally, we can optimize
 	// parsing slightly by not passing parser.ParseComments.
 	if len(ph.localInputs.compiledGopFiles) > 0 {
-		mod := ph.m.GopMod_()
+		mod := ph.m.GopMod_
 		gopFiles := make([]*gopast.File, len(ph.localInputs.compiledGopFiles))
 		{
 			var group errgroup.Group
@@ -1628,7 +1628,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 
 	// goxls: Go+ files
 	if len(inputs.gopFiles) > 0 || len(inputs.compiledGopFiles) > 0 {
-		mod := ph.m.GopMod_()
+		mod := ph.m.GopMod_
 		pkg.gopTypesInfo = newGopTypeInfo()
 		pkg.gopFiles, err = b.parseCache.parseGopFiles(ctx, mod, b.fset, parserutil.ParseFull, false, inputs.gopFiles...)
 		if err != nil {
@@ -1686,7 +1686,7 @@ func doTypeCheck(ctx context.Context, b *typeCheckBatch, ph *packageHandle) (*sy
 			gopFiles = append(gopFiles, cgf.File)
 		}
 		cfg.Importer = newGopImporter(cfg.Importer, ph.m.GopImporter(pkg.fset))
-		opts := &typesutil.Config{Types: pkg.types, Fset: pkg.fset, Mod: ph.m.GopMod_()}
+		opts := &typesutil.Config{Types: pkg.types, Fset: pkg.fset, Mod: ph.m.GopMod_}
 		check := typesutil.NewChecker(cfg, opts, pkg.typesInfo, pkg.gopTypesInfo)
 		_ = check.Files(files, gopFiles)
 	} else {

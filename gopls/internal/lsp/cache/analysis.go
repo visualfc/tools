@@ -1065,7 +1065,7 @@ func (an *analysisNode) typeCheck(parsed []*source.ParsedGoFile, gopParsed []*so
 	// goxls: use Go+
 	if len(pkg.gopFiles) > 0 {
 		cfg.Importer = newGopImporter(cfg.Importer, m.GopImporter(pkg.fset))
-		opts := &typesutil.Config{Types: pkg.types, Fset: pkg.fset, Mod: m.GopMod_()}
+		opts := &typesutil.Config{Types: pkg.types, Fset: pkg.fset, Mod: m.GopMod_}
 		check := typesutil.NewChecker(cfg, opts, pkg.typesInfo, pkg.gopTypesInfo)
 		_ = check.Files(pkg.files, pkg.gopFiles)
 	} else {

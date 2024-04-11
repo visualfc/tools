@@ -499,7 +499,7 @@ func missingModuleForImport(pgf *source.ParsedGoFile, imp *ast.ImportSpec, req *
 // CompiledGoFiles, after cgo processing.)
 //
 // TODO(rfindley): this should key off source.ImportPath.
-func parseImports(ctx context.Context, s *snapshot, files, gopFiles []source.FileHandle, getGopMod func() *gopmod.Module) (map[string]bool, error) {
+func parseImports(ctx context.Context, s *snapshot, files, gopFiles []source.FileHandle, mod *gopmod.Module) (map[string]bool, error) {
 	pgfs, err := s.view.parseCache.parseFiles(ctx, token.NewFileSet(), source.ParseHeader, false, files...)
 	if err != nil { // e.g. context cancellation
 		return nil, err
@@ -513,7 +513,7 @@ func parseImports(ctx context.Context, s *snapshot, files, gopFiles []source.Fil
 		}
 	}
 	if len(gopFiles) > 0 {
-		err := parseGopImports(ctx, getGopMod(), s, gopFiles, seen)
+		err := parseGopImports(ctx, mod, s, gopFiles, seen)
 		if err != nil {
 			return nil, err
 		}
