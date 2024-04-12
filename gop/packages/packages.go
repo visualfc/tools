@@ -399,9 +399,9 @@ func addGopFiles(ret *Package, ld *loader, dir string, mode LoadMode, test bool)
 		mod = ld.Context.LoadMod(ret.Module)
 	} else {
 		mod, _ = gop.LoadMod(dir)
-	}
-	if mod == nil {
-		mod = gopmod.Default
+		if mod == nil {
+			mod = gopmod.Default
+		}
 	}
 	ret.GopMod = mod
 	for _, e := range entries {

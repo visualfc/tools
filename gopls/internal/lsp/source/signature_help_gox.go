@@ -37,7 +37,7 @@ func GopSignatureHelp(ctx context.Context, snapshot Snapshot, fh FileHandle, pos
 	}
 	var offset = int(pos - start)
 	npos := pos
-	if len(pgf.File.Code) >= offset {
+	if len(pgf.File.Code) > offset {
 		if pgf.File.Code[offset] == '\n' {
 			offset--
 			npos--
