@@ -138,7 +138,7 @@ FindCall:
 
 	activeParam := gopActiveParameter(callExpr, sig.Params().Len(), sig.Variadic(), pos)
 
-	objs, overloads := pkg.GopTypesInfo().Overloads[ident]
+	_, overloads := pkg.GopTypesInfo().OverloadOf(ident)
 
 	var (
 		name    string
@@ -146,7 +146,7 @@ FindCall:
 	)
 	if obj != nil {
 		d, err := HoverDocForObject(ctx, snapshot, pkg.FileSet(), obj)
-		if err != nil && !overloads {
+		if err != nil && overloads == nil {
 			return nil, 0, 0, err
 		}
 		name = obj.Name()
@@ -172,10 +172,10 @@ FindCall:
 		}, nil
 	}
 
-	if overloads {
+	if overloads != nil {
 		activeSignature := 0
-		infos := make([]protocol.SignatureInformation, len(objs))
-		for i, o := range objs {
+		infos := make([]protocol.SignatureInformation, len(overloads))
+		for i, o := range overloads {
 			if o.Name() == obj.Name() {
 				activeSignature = i
 			}
