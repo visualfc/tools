@@ -4,16 +4,16 @@ go 1.18
 
 require (
 	github.com/google/go-cmp v0.6.0
-	github.com/goplus/gogen v1.15.3-0.20240424153048-0d40138c65a5
-	github.com/goplus/gop v1.2.0-pre.1.0.20240506041011-133b8a33c31b
-	github.com/goplus/mod v0.13.10
+	github.com/goplus/gogen v1.16.0
+	github.com/goplus/gop v1.3.0-pre.2
+	github.com/goplus/mod v0.13.12
 	github.com/jba/printsrc v0.2.2
 	github.com/jba/templatecheck v0.7.0
 	github.com/qiniu/x v1.13.10
 	github.com/sergi/go-diff v1.1.0
-	golang.org/x/mod v0.17.0
+	golang.org/x/mod v0.19.0
 	golang.org/x/sync v0.6.0
-	golang.org/x/sys v0.20.0
+	golang.org/x/sys v0.21.0
 	golang.org/x/text v0.15.0
 	golang.org/x/tools v0.19.0
 	golang.org/x/vuln v0.0.0-20230110180137-6ad3e3d07815
