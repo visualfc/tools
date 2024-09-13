@@ -8,7 +8,7 @@ require (
 	github.com/yuin/goldmark v1.7.4
 	golang.org/x/mod v0.19.0
 	golang.org/x/net v0.25.0
-	golang.org/x/sync v0.6.0
+	golang.org/x/sync v0.8.0
 	golang.org/x/sys v0.25.0
 )
 
