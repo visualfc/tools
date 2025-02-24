@@ -15,11 +15,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/goplus/gop"
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/scanner"
 	"github.com/goplus/gop/token"
+	gop "github.com/goplus/gop/tool"
 	"github.com/goplus/gop/x/typesutil"
 	"github.com/goplus/mod/gopmod"
 	"golang.org/x/tools/go/packages"
