@@ -5,10 +5,10 @@
 package parserutil
 
 import (
-	"github.com/goplus/gop"
 	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/token"
+	"github.com/goplus/gop/tool"
 	"github.com/goplus/mod/gopmod"
 )
 
@@ -56,6 +56,6 @@ func GetClassType(file *ast.File, filename string, getMod func() (*gopmod.Module
 			return
 		}
 	}
-	classType, isTest = gop.GetFileClassType(mod, file, filename)
+	classType, isTest = tool.GetFileClassType(mod, file, filename)
 	return
 }
